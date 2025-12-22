@@ -1,0 +1,101 @@
+version: '3'
+
+vars:
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
+  BUILD_DATE:
+    sh: date -u +%Y-%m-%dT%H:%M:%SZ
+  LDFLAGS: -s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}}
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  init:
+    desc: Download dependencies and install development tools
+    cmds:
+      - go mod download
+      - go mod tidy
+      - |
+        if ! command -v golangci-lint &> /dev/null; then
+          echo "Installing golangci-lint..."
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        else
+          echo "golangci-lint already installed"
+        fi
+
+  build:
+    desc: Build the brains CLI binary
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags "{{.LDFLAGS}}" -o bin/brains ./cmd/brains
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - bin/brains
+
+  test:
+    desc: Run tests with coverage
+    cmds:
+      - go test -v -race -coverprofile=coverage.out ./...
+    sources:
+      - "**/*.go"
+    generates:
+      - coverage.out
+
+  db:up:
+    desc: Start PostgreSQL database container
+    cmds:
+      - docker compose up -d postgres
+      - echo "Waiting for PostgreSQL to be ready..."
+      - |
+        for i in $(seq 1 30); do
+          if docker compose exec -T postgres pg_isready -U brains -d brains > /dev/null 2>&1; then
+            echo "PostgreSQL is ready on port 9432"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Timeout waiting for PostgreSQL"
+        exit 1
+
+  db:down:
+    desc: Stop and remove PostgreSQL container
+    cmds:
+      - docker compose down
+
+  db:migrate:
+    desc: Run database migrations (placeholder)
+    cmds:
+      - echo "Database migrations not yet implemented"
+      - echo "Migrations directory is migrations/"
+
+  fmt:
+    desc: Format Go code
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run --config configs/.golangci.yml ./...
+
+  ci:
+    desc: Run all CI checks (fmt, vet, lint, test, build)
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: test
+      - task: build

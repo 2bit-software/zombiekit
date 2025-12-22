@@ -1,0 +1,49 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go build cache
+*.mod
+!go.mod
+*.sum
+!go.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+coverage.out
+coverage.html
+*.prof
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Build artifacts
+dist/
+
+# Task runner cache
+.task/
+
+# Temporary files
+*.tmp
+tmp/
