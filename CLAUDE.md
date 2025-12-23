@@ -30,6 +30,8 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 - SQLite (default) or PostgreSQL - read-only status display (014-webgui-status)
 - Go 1.24.0 (per go.mod) + BurntSushi/toml (config parsing), jackc/pgx/v5 (PostgreSQL), modernc.org/sqlite (SQLite), urfave/cli/v2 (CLI) (015-postgres-config)
 - PostgreSQL (primary when configured) or SQLite (default/fallback) (015-postgres-config)
+- Go 1.24.0 (per go.mod) + Docker Compose, wgo (github.com/bokwoon95/wgo) (016-webgui-container-dev)
+- SQLite (modernc.org/sqlite) - persisted via volume mount to `.data/` (016-webgui-container-dev)
 
 - Go 1.22+ (per MASTER-DESIGN.md) (001-core-repo-setup)
 
@@ -49,9 +51,9 @@ tests/
 Go 1.22+ (per MASTER-DESIGN.md): Follow standard conventions
 
 ## Recent Changes
+- 016-webgui-container-dev: Added Go 1.24.0 (per go.mod) + Docker Compose, wgo (github.com/bokwoon95/wgo)
 - 015-postgres-config: Added Go 1.24.0 (per go.mod) + BurntSushi/toml (config parsing), jackc/pgx/v5 (PostgreSQL), modernc.org/sqlite (SQLite), urfave/cli/v2 (CLI)
 - 014-webgui-status: Added Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), html/template (rendering), internal/version (build info), internal/config (storage config)
-- 013-sqlite-postgres-import: Added Go 1.24.0 + urfave/cli/v2 (CLI), modernc.org/sqlite (SQLite), jackc/pgx/v5 (PostgreSQL)
 
 
 <!-- MANUAL ADDITIONS START -->

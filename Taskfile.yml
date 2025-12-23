@@ -122,3 +122,8 @@ tasks:
       - task: lint
       - task: test
       - task: build
+
+  webgui:dev:
+    desc: Start WebGUI in development mode with hot-reloading
+    cmds:
+      - docker compose up --build webgui-dev

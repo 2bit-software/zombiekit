@@ -47,3 +47,6 @@ dist/
 # Temporary files
 *.tmp
 tmp/
+
+# Development data directory (SQLite databases)
+.data/

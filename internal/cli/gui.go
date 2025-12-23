@@ -64,8 +64,13 @@ func runGUI(c *cli.Context) error {
 	}
 
 	// Create memory storage (SQLite default)
-	homeDir, _ := os.UserHomeDir()
-	memoryDBPath := filepath.Join(homeDir, ".brains", "memory.db")
+	// Use BRAINS_DATA_DIR if set (for containerized environments), otherwise default to ~/.brains
+	dataDir := os.Getenv("BRAINS_DATA_DIR")
+	if dataDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		dataDir = filepath.Join(homeDir, ".brains")
+	}
+	memoryDBPath := filepath.Join(dataDir, "memory.db")
 	memoryStorage, err := sqlite.NewSQLiteStorage(context.Background(), memoryDBPath)
 	if err != nil {
 		logger.Warn("failed to initialize memory storage, memory plugin will show errors",

@@ -1,0 +1,43 @@
+# Binary output
+bin/
+
+# IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test/coverage artifacts
+coverage.out
+coverage.html
+*.prof
+
+# Development data
+.data/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Task cache
+.task/
+
+# Git
+.git/
+.gitignore
+
+# Specs (not needed in container)
+specs/
+
+# Docker files (not needed in build context)
+Dockerfile*
+docker-compose*.yml
+
+# Logs
+*.log
