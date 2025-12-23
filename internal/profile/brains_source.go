@@ -39,23 +39,108 @@ func NewBrainsSource(workingDir string) (*BrainsSource, error) {
 }
 
 // FindProfileDirs discovers .brains/profiles/ directories.
+// Includes an embedded virtual directory as the lowest precedence fallback.
 func (s *BrainsSource) FindProfileDirs() ([]ResolvedDirectory, error) {
-	return s.resolver.FindProfileDirs()
+	dirs, err := s.resolver.FindProfileDirs()
+	if err != nil {
+		return nil, err
+	}
+
+	// Append embedded as lowest precedence (after global)
+	if HasEmbeddedProfiles() {
+		dirs = append(dirs, ResolvedDirectory{
+			Path:   "[embedded]",
+			Source: SourceEmbedded,
+		})
+	}
+
+	return dirs, nil
 }
 
 // LoadProfiles loads profiles from the given directories.
+// Includes embedded profiles as lowest-precedence fallback.
 func (s *BrainsSource) LoadProfiles(dirs []ResolvedDirectory) (map[string]*Profile, error) {
-	return s.resolver.LoadProfiles(dirs)
+	// Separate embedded directory from filesystem directories
+	var fsDirs []ResolvedDirectory
+	var hasEmbedded bool
+	for _, dir := range dirs {
+		if dir.Source == SourceEmbedded {
+			hasEmbedded = true
+		} else {
+			fsDirs = append(fsDirs, dir)
+		}
+	}
+
+	// Load filesystem profiles first
+	profiles, err := s.resolver.LoadProfiles(fsDirs)
+	if err != nil {
+		return nil, err
+	}
+	if profiles == nil {
+		profiles = make(map[string]*Profile)
+	}
+
+	// Add embedded profiles that aren't already shadowed
+	if hasEmbedded {
+		for name, p := range loadProfilesFromEmbedded() {
+			if _, exists := profiles[name]; !exists {
+				profiles[name] = p
+			}
+		}
+	}
+
+	return profiles, nil
 }
 
 // LoadAllProfiles loads all profiles including shadowed ones.
+// Includes embedded profiles for listing and shadowing display.
 func (s *BrainsSource) LoadAllProfiles(dirs []ResolvedDirectory) (map[string][]*Profile, error) {
-	return s.resolver.LoadAllProfiles(dirs)
+	// Separate embedded directory from filesystem directories
+	var fsDirs []ResolvedDirectory
+	var hasEmbedded bool
+	for _, dir := range dirs {
+		if dir.Source == SourceEmbedded {
+			hasEmbedded = true
+		} else {
+			fsDirs = append(fsDirs, dir)
+		}
+	}
+
+	// Load filesystem profiles first
+	profiles, err := s.resolver.LoadAllProfiles(fsDirs)
+	if err != nil {
+		return nil, err
+	}
+	if profiles == nil {
+		profiles = make(map[string][]*Profile)
+	}
+
+	// Append embedded profiles (lowest precedence, shown as shadowed if others exist)
+	if hasEmbedded {
+		for name, p := range loadProfilesFromEmbedded() {
+			profiles[name] = append(profiles[name], p)
+		}
+	}
+
+	return profiles, nil
 }
 
 // GetInheritanceChain returns all versions of a profile for inheritance.
+// Includes embedded profiles at the start of the chain (lowest precedence).
 func (s *BrainsSource) GetInheritanceChain(name string) ([]*Profile, error) {
-	return s.resolver.GetInheritanceChain(name)
+	chain, err := s.resolver.GetInheritanceChain(name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for embedded version of this profile
+	embedded := loadProfilesFromEmbedded()
+	if embeddedProfile, ok := embedded[name]; ok {
+		// Prepend embedded profile (it should be first = lowest precedence in chain)
+		chain = append([]*Profile{embeddedProfile}, chain...)
+	}
+
+	return chain, nil
 }
 
 // CreateProfile creates a new brains profile.

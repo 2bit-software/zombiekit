@@ -12,6 +12,8 @@ const (
 	SourceParent
 	// SourceGlobal is a profile from ~/.brains/profiles/.
 	SourceGlobal
+	// SourceEmbedded is a profile embedded in the binary at build time.
+	SourceEmbedded
 )
 
 // String returns the string representation of the profile source.
@@ -23,6 +25,8 @@ func (s ProfileSource) String() string {
 		return "parent"
 	case SourceGlobal:
 		return "global"
+	case SourceEmbedded:
+		return "embedded"
 	default:
 		return "unknown"
 	}

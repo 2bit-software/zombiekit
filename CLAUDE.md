@@ -35,6 +35,8 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 - Go 1.24.0 (per go.mod) + mark3labs/mcp-go (MCP server framework) (017-zombiekit-mcp)
 - File system read-only (no database) (017-zombiekit-mcp)
 - N/A (file-based profiles, no database changes) (018-profile-type)
+- Go 1.24.0 + urfave/cli/v2 (CLI), mark3labs/mcp-go (MCP), adrg/frontmatter (YAML parsing) (019-embedded-profile-fallback)
+- File-based profiles (.md files with YAML frontmatter), embedded filesystem (embed.FS) (019-embedded-profile-fallback)
 
 - Go 1.22+ (per MASTER-DESIGN.md) (001-core-repo-setup)
 
@@ -54,9 +56,9 @@ tests/
 Go 1.22+ (per MASTER-DESIGN.md): Follow standard conventions
 
 ## Recent Changes
+- 019-embedded-profile-fallback: Added Go 1.24.0 + urfave/cli/v2 (CLI), mark3labs/mcp-go (MCP), adrg/frontmatter (YAML parsing)
 - 018-profile-type: Added Go 1.24.0 (per go.mod)
 - 017-zombiekit-mcp: Added Go 1.24.0 (per go.mod) + mark3labs/mcp-go (MCP server framework)
-- 016-webgui-container-dev: Added Go 1.24.0 (per go.mod) + Docker Compose, wgo (github.com/bokwoon95/wgo)
 
 
 <!-- MANUAL ADDITIONS START -->
