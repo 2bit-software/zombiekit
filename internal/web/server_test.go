@@ -12,7 +12,7 @@ import (
 
 func TestNewServer(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry()
+	registry := web.NewPluginRegistry(logger)
 
 	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
 	if err != nil {
@@ -26,7 +26,7 @@ func TestNewServer(t *testing.T) {
 
 func TestHealthEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry()
+	registry := web.NewPluginRegistry(logger)
 
 	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
 	if err != nil {
@@ -50,7 +50,7 @@ func TestHealthEndpoint(t *testing.T) {
 
 func TestHomeEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry()
+	registry := web.NewPluginRegistry(logger)
 
 	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
 	if err != nil {
@@ -69,7 +69,7 @@ func TestHomeEndpoint(t *testing.T) {
 
 func TestNotFoundEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry()
+	registry := web.NewPluginRegistry(logger)
 
 	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
 	if err != nil {
@@ -87,7 +87,7 @@ func TestNotFoundEndpoint(t *testing.T) {
 }
 
 func TestPluginRegistry(t *testing.T) {
-	registry := web.NewPluginRegistry()
+	registry := web.NewPluginRegistry(nil)
 
 	// Test empty registry
 	if len(registry.All()) != 0 {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 //go:embed templates
@@ -40,6 +41,17 @@ func NewRenderer(registry *PluginRegistry) (*Renderer, error) {
 			}
 			return strings.HasPrefix(currentPath, itemPath)
 		},
+		"formatSize": func(bytes int) string {
+			if bytes < 1024 {
+				return fmt.Sprintf("%d B", bytes)
+			} else if bytes < 1024*1024 {
+				return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+			}
+			return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+		},
+		"formatTime": func(t time.Time) string {
+			return t.Format("Jan 2, 2006 3:04 PM")
+		},
 	}
 
 	tmpl := template.New("").Funcs(funcMap)
@@ -56,14 +68,14 @@ func NewRenderer(registry *PluginRegistry) (*Renderer, error) {
 	}
 
 	// Parse plugin templates
-	for _, p := range registry.All() {
-		tp, ok := p.(TemplatePlugin)
+	for _, rp := range registry.All() {
+		tp, ok := rp.Plugin().(TemplatePlugin)
 		if !ok {
 			continue
 		}
 
 		pluginFS := tp.Templates()
-		pluginID := p.ID()
+		pluginID := rp.Name()
 
 		// Walk the plugin's templates directory
 		err := fs.WalkDir(pluginFS, "templates", func(path string, d fs.DirEntry, err error) error {

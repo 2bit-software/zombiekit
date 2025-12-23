@@ -96,10 +96,11 @@ func (s *Server) setupRouter() {
 	r.Get("/", s.homeHandler)
 
 	// Mount plugins
-	for _, p := range s.registry.All() {
-		pluginID := p.ID()
-		r.Route("/"+pluginID, func(pr chi.Router) {
-			p.MountRoutes(pr)
+	for _, rp := range s.registry.All() {
+		name := rp.Name()
+		plugin := rp.Plugin()
+		r.Route("/"+name, func(pr chi.Router) {
+			plugin.MountRoutes(pr)
 		})
 	}
 

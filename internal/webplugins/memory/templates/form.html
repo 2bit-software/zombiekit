@@ -1,0 +1,100 @@
+<div class="bg-white rounded-lg shadow">
+    <!-- Back link -->
+    <div class="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <a href="/memory"
+           hx-get="/memory"
+           hx-target="#content"
+           hx-push-url="true"
+           class="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
+            <svg class="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to memories
+        </a>
+    </div>
+
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h1 class="text-xl font-semibold text-gray-900">
+            {{if .Content.IsEdit}}Edit Memory{{else}}New Memory{{end}}
+        </h1>
+        <p class="mt-1 text-sm text-gray-500">
+            {{if .Content.IsEdit}}Update the content of this memory.{{else}}Create a new sticky memory.{{end}}
+        </p>
+    </div>
+
+    <!-- Error -->
+    {{if .Content.Error}}
+    <div class="px-6 pt-4">
+        <div class="rounded-md bg-red-50 p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-red-800">{{.Content.Error}}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Form -->
+    <form {{if .Content.IsEdit}}hx-put="/memory/{{.Content.Name}}"{{else}}hx-post="/memory"{{end}}
+          hx-target="#content"
+          class="p-6 space-y-6">
+
+        <!-- Name field -->
+        <div>
+            <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
+            <input type="text"
+                   name="name"
+                   id="name"
+                   value="{{.Content.Name}}"
+                   {{if .Content.IsEdit}}disabled{{else}}required{{end}}
+                   placeholder="my-memory-name"
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm {{if .Content.IsEdit}}bg-gray-100 text-gray-500 cursor-not-allowed{{end}}">
+            {{if not .Content.IsEdit}}
+            <p class="mt-1 text-xs text-gray-500">Use letters, numbers, dots, hyphens, or underscores. Max 255 characters.</p>
+            {{end}}
+        </div>
+
+        <!-- Content field -->
+        <div>
+            <label for="content" class="block text-sm font-medium text-gray-700">Content</label>
+            <textarea name="content"
+                      id="content"
+                      rows="12"
+                      placeholder="Write your memory content here... Markdown is supported."
+                      class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono">{{.Content.Content}}</textarea>
+            <p class="mt-1 text-xs text-gray-500">Supports Markdown. Max 1MB.</p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+            {{if .Content.IsEdit}}
+            <a href="/memory/{{.Content.Name}}"
+               hx-get="/memory/{{.Content.Name}}"
+               hx-target="#content"
+               hx-push-url="true"
+               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                Cancel
+            </a>
+            {{else}}
+            <a href="/memory"
+               hx-get="/memory"
+               hx-target="#content"
+               hx-push-url="true"
+               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                Cancel
+            </a>
+            {{end}}
+            <button type="submit"
+                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                {{if .Content.IsEdit}}Update Memory{{else}}Create Memory{{end}}
+            </button>
+        </div>
+    </form>
+</div>

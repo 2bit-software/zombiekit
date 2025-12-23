@@ -16,6 +16,14 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 - Go 1.24.0 (per go.mod) + urfave/cli/v2 (CLI), BurntSushi/toml (TOML parsing - already indirect dep), slog (logging) (007-cli-config)
 - TOML files at `.brains/config.toml` (local), `~/.config/brains/config.toml` (global Unix), `%APPDATA%\brains\config.toml` (Windows) (007-cli-config)
 - N/A (uses existing profile.Service from internal/profile) (008-plugin-web-gui)
+- Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), html/template (rendering), mark3labs/mcp-go (MCP), marked.js (CDN - client-side markdown) (009-sticky-memory-plugin)
+- Reuses existing `internal/memory` package (SQLite default, PostgreSQL optional) (009-sticky-memory-plugin)
+- Go 1.24.0 (per go.mod) + None new required - interface-only feature (010-searchable-interface)
+- N/A (interface contract only; implementations provide storage) (010-searchable-interface)
+- Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), html/template (rendering), HTMX 1.9.10 (client-side), Tailwind CSS (styling via CDN) (011-webgui-search)
+- N/A (uses existing memory plugin storage; search is read-only) (011-webgui-search)
+- Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), mark3labs/mcp-go (MCP tools) (012-plugin-registration-api)
+- N/A (no storage changes - this is an API/interface change) (012-plugin-registration-api)
 
 - Go 1.22+ (per MASTER-DESIGN.md) (001-core-repo-setup)
 
@@ -35,9 +43,9 @@ tests/
 Go 1.22+ (per MASTER-DESIGN.md): Follow standard conventions
 
 ## Recent Changes
-- 008-plugin-web-gui: Added Go 1.24.0 (per go.mod)
-- 007-cli-config: Added Go 1.24.0 (per go.mod) + urfave/cli/v2 (CLI), BurntSushi/toml (TOML parsing - already indirect dep), slog (logging)
-- 006-remove-mcp-tools: Added Go 1.24.0 + mark3labs/mcp-go v0.43.2 (MCP server)
+- 012-plugin-registration-api: Added Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), mark3labs/mcp-go (MCP tools)
+- 011-webgui-search: Added Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), html/template (rendering), HTMX 1.9.10 (client-side), Tailwind CSS (styling via CDN)
+- 010-searchable-interface: Added Go 1.24.0 (per go.mod) + None new required - interface-only feature
 
 
 <!-- MANUAL ADDITIONS START -->

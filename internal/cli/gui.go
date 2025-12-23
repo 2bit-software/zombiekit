@@ -4,12 +4,15 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
 	"github.com/zombiekit/brains/internal/logging"
+	"github.com/zombiekit/brains/internal/memory/sqlite"
 	"github.com/zombiekit/brains/internal/profile"
 	"github.com/zombiekit/brains/internal/web"
+	"github.com/zombiekit/brains/internal/webplugins/memory"
 	"github.com/zombiekit/brains/internal/webplugins/profiles"
 )
 
@@ -51,14 +54,26 @@ func runGUI(c *cli.Context) error {
 	}
 
 	// Create plugin registry
-	registry := web.NewPluginRegistry()
+	registry := web.NewPluginRegistry(logger)
 
 	// Register plugins
 	if profileService != nil {
 		profilesPlugin := profiles.NewPlugin(profileService)
-		if err := registry.Register(profilesPlugin); err != nil {
-			return err
-		}
+		registry.Register("profiles", profilesPlugin)
+	}
+
+	// Create memory storage (SQLite default)
+	homeDir, _ := os.UserHomeDir()
+	memoryDBPath := filepath.Join(homeDir, ".brains", "memory.db")
+	memoryStorage, err := sqlite.NewSQLiteStorage(context.Background(), memoryDBPath)
+	if err != nil {
+		logger.Warn("failed to initialize memory storage, memory plugin will show errors",
+			"error", err,
+		)
+	}
+	if memoryStorage != nil {
+		memoryPlugin := memory.NewPlugin(memoryStorage)
+		registry.Register("memory", memoryPlugin)
 	}
 
 	// Create server config

@@ -1,0 +1,145 @@
+<div class="bg-white rounded-lg shadow">
+    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <div>
+            <h1 class="text-xl font-semibold text-gray-900">Memory</h1>
+            <p class="mt-1 text-sm text-gray-500">Manage your sticky memories.</p>
+        </div>
+        <a href="/memory/new"
+           hx-get="/memory/new"
+           hx-target="#content"
+           hx-push-url="true"
+           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <svg class="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            New Memory
+        </a>
+    </div>
+
+    {{if .Content.Error}}
+    <div class="p-6">
+        <div class="rounded-md bg-red-50 p-4">
+            <div class="flex">
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error loading memories</h3>
+                    <p class="mt-2 text-sm text-red-700">{{.Content.Error}}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{else}}
+    <!-- Search -->
+    <div class="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <form hx-get="/memory"
+              hx-target="#content"
+              hx-push-url="true"
+              class="flex items-center gap-2">
+            <input type="text"
+                   name="q"
+                   value="{{.Content.Query}}"
+                   placeholder="Search memories..."
+                   class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <button type="submit"
+                    class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                Search
+            </button>
+            {{if .Content.Query}}
+            <a href="/memory"
+               hx-get="/memory"
+               hx-target="#content"
+               hx-push-url="true"
+               class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">
+                Clear
+            </a>
+            {{end}}
+        </form>
+    </div>
+
+    {{if not .Content.Memories}}
+    <div class="p-6 text-center py-12">
+        {{if .Content.Query}}
+        <p class="text-gray-500">No memories match "{{.Content.Query}}"</p>
+        <a href="/memory"
+           hx-get="/memory"
+           hx-target="#content"
+           hx-push-url="true"
+           class="mt-2 inline-block text-blue-600 hover:text-blue-800">
+            Clear search
+        </a>
+        {{else}}
+        <h3 class="text-lg font-medium text-gray-900">No memories yet</h3>
+        <p class="mt-2 text-sm text-gray-500">Create your first memory to get started.</p>
+        <a href="/memory/new"
+           hx-get="/memory/new"
+           hx-target="#content"
+           hx-push-url="true"
+           class="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
+            <svg class="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            New Memory
+        </a>
+        {{end}}
+    </div>
+    {{else}}
+    <!-- Memory list -->
+    <div class="divide-y divide-gray-200">
+        {{range .Content.Memories}}
+        <a href="/memory/{{.Name}}"
+           hx-get="/memory/{{.Name}}"
+           hx-target="#content"
+           hx-push-url="true"
+           class="block px-6 py-4 hover:bg-gray-50 transition-colors">
+            <div class="flex items-center justify-between">
+                <div class="flex-1 min-w-0">
+                    <h2 class="text-sm font-medium text-gray-900 truncate">{{.Name}}</h2>
+                    <div class="mt-1 flex items-center space-x-4 text-xs text-gray-500">
+                        <span>{{.Size | formatSize}}</span>
+                        <span>v{{.Version}}</span>
+                        <span>{{.UpdatedAt | formatTime}}</span>
+                    </div>
+                </div>
+                <div class="ml-4 flex-shrink-0">
+                    <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            </div>
+        </a>
+        {{end}}
+    </div>
+
+    <!-- Pagination -->
+    {{if gt .Content.Pagination.TotalPages 1}}
+    <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+        <div class="text-sm text-gray-500">
+            Showing {{len .Content.Memories}} of {{.Content.Pagination.TotalItems}} memories
+        </div>
+        <div class="flex items-center space-x-2">
+            {{if .Content.Pagination.HasPrev}}
+            <a href="/memory?page={{.Content.Pagination.PrevPage}}&limit={{.Content.Pagination.Limit}}{{if .Content.Query}}&q={{.Content.Query}}{{end}}"
+               hx-get="/memory?page={{.Content.Pagination.PrevPage}}&limit={{.Content.Pagination.Limit}}{{if .Content.Query}}&q={{.Content.Query}}{{end}}"
+               hx-target="#content"
+               hx-push-url="true"
+               class="px-3 py-1 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                Previous
+            </a>
+            {{end}}
+            <span class="text-sm text-gray-700">
+                Page {{.Content.Pagination.CurrentPage}} of {{.Content.Pagination.TotalPages}}
+            </span>
+            {{if .Content.Pagination.HasNext}}
+            <a href="/memory?page={{.Content.Pagination.NextPage}}&limit={{.Content.Pagination.Limit}}{{if .Content.Query}}&q={{.Content.Query}}{{end}}"
+               hx-get="/memory?page={{.Content.Pagination.NextPage}}&limit={{.Content.Pagination.Limit}}{{if .Content.Query}}&q={{.Content.Query}}{{end}}"
+               hx-target="#content"
+               hx-push-url="true"
+               class="px-3 py-1 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                Next
+            </a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+    {{end}}
+    {{end}}
+</div>
