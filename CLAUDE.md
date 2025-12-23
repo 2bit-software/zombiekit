@@ -24,6 +24,8 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 - N/A (uses existing memory plugin storage; search is read-only) (011-webgui-search)
 - Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), mark3labs/mcp-go (MCP tools) (012-plugin-registration-api)
 - N/A (no storage changes - this is an API/interface change) (012-plugin-registration-api)
+- Go 1.24.0 + urfave/cli/v2 (CLI), modernc.org/sqlite (SQLite), jackc/pgx/v5 (PostgreSQL) (013-sqlite-postgres-import)
+- SQLite (source, read-only), PostgreSQL (target, read-write with new import_metadata table) (013-sqlite-postgres-import)
 
 - Go 1.22+ (per MASTER-DESIGN.md) (001-core-repo-setup)
 
@@ -43,9 +45,9 @@ tests/
 Go 1.22+ (per MASTER-DESIGN.md): Follow standard conventions
 
 ## Recent Changes
+- 013-sqlite-postgres-import: Added Go 1.24.0 + urfave/cli/v2 (CLI), modernc.org/sqlite (SQLite), jackc/pgx/v5 (PostgreSQL)
 - 012-plugin-registration-api: Added Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), mark3labs/mcp-go (MCP tools)
 - 011-webgui-search: Added Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), html/template (rendering), HTMX 1.9.10 (client-side), Tailwind CSS (styling via CDN)
-- 010-searchable-interface: Added Go 1.24.0 (per go.mod) + None new required - interface-only feature
 
 
 <!-- MANUAL ADDITIONS START -->
