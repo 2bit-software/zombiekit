@@ -7,7 +7,8 @@ vars:
     sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
   BUILD_DATE:
     sh: date -u +%Y-%m-%dT%H:%M:%SZ
-  LDFLAGS: -s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}}
+  VERSION_PKG: github.com/zombiekit/brains/internal/version
+  LDFLAGS: -s -w -X {{.VERSION_PKG}}.version={{.VERSION}} -X {{.VERSION_PKG}}.commit={{.COMMIT}} -X {{.VERSION_PKG}}.buildDate={{.BUILD_DATE}}
 
 tasks:
   default:
@@ -39,6 +40,28 @@ tasks:
       - go.sum
     generates:
       - bin/brains
+
+  install:
+    desc: Build and install brains to GOBIN with bs symlink
+    deps: [build]
+    vars:
+      INSTALL_DIR:
+        sh: go env GOBIN || echo "$HOME/go/bin"
+    cmds:
+      - |
+        echo "Installing brains to {{.INSTALL_DIR}}..."
+        mkdir -p {{.INSTALL_DIR}}
+        if ! cp bin/brains {{.INSTALL_DIR}}/brains; then
+          echo "ERROR: Failed to copy brains to {{.INSTALL_DIR}}"
+          exit 1
+        fi
+        cd {{.INSTALL_DIR}} && ln -sf brains bs
+        echo ""
+        echo "Installed successfully!"
+        echo "  brains: {{.INSTALL_DIR}}/brains"
+        echo "  bs:     {{.INSTALL_DIR}}/bs -> brains"
+        echo ""
+        {{.INSTALL_DIR}}/brains version
 
   test:
     desc: Run tests with coverage

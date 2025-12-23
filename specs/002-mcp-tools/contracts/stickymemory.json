@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "stickymemory",
+  "description": "Persistent memory storage for saving and retrieving information between sessions",
+  "type": "object",
+  "properties": {
+    "operation": {
+      "type": "string",
+      "description": "The operation to perform",
+      "enum": ["get", "set", "list", "delete", "search", "clear"]
+    },
+    "name": {
+      "type": "string",
+      "description": "The name/key of the memory item (required for get, set, delete)",
+      "pattern": "^[a-zA-Z0-9._-]+$",
+      "maxLength": 255
+    },
+    "content": {
+      "type": "string",
+      "description": "The content to store (required for 'set' operation)",
+      "maxLength": 1048576
+    },
+    "limit": {
+      "type": "number",
+      "description": "Maximum number of items to return (for 'list' and 'search' operations, default: 10)",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 10
+    }
+  },
+  "required": ["operation"],
+  "allOf": [
+    {
+      "if": {
+        "properties": { "operation": { "const": "get" } }
+      },
+      "then": {
+        "required": ["name"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "operation": { "const": "set" } }
+      },
+      "then": {
+        "required": ["name", "content"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "operation": { "const": "delete" } }
+      },
+      "then": {
+        "required": ["name"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "operation": { "const": "search" } }
+      },
+      "then": {
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "description": "Search query (searches in both name and content)"
+          }
+        }
+      }
+    }
+  ],
+  "examples": [
+    {
+      "operation": "set",
+      "name": "project-context",
+      "content": "Working on authentication feature for user login"
+    },
+    {
+      "operation": "get",
+      "name": "project-context"
+    },
+    {
+      "operation": "list",
+      "limit": 10
+    },
+    {
+      "operation": "search",
+      "name": "authentication",
+      "limit": 5
+    },
+    {
+      "operation": "delete",
+      "name": "old-note"
+    },
+    {
+      "operation": "clear"
+    }
+  ],
+  "responses": {
+    "set": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "name": { "type": "string" },
+        "version": { "type": "integer" }
+      }
+    },
+    "get": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "content": { "type": "string" },
+        "version": { "type": "integer" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "list": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "size": { "type": "integer" },
+          "version": { "type": "integer" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "search": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "size": { "type": "integer" },
+          "version": { "type": "integer" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "delete": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "name": { "type": "string" }
+      }
+    },
+    "clear": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "count": { "type": "integer" }
+      }
+    }
+  }
+}

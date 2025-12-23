@@ -1,0 +1,256 @@
+package profile
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// ResolvedDirectory represents a .brains/profiles/ directory that was found.
+type ResolvedDirectory struct {
+	Path   string        // Absolute path to the profiles directory
+	Source ProfileSource // The source type (local, parent, global)
+}
+
+// Resolver finds and loads profiles from .brains/profiles/ directories.
+type Resolver struct {
+	workingDir string
+	homeDir    string
+}
+
+// NewResolver creates a new Resolver starting from the given working directory.
+// If workingDir is empty, it uses the current working directory.
+func NewResolver(workingDir string) (*Resolver, error) {
+	if workingDir == "" {
+		var err error
+		workingDir, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("getting current directory: %w", err)
+		}
+	}
+
+	// Ensure we have an absolute path
+	absWorkingDir, err := filepath.Abs(workingDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolving absolute path: %w", err)
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Home directory inaccessible is not fatal; we'll skip global profiles
+		homeDir = ""
+	}
+
+	return &Resolver{
+		workingDir: absWorkingDir,
+		homeDir:    homeDir,
+	}, nil
+}
+
+// FindProfileDirs finds all .brains/profiles/ directories from the working
+// directory up to the git root (or filesystem root), plus the global directory.
+// Returns directories in precedence order: local first, parent directories,
+// then global last.
+func (r *Resolver) FindProfileDirs() ([]ResolvedDirectory, error) {
+	var dirs []ResolvedDirectory
+	gitRoot := r.findGitRoot()
+
+	// Walk from CWD up to git root (or filesystem root)
+	current := r.workingDir
+	isFirst := true
+
+	for {
+		profilesPath := filepath.Join(current, ".brains", "profiles")
+		if info, err := os.Stat(profilesPath); err == nil && info.IsDir() {
+			source := SourceParent
+			if isFirst {
+				source = SourceLocal
+			}
+			dirs = append(dirs, ResolvedDirectory{
+				Path:   profilesPath,
+				Source: source,
+			})
+		}
+		isFirst = false
+
+		// Stop at git root
+		if gitRoot != "" && current == gitRoot {
+			break
+		}
+
+		// Move to parent
+		parent := filepath.Dir(current)
+		if parent == current {
+			// Reached filesystem root
+			break
+		}
+		current = parent
+	}
+
+	// Add global directory last (lowest precedence)
+	if r.homeDir != "" {
+		globalPath := filepath.Join(r.homeDir, ".brains", "profiles")
+		if info, err := os.Stat(globalPath); err == nil && info.IsDir() {
+			dirs = append(dirs, ResolvedDirectory{
+				Path:   globalPath,
+				Source: SourceGlobal,
+			})
+		}
+	}
+
+	return dirs, nil
+}
+
+// findGitRoot finds the git repository root by looking for .git directory.
+// Returns empty string if not in a git repository.
+func (r *Resolver) findGitRoot() string {
+	current := r.workingDir
+	for {
+		gitPath := filepath.Join(current, ".git")
+		if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
+			return current
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			// Reached filesystem root without finding .git
+			return ""
+		}
+		current = parent
+	}
+}
+
+// LoadProfiles loads all profile files from the given directories.
+// Profiles are keyed by name, with earlier directories taking precedence
+// (shadowing later ones).
+func (r *Resolver) LoadProfiles(dirs []ResolvedDirectory) (map[string]*Profile, error) {
+	profiles := make(map[string]*Profile)
+
+	// Process directories in order (first one wins for each name)
+	for _, dir := range dirs {
+		dirProfiles, err := r.loadProfilesFromDir(dir)
+		if err != nil {
+			// Log warning but continue with other directories
+			continue
+		}
+
+		for name, profile := range dirProfiles {
+			if _, exists := profiles[name]; !exists {
+				profiles[name] = profile
+			}
+		}
+	}
+
+	return profiles, nil
+}
+
+// LoadAllProfiles loads all profiles including shadowed ones.
+// Returns profiles grouped by name, with all versions from different sources.
+func (r *Resolver) LoadAllProfiles(dirs []ResolvedDirectory) (map[string][]*Profile, error) {
+	profiles := make(map[string][]*Profile)
+
+	for _, dir := range dirs {
+		dirProfiles, err := r.loadProfilesFromDir(dir)
+		if err != nil {
+			continue
+		}
+
+		for name, profile := range dirProfiles {
+			profiles[name] = append(profiles[name], profile)
+		}
+	}
+
+	return profiles, nil
+}
+
+// loadProfilesFromDir loads all .md files from a single profiles directory.
+func (r *Resolver) loadProfilesFromDir(dir ResolvedDirectory) (map[string]*Profile, error) {
+	profiles := make(map[string]*Profile)
+
+	entries, err := os.ReadDir(dir.Path)
+	if err != nil {
+		return nil, fmt.Errorf("reading directory %s: %w", dir.Path, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+
+		// Extract profile name from filename (without .md extension)
+		profileName := strings.TrimSuffix(name, ".md")
+		filePath := filepath.Join(dir.Path, name)
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			// Skip files we can't read
+			continue
+		}
+
+		profile, err := ParseProfile(content, profileName, filePath, dir.Source)
+		if err != nil {
+			// Skip profiles with parse errors during loading
+			continue
+		}
+
+		profiles[profileName] = profile
+	}
+
+	return profiles, nil
+}
+
+// ResolveProfile finds a specific profile by name from all sources.
+// Returns the highest-precedence version of the profile.
+func (r *Resolver) ResolveProfile(name string) (*Profile, error) {
+	dirs, err := r.FindProfileDirs()
+	if err != nil {
+		return nil, err
+	}
+
+	profiles, err := r.LoadProfiles(dirs)
+	if err != nil {
+		return nil, err
+	}
+
+	profile, exists := profiles[name]
+	if !exists {
+		return nil, fmt.Errorf("profile %q not found", name)
+	}
+
+	return profile, nil
+}
+
+// GetInheritanceChain returns all versions of a profile from global to local
+// (for inheritance resolution). Returns profiles in order: global first,
+// then parent directories from root to CWD, then local.
+func (r *Resolver) GetInheritanceChain(name string) ([]*Profile, error) {
+	dirs, err := r.FindProfileDirs()
+	if err != nil {
+		return nil, err
+	}
+
+	allProfiles, err := r.LoadAllProfiles(dirs)
+	if err != nil {
+		return nil, err
+	}
+
+	versions := allProfiles[name]
+	if len(versions) == 0 {
+		return nil, nil
+	}
+
+	// Reverse the order: we collected in precedence order (local first),
+	// but for inheritance we need global first
+	chain := make([]*Profile, len(versions))
+	for i, p := range versions {
+		chain[len(versions)-1-i] = p
+	}
+
+	return chain, nil
+}

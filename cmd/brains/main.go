@@ -5,16 +5,11 @@ import (
 	"os"
 
 	internalcli "github.com/zombiekit/brains/internal/cli"
-)
-
-// Version info - set via ldflags at build time
-var (
-	version = "dev"
-	commit  = "unknown"
+	"github.com/zombiekit/brains/internal/version"
 )
 
 func main() {
-	app := internalcli.NewApp(version, commit)
+	app := internalcli.NewApp(version.Get())
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "code-reasoning",
+  "description": "Sequential thinking tool for problem-solving with branching and revision capabilities",
+  "type": "object",
+  "properties": {
+    "thought": {
+      "type": "string",
+      "description": "Your current reasoning step",
+      "minLength": 1
+    },
+    "thought_number": {
+      "type": "integer",
+      "description": "Current number in sequence (1-indexed)",
+      "minimum": 1
+    },
+    "total_thoughts": {
+      "type": "integer",
+      "description": "Estimated final count (can adjust as needed)",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "next_thought_needed": {
+      "type": "boolean",
+      "description": "Set to FALSE ONLY when completely done"
+    },
+    "is_revision": {
+      "type": "boolean",
+      "description": "When correcting earlier thinking",
+      "default": false
+    },
+    "revises_thought": {
+      "type": "integer",
+      "description": "Which thought to revise (required if is_revision is true)",
+      "minimum": 1
+    },
+    "branch_from_thought": {
+      "type": "integer",
+      "description": "When exploring alternative approaches",
+      "minimum": 1
+    },
+    "branch_id": {
+      "type": "string",
+      "description": "Branch identifier (required if branch_from_thought is set)",
+      "pattern": "^[a-zA-Z0-9._-]+$"
+    }
+  },
+  "required": ["thought", "thought_number", "total_thoughts", "next_thought_needed"],
+  "allOf": [
+    {
+      "if": {
+        "properties": { "is_revision": { "const": true } }
+      },
+      "then": {
+        "required": ["revises_thought"],
+        "not": {
+          "required": ["branch_from_thought"]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "branch_from_thought": { "type": "integer" } }
+      },
+      "then": {
+        "required": ["branch_id"],
+        "properties": {
+          "is_revision": { "const": false }
+        }
+      }
+    }
+  ],
+  "examples": [
+    {
+      "thought": "First, I need to understand the current authentication flow",
+      "thought_number": 1,
+      "total_thoughts": 5,
+      "next_thought_needed": true
+    },
+    {
+      "thought": "The JWT validation happens in middleware, not the handler",
+      "thought_number": 2,
+      "total_thoughts": 5,
+      "next_thought_needed": true
+    },
+    {
+      "thought": "Actually, I realize the token parsing is duplicated - let me revise my earlier understanding",
+      "thought_number": 3,
+      "total_thoughts": 5,
+      "next_thought_needed": true,
+      "is_revision": true,
+      "revises_thought": 2
+    },
+    {
+      "thought": "Let me explore an alternative: using session-based auth instead",
+      "thought_number": 3,
+      "total_thoughts": 5,
+      "next_thought_needed": true,
+      "branch_from_thought": 2,
+      "branch_id": "session-auth"
+    },
+    {
+      "thought": "In conclusion, the JWT middleware approach is correct and no changes needed",
+      "thought_number": 5,
+      "total_thoughts": 5,
+      "next_thought_needed": false
+    }
+  ],
+  "responses": {
+    "thought_recorded": {
+      "type": "object",
+      "properties": {
+        "thought_number": { "type": "integer" },
+        "total_thoughts": { "type": "integer" },
+        "chain": {
+          "type": "string",
+          "description": "Formatted display of the reasoning chain"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["in_progress", "completed"]
+        }
+      }
+    },
+    "revision_applied": {
+      "type": "object",
+      "properties": {
+        "revised_thought": { "type": "integer" },
+        "indicator": { "type": "string", "const": "🔄" },
+        "chain": { "type": "string" }
+      }
+    },
+    "branch_created": {
+      "type": "object",
+      "properties": {
+        "branch_id": { "type": "string" },
+        "branched_from": { "type": "integer" },
+        "indicator": { "type": "string", "const": "🌿" },
+        "chain": { "type": "string" }
+      }
+    },
+    "session_complete": {
+      "type": "object",
+      "properties": {
+        "total_thoughts": { "type": "integer" },
+        "branches": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "summary": { "type": "string" }
+      }
+    }
+  },
+  "errors": {
+    "invalid_thought_number": {
+      "description": "Thought number must be sequential (expected N, got M)"
+    },
+    "revision_and_branch": {
+      "description": "Cannot revise and branch in the same request"
+    },
+    "invalid_revision_target": {
+      "description": "Cannot revise thought N: it doesn't exist yet"
+    },
+    "session_completed": {
+      "description": "Session already completed, cannot add more thoughts"
+    },
+    "exceeds_total": {
+      "description": "Thought number exceeds declared total_thoughts"
+    }
+  }
+}

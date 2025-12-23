@@ -36,5 +36,11 @@ help me design the workflow that my new CLI application will have:
 /brains.audit
 	* makes sure all artifacts are aligned
 
+/brains.constituation
+	* defines and updates constitution for the project
+
+/brains.checklist
+	* Generate quality checklists to validate requirements completeness, clarity, and consistency (after /brains.plan)
+
 /brains.eat
 	* fun command which i'm not sure what it does yet
