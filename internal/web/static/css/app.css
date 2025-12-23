@@ -1,0 +1,16 @@
+/* Custom styles for Brains web interface */
+
+/* Smooth transitions for HTMX content updates */
+#content {
+    transition: opacity 0.15s ease-in-out;
+}
+
+.htmx-request #content {
+    opacity: 0.5;
+}
+
+/* Sidebar active state updates via JavaScript */
+.sidebar-link.active {
+    background-color: rgb(17, 24, 39); /* bg-gray-900 */
+    color: white;
+}

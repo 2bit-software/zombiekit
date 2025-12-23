@@ -1,0 +1,30 @@
+<div class="bg-white rounded-lg shadow p-6">
+    <h1 class="text-2xl font-bold text-gray-900 mb-4">Welcome to Brains</h1>
+    <p class="text-gray-600 mb-6">
+        Brains is a profile composition and MCP tool management system.
+    </p>
+
+    {{if .Content.Plugins}}
+    <div class="mt-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Registered Plugins</h2>
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {{range .Content.Plugins}}
+            {{range .SidebarItems}}
+            <a href="{{.Path}}"
+               hx-get="{{.Path}}"
+               hx-target="#content"
+               hx-push-url="true"
+               class="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <h3 class="font-medium text-gray-900">{{.Label}}</h3>
+                <p class="text-sm text-gray-500 mt-1">{{.Path}}</p>
+            </a>
+            {{end}}
+            {{end}}
+        </div>
+    </div>
+    {{else}}
+    <div class="text-center py-8 text-gray-500">
+        <p>No plugins registered yet.</p>
+    </div>
+    {{end}}
+</div>

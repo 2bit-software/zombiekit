@@ -1,0 +1,94 @@
+<div class="bg-white rounded-lg shadow">
+    <!-- Back link -->
+    <div class="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <a href="/profiles"
+           hx-get="/profiles"
+           hx-target="#content"
+           hx-push-url="true"
+           class="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
+            <svg class="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to profiles
+        </a>
+    </div>
+
+    {{if .Content.Error}}
+    <div class="p-6">
+        <div class="rounded-md bg-red-50 p-4">
+            <div class="flex">
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Profile not found</h3>
+                    <p class="mt-2 text-sm text-red-700">{{.Content.Error}}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{else}}
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-semibold text-gray-900">{{.Content.Profile.Name}}</h1>
+                {{if .Content.Profile.Description}}
+                <p class="mt-1 text-sm text-gray-500">{{.Content.Profile.Description}}</p>
+                {{end}}
+            </div>
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+                {{.Content.Profile.SourceStr}}
+            </span>
+        </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <dl class="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-3">
+            <div class="sm:col-span-3">
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Path</dt>
+                <dd class="mt-1 text-sm text-gray-900 font-mono break-all">{{.Content.Profile.Path}}</dd>
+            </div>
+            {{if .Content.Profile.Includes}}
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Includes</dt>
+                <dd class="mt-1">
+                    {{range .Content.Profile.Includes}}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-1">
+                        {{.}}
+                    </span>
+                    {{end}}
+                </dd>
+            </div>
+            {{end}}
+            {{if .Content.Profile.Inherits}}
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Inherits</dt>
+                <dd class="mt-1 text-sm text-gray-900">Yes</dd>
+            </div>
+            {{end}}
+            {{if .Content.Profile.Model}}
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Model</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{.Content.Profile.Model}}</dd>
+            </div>
+            {{end}}
+        </dl>
+    </div>
+
+    {{if .Content.Profile.InheritedFrom}}
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-sm font-medium text-gray-900 mb-2">Inherited From</h3>
+        <ul class="space-y-1">
+            {{range .Content.Profile.InheritedFrom}}
+            <li class="text-sm text-gray-600 font-mono">{{.Path}}</li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+
+    <!-- Content -->
+    <div class="p-6">
+        <h3 class="text-sm font-medium text-gray-900 mb-3">Content</h3>
+        <pre class="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm font-mono whitespace-pre-wrap">{{.Content.Profile.Content}}</pre>
+    </div>
+    {{end}}
+</div>

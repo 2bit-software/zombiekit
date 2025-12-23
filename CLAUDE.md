@@ -15,6 +15,7 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 - N/A (no storage changes) (006-remove-mcp-tools)
 - Go 1.24.0 (per go.mod) + urfave/cli/v2 (CLI), BurntSushi/toml (TOML parsing - already indirect dep), slog (logging) (007-cli-config)
 - TOML files at `.brains/config.toml` (local), `~/.config/brains/config.toml` (global Unix), `%APPDATA%\brains\config.toml` (Windows) (007-cli-config)
+- N/A (uses existing profile.Service from internal/profile) (008-plugin-web-gui)
 
 - Go 1.22+ (per MASTER-DESIGN.md) (001-core-repo-setup)
 
@@ -34,9 +35,9 @@ tests/
 Go 1.22+ (per MASTER-DESIGN.md): Follow standard conventions
 
 ## Recent Changes
+- 008-plugin-web-gui: Added Go 1.24.0 (per go.mod)
 - 007-cli-config: Added Go 1.24.0 (per go.mod) + urfave/cli/v2 (CLI), BurntSushi/toml (TOML parsing - already indirect dep), slog (logging)
 - 006-remove-mcp-tools: Added Go 1.24.0 + mark3labs/mcp-go v0.43.2 (MCP server)
-- 005-profile-import: Added Go 1.24.0 (per go.mod) + urfave/cli/v2 (CLI), adrg/frontmatter (YAML parsing), gopkg.in/yaml.v3 (YAML)
 
 
 <!-- MANUAL ADDITIONS START -->
