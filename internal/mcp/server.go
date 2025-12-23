@@ -13,6 +13,7 @@ import (
 	"github.com/zombiekit/brains/internal/mcp/tools/codereasoning"
 	profiletool "github.com/zombiekit/brains/internal/mcp/tools/profile"
 	"github.com/zombiekit/brains/internal/mcp/tools/stickymemory"
+	"github.com/zombiekit/brains/internal/mcp/tools/zombiekit"
 	"github.com/zombiekit/brains/internal/memory"
 )
 
@@ -24,6 +25,7 @@ type Server struct {
 	codeReasoning  *codereasoning.Tool
 	sessionManager *codereasoning.SessionManager
 	profileTool    *profiletool.Tool
+	zombiekitTool  *zombiekit.Tool
 	config         *config.Config
 }
 
@@ -44,6 +46,7 @@ func NewServer(storage memory.Storage, cfg *config.Config) *Server {
 	stickyMemoryTool := stickymemory.NewTool(storage)
 	codeReasoningTool := codereasoning.NewTool(sessionManager)
 	profTool := profiletool.NewTool()
+	zombiekitTool := zombiekit.NewTool()
 
 	s := &Server{
 		mcpServer:      mcpServer,
@@ -52,6 +55,7 @@ func NewServer(storage memory.Storage, cfg *config.Config) *Server {
 		codeReasoning:  codeReasoningTool,
 		sessionManager: sessionManager,
 		profileTool:    profTool,
+		zombiekitTool:  zombiekitTool,
 		config:         cfg,
 	}
 
@@ -126,6 +130,30 @@ func (s *Server) registerTools() {
 
 	// Register profile tools
 	s.registerProfileTools()
+
+	// Register feature tool
+	if s.config.IsToolEnabled("feature") {
+		featureDef := s.zombiekitTool.Definition()
+		featureTool := mcp.NewTool(featureDef.Name,
+			mcp.WithDescription(featureDef.Description),
+		)
+		s.mcpServer.AddTool(featureTool, s.handleFeature)
+	}
+}
+
+// handleFeature handles feature tool calls.
+func (s *Server) handleFeature(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]interface{})
+	if !ok {
+		args = make(map[string]interface{})
+	}
+
+	result, err := s.zombiekitTool.Execute(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
 }
 
 // handleStickyMemory handles stickymemory tool calls.
