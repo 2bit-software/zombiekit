@@ -110,18 +110,22 @@ func (s *Server) searchHandler(w http.ResponseWriter, r *http.Request) {
     query := r.URL.Query().Get("q")
     var results []PluginSearchResult
 
-    for _, plugin := range s.registry.All() {
-        searchable, ok := plugin.(search.Searchable)
+    for _, rp := range s.registry.All() {
+        searchable, ok := rp.Plugin().(search.Searchable)
         if !ok {
             continue
         }
         items, err := searchable.Search(query, 3, search.SortRelevance)
         if err != nil {
-            s.logger.Error("search failed", "plugin", plugin.ID(), "error", err)
+            s.logger.Error("search failed", "plugin", rp.Name(), "error", err)
             continue
         }
+        // Prefix URLs with plugin name
+        for i := range items {
+            items[i].URL = PrefixURL(rp.Name(), items[i].URL)
+        }
         results = append(results, PluginSearchResult{
-            PluginID:   plugin.ID(),
+            PluginID:   rp.Name(),
             PluginName: /* from sidebar label */,
             Items:      items,
         })

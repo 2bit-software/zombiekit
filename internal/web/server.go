@@ -95,6 +95,9 @@ func (s *Server) setupRouter() {
 	// Home page
 	r.Get("/", s.homeHandler)
 
+	// Search endpoint
+	r.Get("/search", s.searchHandler)
+
 	// Mount plugins
 	for _, rp := range s.registry.All() {
 		name := rp.Name()

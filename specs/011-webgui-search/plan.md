@@ -17,7 +17,7 @@ Add a debounced search bar to the web GUI header that queries all plugins implem
 **Project Type**: Single Go binary with embedded web UI
 **Performance Goals**: Search results within 500ms of last keystroke (300ms debounce + 200ms query time)
 **Constraints**: Results limited to 3 per plugin; client-side debouncing to reduce server load
-**Scale/Scope**: Single user, local deployment; memory plugin currently only searchable plugin
+**Scale/Scope**: Single user, local deployment; both memory and profiles plugins implement Searchable
 
 ## Constitution Check
 

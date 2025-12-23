@@ -1,0 +1,25 @@
+{{if .Content.HasAny}}
+<div class="search-results">
+  {{range .Content.Results}}
+  {{if .Items}}
+  <div class="search-group border-b border-gray-100 last:border-b-0">
+    <div class="search-group-header px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50">{{.PluginName}}</div>
+    {{range .Items}}
+    <a href="{{.URL}}"
+       hx-get="{{.URL}}"
+       hx-target="#content"
+       hx-push-url="true"
+       data-search-result
+       class="search-result block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 cursor-pointer truncate">
+      {{.Title}}
+    </a>
+    {{end}}
+  </div>
+  {{end}}
+  {{end}}
+</div>
+{{else}}
+<div class="search-no-results px-4 py-3 text-sm text-gray-500">
+  No results found for "{{.Content.Query}}"
+</div>
+{{end}}

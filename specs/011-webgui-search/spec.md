@@ -158,7 +158,7 @@ Users can navigate search results using keyboard arrows and select with Enter, p
 ## Assumptions
 
 - The Searchable interface is already implemented by the memory plugin (verified from codebase review)
-- Profiles plugin search implementation will be done in a future iteration
+- The profiles plugin also implements Searchable (added during spec 012 implementation)
 - HTMX is available and used for partial page updates (present in shell.html)
 - The existing shell.html layout can be modified to include the search bar
 - Plugin-relative URLs (e.g., "/memory/my-notes") work correctly with the existing routing

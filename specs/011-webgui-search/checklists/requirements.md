@@ -32,6 +32,8 @@
 ## Notes
 
 - All items pass validation
-- Specification is ready for `/speckit.clarify` or `/speckit.plan`
+- Specification is ready for `/speckit.tasks` (planning already complete)
 - Memory plugin already implements Searchable interface - verified in codebase
-- Profiles plugin search deferred to future iteration as stated in user requirements
+- Profiles plugin also implements Searchable (added during spec 012 implementation)
+- Spec 012 changes integrated: WebPlugin.ID() removed, registration name used instead
+- Updated 2025-12-22: Post-012 alignment audit completed

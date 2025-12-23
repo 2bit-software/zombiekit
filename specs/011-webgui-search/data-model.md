@@ -20,11 +20,11 @@
 **Location**: `internal/web/search.go`
 **Purpose**: Groups search results with their source plugin metadata
 
-| Field      | Type           | Description                                    |
-|------------|----------------|------------------------------------------------|
-| PluginID   | string         | Unique identifier from WebPlugin.ID()          |
-| PluginName | string         | Human-readable label from SidebarItems()[0]    |
-| Items      | []SearchResult | Up to 3 results from this plugin               |
+| Field      | Type           | Description                                       |
+|------------|----------------|---------------------------------------------------|
+| PluginID   | string         | Plugin name from RegisteredPlugin.Name()          |
+| PluginName | string         | Human-readable label from SidebarItems()[0].Label |
+| Items      | []SearchResult | Up to 3 results from this plugin                  |
 
 **Validation Rules**:
 - PluginID must be non-empty
