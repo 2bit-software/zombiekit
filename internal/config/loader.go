@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -123,4 +124,43 @@ func LoadConfig(logger *slog.Logger) *Config {
 	}
 
 	return cfg
+}
+
+// LoadStorageConfig loads and merges storage configuration from all sources.
+// Precedence order (highest to lowest): env vars > local file > global file > defaults.
+//
+// Returns a StorageConfig ready for use with the database layer.
+func LoadStorageConfig(logger *slog.Logger) StorageConfig {
+	// Start with defaults
+	cfg := NewDefaultStorageConfig()
+
+	// Load and merge from config files (global -> local precedence)
+	if fileCfg := LoadConfig(logger); fileCfg != nil && fileCfg.Storage != nil {
+		cfg = fileCfg.Storage.ToStorageConfig()
+		logger.Debug("loaded storage config from file",
+			"backend", cfg.Backend,
+			"postgres_url_set", cfg.PostgresURL != "",
+		)
+	}
+
+	// Apply environment variable overrides (highest precedence)
+	envCfg := LoadStorageConfigFromEnv()
+	cfg.MergeEnvOverrides(envCfg)
+
+	// Validate and clamp connection timeout
+	cfg.ConnectionTimeout = ValidateConnectionTimeout(cfg.ConnectionTimeout)
+
+	return cfg
+}
+
+// ValidateConnectionTimeout ensures the connection timeout is within valid bounds.
+// Returns the clamped value within [MinConnectionTimeout, MaxConnectionTimeout].
+func ValidateConnectionTimeout(d time.Duration) time.Duration {
+	if d < MinConnectionTimeout {
+		return MinConnectionTimeout
+	}
+	if d > MaxConnectionTimeout {
+		return MaxConnectionTimeout
+	}
+	return d
 }

@@ -28,6 +28,8 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 - SQLite (source, read-only), PostgreSQL (target, read-write with new import_metadata table) (013-sqlite-postgres-import)
 - Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), html/template (rendering), internal/version (build info), internal/config (storage config) (014-webgui-status)
 - SQLite (default) or PostgreSQL - read-only status display (014-webgui-status)
+- Go 1.24.0 (per go.mod) + BurntSushi/toml (config parsing), jackc/pgx/v5 (PostgreSQL), modernc.org/sqlite (SQLite), urfave/cli/v2 (CLI) (015-postgres-config)
+- PostgreSQL (primary when configured) or SQLite (default/fallback) (015-postgres-config)
 
 - Go 1.22+ (per MASTER-DESIGN.md) (001-core-repo-setup)
 
@@ -47,9 +49,9 @@ tests/
 Go 1.22+ (per MASTER-DESIGN.md): Follow standard conventions
 
 ## Recent Changes
+- 015-postgres-config: Added Go 1.24.0 (per go.mod) + BurntSushi/toml (config parsing), jackc/pgx/v5 (PostgreSQL), modernc.org/sqlite (SQLite), urfave/cli/v2 (CLI)
 - 014-webgui-status: Added Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), html/template (rendering), internal/version (build info), internal/config (storage config)
 - 013-sqlite-postgres-import: Added Go 1.24.0 + urfave/cli/v2 (CLI), modernc.org/sqlite (SQLite), jackc/pgx/v5 (PostgreSQL)
-- 012-plugin-registration-api: Added Go 1.24.0 (per go.mod) + go-chi/chi/v5 (routing), mark3labs/mcp-go (MCP tools)
 
 
 <!-- MANUAL ADDITIONS START -->
