@@ -52,6 +52,7 @@ func NewRenderer(registry *PluginRegistry) (*Renderer, error) {
 		"formatTime": func(t time.Time) string {
 			return t.Format("Jan 2, 2006 3:04 PM")
 		},
+		"lower": strings.ToLower,
 	}
 
 	tmpl := template.New("").Funcs(funcMap)

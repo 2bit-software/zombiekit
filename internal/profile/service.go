@@ -82,6 +82,7 @@ func (s *Service) List() ([]ListEntry, error) {
 				Shadowed:    i > 0, // First one wins, rest are shadowed
 				Model:       p.Model,
 				Color:       p.Color,
+				Type:        p.Type,
 			}
 			if !seen[name] || entry.Shadowed {
 				entries = append(entries, entry)
@@ -125,6 +126,7 @@ func (s *Service) Show(name string, raw bool) (*ShowResult, error) {
 		RawContent:  string(profile.RawContent),
 		Model:       profile.Model,
 		Color:       profile.Color,
+		Type:        profile.Type,
 	}
 
 	if raw {

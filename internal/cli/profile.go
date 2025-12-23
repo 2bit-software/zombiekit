@@ -379,6 +379,17 @@ func outputShowJSON(result *profile.ShowResult) error {
 		"raw_content":  result.RawContent,
 	}
 
+	// Add optional fields only if they have values
+	if result.Model != "" {
+		output["model"] = result.Model
+	}
+	if result.Color != "" {
+		output["color"] = result.Color
+	}
+	if result.Type != "" {
+		output["type"] = result.Type
+	}
+
 	if len(result.InheritedFrom) > 0 {
 		var inherited []map[string]string
 		for _, inf := range result.InheritedFrom {

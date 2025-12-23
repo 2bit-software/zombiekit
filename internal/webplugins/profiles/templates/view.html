@@ -71,6 +71,17 @@
                 <dd class="mt-1 text-sm text-gray-900">{{.Content.Profile.Model}}</dd>
             </div>
             {{end}}
+            {{if .Content.Profile.Type}}
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Type</dt>
+                <dd class="mt-1">
+                    {{$typeLower := .Content.Profile.Type | lower}}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{if eq $typeLower "action"}}bg-purple-100 text-purple-800{{else if eq $typeLower "domain"}}bg-green-100 text-green-800{{else if eq $typeLower "step"}}bg-blue-100 text-blue-800{{else}}bg-gray-100 text-gray-600{{end}}">
+                        {{.Content.Profile.Type}}
+                    </span>
+                </dd>
+            </div>
+            {{end}}
         </dl>
     </div>
 

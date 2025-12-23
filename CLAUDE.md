@@ -34,6 +34,7 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 - SQLite (modernc.org/sqlite) - persisted via volume mount to `.data/` (016-webgui-container-dev)
 - Go 1.24.0 (per go.mod) + mark3labs/mcp-go (MCP server framework) (017-zombiekit-mcp)
 - File system read-only (no database) (017-zombiekit-mcp)
+- N/A (file-based profiles, no database changes) (018-profile-type)
 
 - Go 1.22+ (per MASTER-DESIGN.md) (001-core-repo-setup)
 
@@ -53,9 +54,9 @@ tests/
 Go 1.22+ (per MASTER-DESIGN.md): Follow standard conventions
 
 ## Recent Changes
+- 018-profile-type: Added Go 1.24.0 (per go.mod)
 - 017-zombiekit-mcp: Added Go 1.24.0 (per go.mod) + mark3labs/mcp-go (MCP server framework)
 - 016-webgui-container-dev: Added Go 1.24.0 (per go.mod) + Docker Compose, wgo (github.com/bokwoon95/wgo)
-- 015-postgres-config: Added Go 1.24.0 (per go.mod) + BurntSushi/toml (config parsing), jackc/pgx/v5 (PostgreSQL), modernc.org/sqlite (SQLite), urfave/cli/v2 (CLI)
 
 
 <!-- MANUAL ADDITIONS START -->
