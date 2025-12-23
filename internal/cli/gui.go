@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/urfave/cli/v2"
+	"github.com/zombiekit/brains/internal/config"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/memory/sqlite"
 	"github.com/zombiekit/brains/internal/profile"
@@ -76,13 +77,25 @@ func runGUI(c *cli.Context) error {
 		registry.Register("memory", memoryPlugin)
 	}
 
+	// Load storage config for status display
+	storageConfig := config.LoadStorageConfigFromEnv()
+	// Override SQLite path if using default local storage
+	if storageConfig.Backend == config.BackendSQLite && storageConfig.SQLitePath == config.DefaultSQLitePath() {
+		storageConfig.SQLitePath = memoryDBPath
+	}
+
 	// Create server config
-	config := web.ServerConfig{
+	serverConfig := web.ServerConfig{
 		Port: c.Int("port"),
+		StatusConfig: web.StatusConfig{
+			ServerPort:    c.Int("port"),
+			LogLevel:      logLevel,
+			StorageConfig: storageConfig,
+		},
 	}
 
 	// Create server
-	server, err := web.NewServer(registry, config, logger)
+	server, err := web.NewServer(registry, serverConfig, logger)
 	if err != nil {
 		return err
 	}
@@ -101,7 +114,7 @@ func runGUI(c *cli.Context) error {
 	}()
 
 	logger.Info("starting web GUI",
-		"port", config.Port,
+		"port", serverConfig.Port,
 		"url", "http://localhost:"+c.String("port"),
 	)
 

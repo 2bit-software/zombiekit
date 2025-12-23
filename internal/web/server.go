@@ -22,6 +22,7 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration // Max time to read request (default: 15s)
 	WriteTimeout time.Duration // Max time to write response (default: 15s)
 	IdleTimeout  time.Duration // Max keep-alive idle time (default: 60s)
+	StatusConfig StatusConfig  // Status page configuration
 }
 
 // DefaultServerConfig returns a ServerConfig with sensible defaults.
@@ -42,6 +43,7 @@ type Server struct {
 	renderer   *Renderer
 	httpServer *http.Server
 	logger     *slog.Logger
+	startTime  time.Time
 }
 
 // NewServer creates a new web server with the given registry and configuration.
@@ -67,10 +69,11 @@ func NewServer(registry *PluginRegistry, config ServerConfig, logger *slog.Logge
 	}
 
 	s := &Server{
-		config:   config,
-		registry: registry,
-		renderer: renderer,
-		logger:   logger,
+		config:    config,
+		registry:  registry,
+		renderer:  renderer,
+		logger:    logger,
+		startTime: time.Now(),
 	}
 
 	s.setupRouter()
@@ -131,8 +134,16 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // homeHandler renders the dashboard home page.
 func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
+	// Build status config with current start time
+	statusCfg := s.config.StatusConfig
+	statusCfg.StartTime = s.startTime
+
+	// Gather status information
+	status := GatherStatus(r.Context(), statusCfg, s.registry)
+
 	data := map[string]any{
 		"Plugins": s.registry.All(),
+		"Status":  status,
 	}
 	if err := s.renderer.Render(w, r, "home.html", data); err != nil {
 		s.logger.Error("failed to render home page", "error", err)
