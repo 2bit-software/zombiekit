@@ -1,0 +1,82 @@
+{
+  "name": "step",
+  "description": "Execute a workflow step within an initiative. Returns directive text, history folder path, files to read, and composed profile prompt.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "step": {
+        "type": "string",
+        "description": "Step name to execute. Built-in steps: init, specify, plan, tasks, implement, audit, clarify, complete",
+        "examples": ["init", "specify", "plan", "implement"]
+      },
+      "dir": {
+        "type": "string",
+        "description": "Working directory containing the .brains folder. Used for profile resolution and initiative state."
+      },
+      "initiative": {
+        "type": "string",
+        "description": "Optional: Override the current active initiative. Path relative to history/ folder (e.g., '675d8a3f-feature-user-auth')"
+      },
+      "type": {
+        "type": "string",
+        "enum": ["feature", "bug", "refactor"],
+        "description": "Required for 'init' step: Type of initiative to create"
+      },
+      "name": {
+        "type": "string",
+        "description": "Required for 'init' step: Name/slug for the new initiative (e.g., 'user-auth')"
+      }
+    },
+    "required": ["step", "dir"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "directive": {
+        "type": "string",
+        "description": "The step directive/instruction text for the agent"
+      },
+      "history_folder": {
+        "type": "string",
+        "description": "Absolute path to the initiative's history folder"
+      },
+      "files_to_read": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "List of file paths the agent should read before proceeding"
+      },
+      "composed_prompt": {
+        "type": "string",
+        "description": "Pre-composed profile prompt content for this step"
+      }
+    },
+    "required": ["directive", "history_folder", "files_to_read", "composed_prompt"]
+  },
+  "errors": [
+    {
+      "code": "NOT_INITIALIZED",
+      "message": "Directory does not contain a .brains folder",
+      "suggestion": "Run 'brains init' in the project directory first"
+    },
+    {
+      "code": "UNKNOWN_STEP",
+      "message": "Step '{name}' not found",
+      "suggestion": "Available steps: init, specify, plan, tasks, implement, audit, clarify, complete"
+    },
+    {
+      "code": "NO_ACTIVE_INITIATIVE",
+      "message": "No active initiative. Use 'init' step to create one or provide 'initiative' parameter",
+      "suggestion": "Run step='init' with type and name parameters to create a new initiative"
+    },
+    {
+      "code": "INVALID_TYPE",
+      "message": "Invalid initiative type '{type}'",
+      "suggestion": "Type must be one of: feature, bug, refactor"
+    },
+    {
+      "code": "INITIATIVE_NOT_FOUND",
+      "message": "Initiative '{initiative}' not found in history/",
+      "suggestion": "Check the initiative path or use 'init' to create a new one"
+    }
+  ]
+}

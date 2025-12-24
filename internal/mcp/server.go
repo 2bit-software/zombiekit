@@ -12,6 +12,7 @@ import (
 	"github.com/zombiekit/brains/internal/config"
 	"github.com/zombiekit/brains/internal/mcp/tools/codereasoning"
 	profiletool "github.com/zombiekit/brains/internal/mcp/tools/profile"
+	steptool "github.com/zombiekit/brains/internal/mcp/tools/step"
 	"github.com/zombiekit/brains/internal/mcp/tools/stickymemory"
 	"github.com/zombiekit/brains/internal/mcp/tools/zombiekit"
 	"github.com/zombiekit/brains/internal/memory"
@@ -26,6 +27,7 @@ type Server struct {
 	sessionManager *codereasoning.SessionManager
 	profileTool    *profiletool.Tool
 	zombiekitTool  *zombiekit.Tool
+	stepTool       *steptool.Tool
 	config         *config.Config
 }
 
@@ -47,6 +49,7 @@ func NewServer(storage memory.Storage, cfg *config.Config) *Server {
 	codeReasoningTool := codereasoning.NewTool(sessionManager)
 	profTool := profiletool.NewTool()
 	zombiekitTool := zombiekit.NewTool()
+	stepToolInst := steptool.NewTool()
 
 	s := &Server{
 		mcpServer:      mcpServer,
@@ -56,6 +59,7 @@ func NewServer(storage memory.Storage, cfg *config.Config) *Server {
 		sessionManager: sessionManager,
 		profileTool:    profTool,
 		zombiekitTool:  zombiekitTool,
+		stepTool:       stepToolInst,
 		config:         cfg,
 	}
 
@@ -139,6 +143,9 @@ func (s *Server) registerTools() {
 		)
 		s.mcpServer.AddTool(featureTool, s.handleFeature)
 	}
+
+	// Register step tool
+	s.registerStepTool()
 }
 
 // handleFeature handles feature tool calls.
@@ -266,6 +273,52 @@ func (s *Server) handleProfileList(ctx context.Context, req mcp.CallToolRequest)
 	}
 
 	result, err := s.profileTool.HandleList(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// registerStepTool registers the step MCP tool.
+// The step tool is only registered if enabled in the configuration.
+func (s *Server) registerStepTool() {
+	if !s.config.IsToolEnabled("step") {
+		return
+	}
+
+	stepDef := s.stepTool.Definition()
+	stepMCPTool := mcp.NewTool(stepDef.Name,
+		mcp.WithDescription(stepDef.Description),
+		mcp.WithString("step",
+			mcp.Required(),
+			mcp.Description("Step name to execute. Built-in steps: init, specify, plan, tasks, implement, audit, clarify, complete"),
+		),
+		mcp.WithString("dir",
+			mcp.Required(),
+			mcp.Description("Working directory containing the .brains folder. Used for profile resolution and initiative state."),
+		),
+		mcp.WithString("initiative",
+			mcp.Description("Optional: Override the current active initiative. Path relative to history/ folder (e.g., '675d8a3f-feature-user-auth')"),
+		),
+		mcp.WithString("type",
+			mcp.Description("Required for 'init' step: Type of initiative to create (feature, bug, refactor)"),
+		),
+		mcp.WithString("name",
+			mcp.Description("Required for 'init' step: Name/slug for the new initiative (e.g., 'user-auth')"),
+		),
+	)
+	s.mcpServer.AddTool(stepMCPTool, s.handleStep)
+}
+
+// handleStep handles step tool calls.
+func (s *Server) handleStep(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]interface{})
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	result, err := s.stepTool.Execute(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

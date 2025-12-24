@@ -37,6 +37,10 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 - N/A (file-based profiles, no database changes) (018-profile-type)
 - Go 1.24.0 + urfave/cli/v2 (CLI), mark3labs/mcp-go (MCP), adrg/frontmatter (YAML parsing) (019-embedded-profile-fallback)
 - File-based profiles (.md files with YAML frontmatter), embedded filesystem (embed.FS) (019-embedded-profile-fallback)
+- Go 1.24.0 (per go.mod) + urfave/cli/v2 (CLI framework), embed (stdlib for filesystem embedding) (020-cli-init-here)
+- File-based (copying embedded files to local filesystem) (020-cli-init-here)
+- Go 1.24.0 (per go.mod) + mark3labs/mcp-go v0.43.2 (MCP), urfave/cli/v2 (CLI), adrg/frontmatter (YAML parsing), gopkg.in/yaml.v3 (021-initiatives-step-framework)
+- File-based (`.brains/active.json` for state, `./history/` for initiatives, step definitions in `.brains/steps/`) (021-initiatives-step-framework)
 
 - Go 1.22+ (per MASTER-DESIGN.md) (001-core-repo-setup)
 
@@ -56,9 +60,9 @@ tests/
 Go 1.22+ (per MASTER-DESIGN.md): Follow standard conventions
 
 ## Recent Changes
+- 021-initiatives-step-framework: Added Go 1.24.0 (per go.mod) + mark3labs/mcp-go v0.43.2 (MCP), urfave/cli/v2 (CLI), adrg/frontmatter (YAML parsing), gopkg.in/yaml.v3
+- 020-cli-init-here: Added Go 1.24.0 (per go.mod) + urfave/cli/v2 (CLI framework), embed (stdlib for filesystem embedding)
 - 019-embedded-profile-fallback: Added Go 1.24.0 + urfave/cli/v2 (CLI), mark3labs/mcp-go (MCP), adrg/frontmatter (YAML parsing)
-- 018-profile-type: Added Go 1.24.0 (per go.mod)
-- 017-zombiekit-mcp: Added Go 1.24.0 (per go.mod) + mark3labs/mcp-go (MCP server framework)
 
 
 <!-- MANUAL ADDITIONS START -->
