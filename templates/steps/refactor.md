@@ -31,6 +31,29 @@ You are executing the refactoring workflow. Your goal is to restructure existing
 - Create a refactoring specification
 - Run audit checks for behavior preservation
 
+### System Responsibilities (handled by MCP tool)
+- Folder creation
+- Template copying
+- Git branch management
+- State updates
+
+---
+
+## Response Handling
+
+When you receive the MCP response, process fields in this order:
+
+1. **Check `prerequisites.met`**: If false, follow `prerequisites.hint` to unblock
+2. **Read `files_to_read`**: Load research.md, spec.md, and any previous cycle artifacts
+3. **Parse `workflow_phases`**: Understand the 4-phase structure (analyze→define→specify→audit)
+4. **Follow `directive`**: Execute according to this document
+5. **Output to `cycle_folder`**: Save artifacts (research.md, spec.md, audit/) here
+6. **Reference `composed_prompt`**: Additional context from research, create, audit profiles
+
+### Understanding `workflow_phases`
+
+The response includes phase definitions similar to feature workflow. Execute phases in order.
+
 ---
 
 ## Phase I: Analysis (Parallel Agents)

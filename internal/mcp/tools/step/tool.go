@@ -38,38 +38,21 @@ type ToolDefinition struct {
 func (t *Tool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "step",
-		Description: "Execute a workflow step within an initiative. Returns directive text, history folder path, files to read, and composed profile prompt.",
+		Description: "Execute a workflow step within an active initiative. Returns directive text, file paths, and composed profile prompt. Requires an active initiative (created via 'initiative' tool).",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"step": map[string]interface{}{
 					"type":        "string",
-					"description": "Step name to execute. Built-in steps: init, feature, specify, plan, tasks, implement, audit, clarify, complete",
+					"description": "Step name to execute: feature, bug, refactor, plan, tasks, eat, audit, clarify",
 				},
 				"dir": map[string]interface{}{
 					"type":        "string",
-					"description": "Working directory containing the .brains folder. Used for profile resolution and initiative state.",
+					"description": "Working directory containing the .brains folder",
 				},
 				"initiative": map[string]interface{}{
 					"type":        "string",
 					"description": "Optional: Override the current active initiative. Path relative to history/ folder (e.g., '675d8a3f-feature-user-auth')",
-				},
-				"type": map[string]interface{}{
-					"type":        "string",
-					"enum":        []string{"feature", "bug", "refactor"},
-					"description": "Initiative type. Required for 'init' and 'feature' steps when creating new initiative.",
-				},
-				"name": map[string]interface{}{
-					"type":        "string",
-					"description": "Name/slug for the new initiative or cycle (e.g., 'user-auth'). Required for 'init' and 'feature' steps.",
-				},
-				"description": map[string]interface{}{
-					"type":        "string",
-					"description": "Optional: Description of the feature or initiative.",
-				},
-				"new_initiative": map[string]interface{}{
-					"type":        "boolean",
-					"description": "Optional: Force creation of a new initiative even if one is active. Default false.",
 				},
 			},
 			"required": []string{"step", "dir"},
@@ -111,13 +94,9 @@ func (t *Tool) Execute(ctx context.Context, args map[string]interface{}) (string
 		svc.SetEmbeddedFS(t.embeddedFS)
 	}
 
-	// Build execution options
+	// Build execution options (simplified - creation params removed)
 	opts := &internalStep.ExecuteOptions{
-		Initiative:    getStringArg(args, "initiative"),
-		Type:          getStringArg(args, "type"),
-		Name:          getStringArg(args, "name"),
-		Description:   getStringArg(args, "description"),
-		NewInitiative: getBoolArg(args, "new_initiative"),
+		Initiative: getStringArg(args, "initiative"),
 	}
 
 	// Execute the step

@@ -1,7 +1,7 @@
-# Tasks: Update Step Types
+# Tasks: Update Step Types & MCP Tool Interface
 
 **Input**: Design documents from `/specs/023-update-step-types/`
-**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
+**Prerequisites**: plan.md (required), spec.md (required for user stories), data-model.md, contracts/
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -13,8 +13,9 @@
 
 ## Path Conventions
 
-- **Go project**: `internal/` for packages, `templates/` for step templates
-- All paths relative to repository root
+- **Project type**: Single Go CLI application
+- **Source**: `internal/` for implementation, `templates/` for step definitions
+- **Tests**: `*_test.go` files alongside source
 
 ---
 
@@ -22,75 +23,93 @@
 
 **Purpose**: Remove legacy templates and rename implement to eat
 
-- [X] T001 Delete legacy template templates/steps/init.md
-- [X] T002 [P] Delete legacy template templates/steps/specify.md
-- [X] T003 [P] Rename templates/steps/implement.md to templates/steps/eat.md (update name in frontmatter)
+- [x] T001 Delete legacy template templates/steps/init.md
+- [x] T002 [P] Delete legacy template templates/steps/specify.md
+- [x] T003 [P] Rename templates/steps/implement.md to templates/steps/eat.md (update name in frontmatter)
+- [x] T004 [P] Delete templates/steps/complete.md (complete is now an initiative action, not a step)
 
 ---
 
-## Phase 2: Foundational (Prerequisite System)
+## Phase 2: Foundational (Initiative Tool Infrastructure)
 
-**Purpose**: Core prerequisite checking infrastructure that MUST be complete before step handlers can enforce requirements
+**Purpose**: Create the new `initiative` MCP tool to handle lifecycle operations (create, status, complete, list)
 
-**CRITICAL**: User story implementation depends on this phase
+**Critical**: User story implementation depends on this phase - the initiative tool must exist before steps can require active initiatives
 
-- [X] T004 Add StepPrerequisite type to internal/step/types.go with RequiredArtifact, RequiredStatus, Hint, BlockingStep fields
-- [X] T005 Add stepPrerequisites map to internal/step/service.go defining: plan→spec.md, tasks→plan.md, eat→tasks.md
-- [X] T006 Add checkPrerequisite method to Service in internal/step/service.go that validates artifact exists and status matches
-- [X] T007 Add prerequisite check call at start of Execute() method in internal/step/service.go
-- [X] T008 Update error hint in internal/step/loader.go from legacy steps to new step names
+### Initiative Service Extensions
 
-**Checkpoint**: Prerequisite system ready - step handler implementation can begin
+- [x] T005 Add Create(type, name, dir) method to internal/initiative/service.go that creates initiative folder, cycle folder, git branch, copies templates (already exists)
+- [x] T006 Add CreateCycle(initiativeID) method to internal/initiative/service.go for creating new cycles within an existing initiative (already exists in cycle.go)
+- [x] T007 Add Complete(dir) method to internal/initiative/service.go that marks initiative complete and clears active state (already exists)
+- [x] T008 Add List(dir) method to internal/initiative/service.go that returns all initiatives with status (already exists)
+- [x] T009 Add Status(dir) method to internal/initiative/service.go that returns active initiative info, current step, available docs
+
+### Initiative MCP Tool
+
+- [x] T010 Create internal/mcp/tools/initiative/types.go with InitiativeRequest, InitiativeCreateResponse, InitiativeStatusResponse, InitiativeCompleteResponse, InitiativeListResponse per data-model.md
+- [x] T011 Create internal/mcp/tools/initiative/tool.go with Tool struct and Definition() returning InputSchema per contracts/initiative-tool.md
+- [x] T012 Implement Handle() method in internal/mcp/tools/initiative/tool.go dispatching to create/status/complete/list based on action param
+- [ ] T013 Create internal/mcp/tools/initiative/tool_test.go with tests for all four actions
+
+### Step Tool Simplification
+
+- [x] T014 Remove type, name, description, new_initiative, phase parameters from InputSchema in internal/mcp/tools/step/tool.go per contracts/step-tool.md
+- [x] T015 Update internal/step/types.go ExecuteOptions to remove Type, Name, Description, NewInitiative fields
+- [x] T016 Add active initiative check to Execute() in internal/step/service.go - return NO_ACTIVE_INITIATIVE error if no active initiative
+
+### MCP Server Registration
+
+- [x] T017 Register initiative tool in internal/mcp/server.go alongside step tool
+
+**Checkpoint**: Initiative tool ready - step tool simplified - MCP server registers both tools
 
 ---
 
 ## Phase 3: User Story 1 - Start New Feature Workflow (Priority: P1)
 
-**Goal**: Ensure feature step creates initiative with spec.md template and provides specify workflow guidance
+**Goal**: User creates feature initiative via `initiative create`, then runs `step feature` for specification guidance
 
-**Independent Test**: Run `/brains.feature "test-feature"` and verify initiative folder created with templates
+**Independent Test**: Call `initiative(action="create", type="feature", name="user-auth")` then `step(step="feature")` and verify folder structure created with templates, step provides specify workflow directive
 
 ### Implementation for User Story 1
 
-- [X] T009 [US1] Verify feature step in internal/step/service.go correctly handles "feature" case (already exists, confirm behavior)
-- [X] T010 [US1] Verify templates/steps/feature.md contains complete specify workflow directive (research-create-audit-highlight phases)
-- [X] T011 [US1] Add test case in internal/step/service_test.go for feature step creating initiative with templates
+- [ ] T018 [US1] Add test in internal/mcp/tools/initiative/tool_test.go for initiative create action creating folder structure with spec.md, research.md templates
+- [ ] T019 [US1] Verify templates/steps/feature.md contains complete specify workflow directive (research-create-audit-highlight phases)
+- [ ] T020 [US1] Add integration test verifying initiative create → step feature flow works end-to-end
 
-**Checkpoint**: Feature step fully functional and testable independently
+**Checkpoint**: Feature workflow entry point fully functional
 
 ---
 
 ## Phase 4: User Story 2 - Create Bug Investigation (Priority: P2)
 
-**Goal**: Bug step creates bug-type initiative with bug-specific directive
+**Goal**: User creates bug initiative via `initiative create type=bug`, then runs `step bug` for investigation guidance
 
-**Independent Test**: Run `/brains.bug "test-bug"` and verify bug-type initiative created
+**Independent Test**: Call `initiative(action="create", type="bug", name="payment-timeout")` then `step(step="bug")` and verify bug-type initiative created with appropriate templates
 
 ### Implementation for User Story 2
 
-- [X] T012 [P] [US2] Create templates/steps/bug.md with bug investigation directive (reproduction, root cause, fix spec)
-- [X] T013 [US2] Add executeBugStep method to internal/step/service.go that sets Type="bug" and delegates to executeFeatureStep
-- [X] T014 [US2] Add "bug" case to switch in Execute() method in internal/step/service.go
-- [X] T015 [US2] Add test case in internal/step/service_test.go for bug step creating bug-type initiative
+- [ ] T021 [P] [US2] Create templates/steps/bug.md with bug investigation directive (reproduction, root cause, fix spec)
+- [ ] T022 [US2] Add test in internal/mcp/tools/initiative/tool_test.go for initiative create action with type=bug
+- [ ] T023 [US2] Add test in internal/step/service_test.go for bug step providing investigation guidance
 
-**Checkpoint**: Bug step fully functional and testable independently
+**Checkpoint**: Bug workflow fully functional
 
 ---
 
 ## Phase 5: User Story 3 - Create Refactor Specification (Priority: P2)
 
-**Goal**: Refactor step creates refactor-type initiative with behavior preservation focus
+**Goal**: User creates refactor initiative via `initiative create type=refactor`, then runs `step refactor` for refactoring guidance
 
-**Independent Test**: Run `/brains.refactor "test-refactor"` and verify refactor-type initiative created
+**Independent Test**: Call `initiative(action="create", type="refactor", name="extract-auth")` then `step(step="refactor")` and verify refactor-type initiative created
 
 ### Implementation for User Story 3
 
-- [X] T016 [P] [US3] Create templates/steps/refactor.md with refactor directive (before/after, behavior preservation)
-- [X] T017 [US3] Add executeRefactorStep method to internal/step/service.go that sets Type="refactor" and delegates to executeFeatureStep
-- [X] T018 [US3] Add "refactor" case to switch in Execute() method in internal/step/service.go
-- [X] T019 [US3] Add test case in internal/step/service_test.go for refactor step creating refactor-type initiative
+- [ ] T024 [P] [US3] Create templates/steps/refactor.md with refactor directive (before/after, behavior preservation)
+- [ ] T025 [US3] Add test in internal/mcp/tools/initiative/tool_test.go for initiative create action with type=refactor
+- [ ] T026 [US3] Add test in internal/step/service_test.go for refactor step providing behavior preservation guidance
 
-**Checkpoint**: Refactor step fully functional and testable independently
+**Checkpoint**: Refactor workflow fully functional
 
 ---
 
@@ -98,14 +117,16 @@
 
 **Goal**: Plan step enforces spec approval prerequisite and provides planning guidance
 
-**Independent Test**: Run `/brains.plan` with approved spec and verify plan step executes; run without approved spec and verify hard block
+**Independent Test**: Run `step plan` with approved spec and verify step executes; run without approved spec and verify hard block with guidance
 
 ### Implementation for User Story 4
 
-- [X] T020 [US4] Verify plan step prerequisite (spec.md approved) is enforced via T005-T007 foundational work
-- [X] T021 [US4] Verify templates/steps/plan.md exists with planning directive
-- [X] T022 [US4] Add test case in internal/step/service_test.go for plan step blocking when spec not approved
-- [X] T023 [US4] Add test case in internal/step/service_test.go for plan step allowing when spec approved
+- [ ] T027 [US4] Add stepPrerequisites map to internal/step/service.go defining plan→spec.md (approved status required)
+- [ ] T028 [US4] Implement YAML frontmatter status parser in internal/step/prereq.go that reads artifact files and extracts `status` field
+- [ ] T029 [US4] Add checkPrerequisite method to Service in internal/step/service.go that uses prereq parser to validate artifact exists and status matches
+- [ ] T030 [US4] Verify templates/steps/plan.md exists with planning directive
+- [ ] T031 [US4] Add test case in internal/step/service_test.go for plan step blocking when spec not approved
+- [ ] T032 [US4] Add test case in internal/step/service_test.go for plan step allowing when spec approved
 
 **Checkpoint**: Plan step prerequisite enforcement verified
 
@@ -115,14 +136,14 @@
 
 **Goal**: Tasks step enforces plan approval prerequisite and provides task generation guidance
 
-**Independent Test**: Run `/brains.tasks` with approved plan and verify tasks step executes; run without approved plan and verify hard block
+**Independent Test**: Run `step tasks` with approved plan and verify step executes; run without approved plan and verify hard block
 
 ### Implementation for User Story 5
 
-- [X] T024 [US5] Verify tasks step prerequisite (plan.md approved) is enforced via T005-T007 foundational work
-- [X] T025 [US5] Verify templates/steps/tasks.md exists with task generation directive
-- [X] T026 [US5] Add test case in internal/step/service_test.go for tasks step blocking when plan not approved
-- [X] T027 [US5] Add test case in internal/step/service_test.go for tasks step allowing when plan approved
+- [ ] T033 [US5] Add tasks→plan.md prerequisite to stepPrerequisites map in internal/step/service.go
+- [ ] T034 [US5] Verify templates/steps/tasks.md exists with task generation directive
+- [ ] T035 [US5] Add test case in internal/step/service_test.go for tasks step blocking when plan not approved
+- [ ] T036 [US5] Add test case in internal/step/service_test.go for tasks step allowing when plan approved
 
 **Checkpoint**: Tasks step prerequisite enforcement verified
 
@@ -130,16 +151,19 @@
 
 ## Phase 8: User Story 6 - Execute Implementation (Priority: P1)
 
-**Goal**: Eat step (renamed from implement) enforces tasks.md prerequisite and guides task execution
+**Goal**: Eat step enforces tasks.md prerequisite and guides task execution
 
-**Independent Test**: Run `/brains.eat` with tasks.md and verify step executes; run without tasks.md and verify hard block
+**Independent Test**: Run `step eat` with tasks.md and verify step executes; run without tasks.md and verify hard block
 
 ### Implementation for User Story 6
 
-- [X] T028 [US6] Verify eat step prerequisite (tasks.md exists) is enforced via T005-T007 foundational work
-- [X] T029 [US6] Verify templates/steps/eat.md exists with implementation guidance (from T003 rename)
-- [X] T030 [US6] Add test case in internal/step/service_test.go for eat step blocking when tasks.md missing
-- [X] T031 [US6] Add test case in internal/step/service_test.go for eat step allowing when tasks.md exists
+- [ ] T037 [US6] Add eat→tasks.md prerequisite to stepPrerequisites map in internal/step/service.go
+- [ ] T038 [US6] Verify templates/steps/eat.md exists with implementation guidance (from T003 rename)
+- [ ] T039 [US6] Implement next task detection in eat step handler: parse tasks.md for first unchecked `- [ ]` item
+- [ ] T040 [US6] Add test case in internal/step/service_test.go for eat step blocking when tasks.md missing
+- [ ] T041 [US6] Add test case in internal/step/service_test.go for eat step allowing when tasks.md exists
+- [ ] T042 [US6] Add test case for eat step returning NextTask info with task ID and description
+- [ ] T043 [US6] Add test case for eat step indicating "all tasks complete" when all checkboxes are checked
 
 **Checkpoint**: Eat step prerequisite enforcement verified
 
@@ -149,12 +173,12 @@
 
 **Goal**: Audit step verifies cross-artifact alignment
 
-**Independent Test**: Run `/brains.audit` on initiative with artifacts and verify audit runs
+**Independent Test**: Run `step audit` on initiative with artifacts and verify audit runs
 
 ### Implementation for User Story 7
 
-- [X] T032 [US7] Verify templates/steps/audit.md exists with audit directive
-- [X] T033 [US7] Verify audit step works with existing implementation in internal/step/service.go
+- [ ] T044 [US7] Verify templates/steps/audit.md exists with audit directive
+- [ ] T045 [US7] Add test in internal/step/service_test.go for audit step working with active initiative
 
 **Checkpoint**: Audit step functional
 
@@ -164,12 +188,13 @@
 
 **Goal**: Clarify step identifies underspecified areas
 
-**Independent Test**: Run `/brains.clarify` on initiative and verify clarification workflow
+**Independent Test**: Run `step clarify` on initiative and verify clarification workflow
 
 ### Implementation for User Story 8
 
-- [X] T034 [US8] Verify templates/steps/clarify.md exists with clarification directive
-- [X] T035 [US8] Verify clarify step works with existing implementation in internal/step/service.go
+- [ ] T046 [US8] Verify templates/steps/clarify.md exists with clarification directive
+- [ ] T047 [US8] Add test in internal/step/service_test.go for clarify step working with active initiative
+- [ ] T048 [US8] Add test verifying clarify step appends Q/A to Clarifications section with session date header
 
 **Checkpoint**: Clarify step functional
 
@@ -177,41 +202,72 @@
 
 ## Phase 11: User Story 9 - Complete Initiative (Priority: P1)
 
-**Goal**: Complete step marks initiative finished and clears active state
+**Goal**: User calls `initiative complete` to mark initiative finished and clear active state
 
-**Independent Test**: Run `/brains.complete` on active initiative and verify status changed and active state cleared
+**Independent Test**: Call `initiative(action="complete")` on active initiative and verify status changed and active state cleared
 
 ### Implementation for User Story 9
 
-- [X] T036 [US9] Verify complete step in internal/step/service.go correctly handles "complete" case (already exists)
-- [X] T037 [US9] Verify templates/steps/complete.md exists with completion directive
-- [X] T038 [US9] Add test case in internal/step/service_test.go for complete step clearing active state
+- [ ] T049 [US9] Add test in internal/mcp/tools/initiative/tool_test.go for complete action updating INITIATIVE.md status
+- [ ] T050 [US9] Add test in internal/mcp/tools/initiative/tool_test.go for complete action clearing active state
+- [ ] T051 [US9] Verify Complete() method handles case where no active initiative exists (returns NO_ACTIVE_INITIATIVE error per contracts/initiative-tool.md)
 
-**Checkpoint**: Complete step fully functional
-
----
-
-## Phase 12: Legacy Step Removal Verification
-
-**Purpose**: Ensure legacy steps return proper errors
-
-- [X] T039 Add test case in internal/step/loader_test.go verifying "init" returns UNKNOWN_STEP error
-- [X] T040 [P] Add test case in internal/step/loader_test.go verifying "specify" returns UNKNOWN_STEP error
-- [X] T041 [P] Add test case in internal/step/loader_test.go verifying "implement" returns UNKNOWN_STEP error
-- [X] T042 Remove "init" case from Execute() switch in internal/step/service.go if present
-
-**Checkpoint**: Legacy steps properly rejected
+**Checkpoint**: Initiative completion fully functional
 
 ---
 
-## Phase 13: Polish & Cross-Cutting Concerns
+## Phase 12: User Story 10 - Check Initiative Status (Priority: P2)
+
+**Goal**: User calls `initiative status` to see current initiative state
+
+**Independent Test**: Call `initiative(action="status")` and verify it returns current step, available docs, suggested next step
+
+### Implementation for User Story 10
+
+- [ ] T052 [US10] Add test in internal/mcp/tools/initiative/tool_test.go for status action returning active initiative info per contracts/initiative-tool.md
+- [ ] T053 [US10] Add test in internal/mcp/tools/initiative/tool_test.go for status action when no active initiative (returns active=false with suggestion)
+- [ ] T054 [US10] Add test in internal/mcp/tools/initiative/tool_test.go for list action returning all initiatives from history folder
+- [ ] T055 [US10] Verify Status() method includes suggested_next based on available artifacts
+
+**Checkpoint**: Initiative status and list fully functional
+
+---
+
+## Phase 13: Edge Cases & Error Handling
+
+**Purpose**: Ensure proper error handling for invalid states per contracts
+
+- [ ] T056 Add test for step tool returning NO_ACTIVE_INITIATIVE when no initiative is active
+- [ ] T057 Add test for initiative create failing with INITIATIVE_ALREADY_ACTIVE when initiative already active (per contracts/initiative-tool.md)
+- [ ] T058 Add test for initiative create failing with MISSING_REQUIRED_PARAM when type or name missing
+- [ ] T059 Add test for initiative tool returning INVALID_ACTION for unknown actions
+- [ ] T060 Add test for step tool returning UNKNOWN_STEP for invalid step names
+
+---
+
+## Phase 14: Legacy Step Removal Verification
+
+**Purpose**: Ensure legacy steps return proper errors per contracts/step-tool.md
+
+- [ ] T061 Add test in internal/step/loader_test.go verifying "init" returns UNKNOWN_STEP error
+- [ ] T062 [P] Add test in internal/step/loader_test.go verifying "specify" returns UNKNOWN_STEP error
+- [ ] T063 [P] Add test in internal/step/loader_test.go verifying "implement" returns UNKNOWN_STEP error
+- [ ] T064 [P] Add test in internal/step/loader_test.go verifying "complete" returns UNKNOWN_STEP error (now initiative action)
+- [ ] T065 Remove legacy step cases from Execute() switch in internal/step/service.go if present
+- [ ] T066 Remove creation logic from internal/step/feature.go (now in initiative service)
+
+---
+
+## Phase 15: Polish & Cross-Cutting Concerns
 
 **Purpose**: Final cleanup and validation
 
-- [X] T043 Run go test ./internal/step/... to verify all tests pass
-- [X] T044 Run go build ./... to verify no compilation errors
-- [X] T045 Verify ListSteps() in internal/step/loader.go returns all nine new steps
-- [ ] T046 Manual end-to-end test: feature → plan → tasks → eat → complete workflow
+- [ ] T067 Run go test ./internal/step/... to verify all step tests pass
+- [ ] T068 [P] Run go test ./internal/initiative/... to verify all initiative tests pass
+- [ ] T069 [P] Run go test ./internal/mcp/... to verify all MCP tool tests pass
+- [ ] T070 Run go build ./... to verify no compilation errors
+- [ ] T071 Verify ListSteps() in internal/step/loader.go returns exactly 8 steps (feature, bug, refactor, plan, tasks, eat, audit, clarify)
+- [ ] T072 Manual end-to-end test per quickstart.md: initiative create → step feature → step plan → step tasks → step eat → initiative complete
 
 ---
 
@@ -220,93 +276,90 @@
 ### Phase Dependencies
 
 - **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS prerequisite-dependent stories
-- **User Story 1 (Phase 3)**: Depends on Setup only (feature step already exists)
-- **User Stories 2-3 (Phases 4-5)**: Depend on Foundational completion (need new step handlers)
-- **User Stories 4-6 (Phases 6-8)**: Depend on Foundational completion (need prerequisite checking)
-- **User Stories 7-9 (Phases 9-11)**: Depend on Setup only (steps already exist)
-- **Legacy Removal (Phase 12)**: Depends on Setup completion
-- **Polish (Phase 13)**: Depends on all stories being complete
+- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
+- **User Stories (Phases 3-12)**: All depend on Foundational completion
+- **Edge Cases (Phase 13)**: Depends on User Stories completion
+- **Legacy Removal (Phase 14)**: Depends on Setup completion
+- **Polish (Phase 15)**: Depends on all phases being complete
 
 ### User Story Dependencies
 
 | Story | Depends On | Can Parallel With |
 |-------|------------|-------------------|
-| US1 (Feature) | Setup | US7, US8, US9 |
-| US2 (Bug) | Foundational | US3 |
-| US3 (Refactor) | Foundational | US2 |
-| US4 (Plan) | Foundational | US5, US6 |
-| US5 (Tasks) | Foundational | US4, US6 |
-| US6 (Eat) | Foundational | US4, US5 |
-| US7 (Audit) | Setup | US1, US8, US9 |
-| US8 (Clarify) | Setup | US1, US7, US9 |
-| US9 (Complete) | Setup | US1, US7, US8 |
+| US1 (Feature) | Foundational | None (MVP) |
+| US2 (Bug) | Foundational, US1 verified | US3 |
+| US3 (Refactor) | Foundational, US1 verified | US2 |
+| US4 (Plan) | Foundational | US7, US8 |
+| US5 (Tasks) | US4 | - |
+| US6 (Eat) | US5 | - |
+| US7 (Audit) | Foundational | US4, US8 |
+| US8 (Clarify) | Foundational | US4, US7 |
+| US9 (Complete) | Foundational | US10 |
+| US10 (Status) | Foundational | US9 |
 
 ### Parallel Opportunities
 
 **Phase 1 (Setup)**:
-- T001, T002, T003 can all run in parallel (different files)
+- T001, T002, T003, T004 can all run in parallel (different files)
 
 **Phase 2 (Foundational)**:
-- T004 must complete before T005-T007 (type definition needed)
-- T005-T008 can run in parallel after T004
+- T005-T009 (initiative service methods) are sequential (methods build on types)
+- T010-T012 (initiative tool) depend on T005-T009
+- T014-T016 (step simplification) can run in parallel with T005-T009
 
 **After Foundational**:
 - US2 and US3 can run in parallel (bug.md and refactor.md are independent)
-- US4, US5, US6 prerequisite tests can run in parallel
-- US7, US8, US9 can run in parallel with each other and with US1
+- US4, US5, US6 must be sequential (prerequisite chain)
+- US7 and US8 can run in parallel
+- US9 and US10 can run in parallel
 
-**Phase 12 (Legacy Removal)**:
-- T039, T040, T041 can run in parallel (different test cases)
+**Phase 14 (Legacy Removal)**:
+- T056, T057, T058, T059 can run in parallel (different test cases)
 
 ---
 
-## Parallel Example: Bug and Refactor Steps
+## Parallel Example: Initiative Tool Creation
 
 ```bash
-# Launch new step template creation in parallel:
-Task: "Create templates/steps/bug.md with bug investigation directive"
-Task: "Create templates/steps/refactor.md with refactor directive"
+# Launch step simplification in parallel with initiative service work:
+Task: "Remove type, name, description params from InputSchema in internal/mcp/tools/step/tool.go"
+Task: "Add Create method to internal/initiative/service.go"
 
-# After templates created, launch handler implementation in parallel:
-Task: "Add executeBugStep method to internal/step/service.go"
-Task: "Add executeRefactorStep method to internal/step/service.go"
+# After service methods, launch MCP tool implementation:
+Task: "Create internal/mcp/tools/initiative/types.go"
+Task: "Create internal/mcp/tools/initiative/tool.go"
 ```
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 Only)
+### MVP First (Phase 1-3 Only)
 
 1. Complete Phase 1: Setup (remove legacy templates)
-2. Complete Phase 3: User Story 1 (verify feature step)
-3. **STOP and VALIDATE**: Test feature step independently
-4. This confirms the core workflow entry point works
+2. Complete Phase 2: Foundational (initiative tool infrastructure)
+3. Complete Phase 3: User Story 1 (feature workflow)
+4. **STOP and VALIDATE**: Test `initiative create` → `step feature` flow
+5. This confirms the new tool architecture works
 
 ### Incremental Delivery
 
-1. Setup + US1 → Feature workflow works
-2. Add Foundational → Prerequisite system in place
-3. Add US2 + US3 → Bug and refactor workflows work
-4. Add US4 + US5 + US6 → Prerequisite enforcement verified
-5. Verify US7 + US8 + US9 → Audit, clarify, complete work
-6. Legacy removal → Old steps properly rejected
-7. Polish → Full workflow validated
+1. Setup + Foundational → Initiative tool created, step tool simplified
+2. Add US1 → Feature workflow works with new architecture (MVP!)
+3. Add US4 + US5 + US6 → Full lifecycle: plan → tasks → eat
+4. Add US9 → Can complete initiatives
+5. Add US2 + US3 → Bug and refactor workflows work
+6. Add US7 + US8 + US10 → Audit, clarify, and status
+7. Edge cases + Legacy removal → Error handling verified
+8. Polish → Full workflow validated per quickstart.md
 
-### Suggested Order (Single Developer)
+### Critical Path
 
-1. T001-T003 (Setup - parallel)
-2. T004-T008 (Foundational - sequential with some parallel)
-3. T009-T011 (US1)
-4. T012-T015 (US2)
-5. T016-T019 (US3)
-6. T020-T023 (US4)
-7. T024-T027 (US5)
-8. T028-T031 (US6)
-9. T032-T038 (US7, US8, US9 - can parallel)
-10. T039-T042 (Legacy removal)
-11. T043-T046 (Polish)
+```
+Setup → Foundational → US1 → US4 → US5 → US6 → US9 → Polish
+```
+
+This path delivers the minimum viable feature workflow. US2, US3, US7, US8, US10 add breadth but aren't blocking.
 
 ---
 
@@ -314,6 +367,8 @@ Task: "Add executeRefactorStep method to internal/step/service.go"
 
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
-- Constitution requires tests before implementation, but this feature modifies existing tested code
+- Major architectural change: initiative lifecycle separated from step execution
+- The `step` tool now requires an active initiative (created via `initiative create`)
+- Complete is now an initiative action, not a step
 - Commit after each task or logical group
-- Feature step already exists and works - mostly verification tasks for US1
+- All response/error schemas per contracts/initiative-tool.md and contracts/step-tool.md

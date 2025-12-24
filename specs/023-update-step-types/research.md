@@ -1,132 +1,176 @@
-# Research: Update Step Types
+# Research: Update Step Types & MCP Tool Interface
 
-**Date**: 2025-12-23
+**Date**: 2025-12-24 (Updated)
 **Feature**: 023-update-step-types
 
 ## Executive Summary
 
-The existing step system already has most infrastructure in place. The feature step (`feature.go`) already handles initiative creation with cycles and uses the specify workflow (research-create-audit-highlight phases). The main work involves: (1) removing legacy steps (init, specify, implement), (2) adding bug/refactor as first-class step types, (3) renaming implement to eat, and (4) adding prerequisite enforcement.
+The feature has evolved from a simple step renaming to a more significant architectural change: splitting the `step` MCP tool into two focused tools:
+
+1. **`initiative` tool** - Handles lifecycle (create, status, complete, list)
+2. **`step` tool** - Handles workflow execution (simplified, no creation params)
+
+This separation addresses the interface overloading problem where creation steps required different parameters than execution steps.
 
 ## Findings by Category
 
-### Current Step Implementation
+### MCP Tool Interface Problem
 
-**Decision**: Extend existing pattern in `internal/step/service.go`
+**Problem**: The current `step` tool is overloaded:
+- Creation steps (feature/bug/refactor) need: type, name, description
+- Execution steps (plan/tasks/eat/audit/clarify) need: active initiative context
+- Termination (complete) needs: active initiative
 
-**Rationale**: The service already has special handling for init, feature, and complete steps. Adding bug/refactor follows the same pattern.
+**Solution**: Split into two tools with clear responsibilities:
 
-**Current Step Handlers**:
-- `executeInitStep()` - Creates initiative, to be removed
-- `executeFeatureStep()` - Creates initiative with cycles, already supports type parameter
-- `executeCompleteStep()` - Marks initiative complete
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `initiative` | Lifecycle CRUD | action, dir, type, name, description |
+| `step` | Workflow execution | step, dir, initiative (optional override) |
 
-**Key Insight**: The feature step already accepts a `Type` parameter that maps to initiative types (feature, bug, refactor). Bug and refactor steps can delegate to the same handler with preset types.
+**Rationale**: Clear separation of concerns, better parameter validation, simpler mental model for LLM callers.
 
-### Step Template Structure
+### Initiative Tool Design
 
-**Decision**: Keep current YAML frontmatter + markdown directive format
+**Decision**: Action-based interface (like REST verbs)
 
-**Rationale**: Works well, no changes needed to the format itself.
-
-**Current Templates** (in `templates/steps/`):
-- audit.md, clarify.md, complete.md - Keep as-is
-- feature.md - Keep as-is (already has full specify workflow)
-- implement.md - Rename to eat.md
-- init.md - Remove
-- specify.md - Remove (functionality now in feature.md)
-- plan.md, tasks.md - Keep as-is
-
-**New Templates Needed**:
-- bug.md - Bug investigation workflow directive
-- refactor.md - Refactor specification workflow directive
-
-### Loader Hint Update
-
-**Decision**: Update error hint in `loader.go` line 107-108
-
-**Current**:
 ```go
-Hint: "Available steps: init, specify, plan, tasks, implement, audit, clarify, complete"
+// Request
+type InitiativeRequest struct {
+    Action      string // create | status | complete | list
+    Dir         string
+    Type        string // For create: feature | bug | refactor
+    Name        string // For create
+    Description string // For create (optional)
+}
+
+// Responses vary by action
 ```
 
-**New**:
-```go
-Hint: "Available steps: feature, bug, refactor, plan, tasks, eat, audit, clarify, complete"
-```
+**Rationale**: Standard pattern, LLMs handle it well (similar to TodoWrite's status enum).
+
+### Step Tool Simplification
+
+**Decision**: Remove all creation-related parameters
+
+**Current params** (before):
+- step, dir, initiative, type, name, description, new_initiative, phase
+
+**New params** (after):
+- step, dir, initiative (optional override)
+
+**Rationale**: Steps no longer create initiatives - they only execute within existing ones.
+
+### Creation Logic Migration
+
+**Decision**: Move from `internal/step/feature.go` to `internal/initiative/service.go`
+
+**Operations to move**:
+- Initiative folder creation
+- Git branch creation
+- Cycle folder creation
+- Template copying
+
+**Operations that stay in step service**:
+- Step directive loading
+- Profile composition
+- File resolution
+- Prerequisite checking
+
+### Step Type Changes
+
+**Final list** (8 steps):
+1. `feature` - Feature specification workflow
+2. `bug` - Bug investigation workflow
+3. `refactor` - Refactor planning workflow
+4. `plan` - Implementation planning
+5. `tasks` - Task generation
+6. `eat` - Implementation execution
+7. `audit` - Cross-artifact alignment
+8. `clarify` - Underspecification identification
+
+**Removed**:
+- `complete` → Now `initiative(action="complete")`
+- `init` → Legacy, removed entirely
+- `specify` → Merged into feature step
+- `implement` → Renamed to `eat`
 
 ### Prerequisite Enforcement
 
-**Decision**: Add prerequisite validation in `Service.Execute()`
+**Decision**: Keep in step service, require active initiative for ALL steps
 
-**Rationale**: FR-011 requires hard blocking with guidance. Implement as a prerequisite map checked before step execution.
-
-**Prerequisite Map**:
 ```go
-var stepPrerequisites = map[string]StepPrerequisite{
-    "plan":  {RequiredArtifact: "spec.md", RequiredStatus: "approved", Hint: "Run feature/bug/refactor first"},
-    "tasks": {RequiredArtifact: "plan.md", RequiredStatus: "approved", Hint: "Run plan first"},
-    "eat":   {RequiredArtifact: "tasks.md", RequiredStatus: "", Hint: "Run tasks first"},
-}
-```
-
-### Initiative Type Handling
-
-**Decision**: Bug and refactor steps delegate to feature step handler with preset types
-
-**Rationale**: The feature step already handles all three initiative types via the Type parameter. Dedicated steps just provide better UX and type-specific directives.
-
-**Implementation**:
-```go
-func (s *Service) executeBugStep(step *Step, opts *ExecuteOptions) (*StepResponse, error) {
-    if opts == nil {
-        opts = &ExecuteOptions{}
+func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse, error) {
+    // First: check active initiative
+    state, err := s.stateManager.Load()
+    if state.IsEmpty() {
+        return nil, &StepError{Code: "NO_ACTIVE_INITIATIVE", ...}
     }
-    opts.Type = "bug"
-    return s.executeFeatureStep(step, opts)
+
+    // Second: check step-specific prerequisites
+    if err := s.checkPrerequisite(stepName, cyclePath); err != nil {
+        return nil, err
+    }
+
+    // Then: execute step
 }
 ```
 
-### Files to Modify
+### Files to Modify/Create
 
-1. **internal/step/service.go**
-   - Remove `executeInitStep()` case
-   - Add `executeBugStep()` and `executeRefactorStep()` cases
-   - Change `implement` case to `eat`
-   - Add prerequisite validation in `Execute()`
+**New files**:
+- `internal/mcp/tools/initiative/tool.go` - Initiative MCP tool
+- `internal/mcp/tools/initiative/tool_test.go` - Tests
+- `internal/mcp/tools/initiative/types.go` - Request/response types
 
-2. **internal/step/loader.go**
-   - Update error hint with new step names
+**Modified files**:
+- `internal/mcp/tools/step/tool.go` - Remove creation params
+- `internal/step/service.go` - Remove creation logic, add initiative check
+- `internal/step/feature.go` - Remove initiative/cycle creation
+- `internal/step/types.go` - Simplify ExecuteOptions
+- `internal/initiative/service.go` - Add Create, CreateCycle methods
+- `internal/mcp/server.go` - Register initiative tool
 
-3. **internal/step/bug.go** (NEW)
-   - Simple wrapper that sets Type="bug" and delegates to executeFeatureStep
+**Deleted**:
+- `templates/steps/init.md`
+- `templates/steps/specify.md`
+- `templates/steps/complete.md` (now initiative action)
 
-4. **internal/step/refactor.go** (NEW)
-   - Simple wrapper that sets Type="refactor" and delegates to executeFeatureStep
-
-5. **templates/steps/**
-   - Delete: init.md, specify.md
-   - Rename: implement.md → eat.md
-   - Add: bug.md, refactor.md
+**Renamed**:
+- `templates/steps/implement.md` → `templates/steps/eat.md`
 
 ## Alternatives Considered
 
-### Alternative 1: Keep legacy steps as aliases
-**Rejected**: User explicitly stated "we don't care about legacy" - breaking change acceptable.
+### Alternative 1: Keep single step tool with conditional validation
+**Rejected**: Makes the interface confusing. LLM has to know which params are valid for which steps. Error messages are unclear.
 
-### Alternative 2: Merge bug/refactor into feature step only
-**Rejected**: Having dedicated `/brains.bug` and `/brains.refactor` commands improves discoverability and allows type-specific directives.
+### Alternative 2: Three tools (initiative-create, step, initiative-complete)
+**Rejected**: Over-splitting. The action-based `initiative` tool handles all lifecycle operations cleanly.
 
-### Alternative 3: Complex prerequisite state machine
-**Rejected**: Simple artifact-exists check is sufficient. No need for elaborate state tracking.
+### Alternative 3: Resource-oriented design with separate context tool
+**Rejected**: Over-engineered. Would require three tools and more round-trips.
+
+### Initiative Naming & Uniqueness
+
+**Decision**: Initiatives are prefixed with a unique hex ID (e.g., `abc123-user-auth`)
+
+**Rationale**: Name collisions cannot occur - duplicate names are allowed because the hex ID ensures folder uniqueness. No need for collision detection or auto-suffixing.
+
+### Force Flag for Active Initiative
+
+**Decision**: No force flag - user must complete or abandon current initiative first
+
+**Rationale**: Keep interface simple. The explicit workflow (complete/abandon before create) prevents accidental data loss and makes the state machine clear.
 
 ## Open Questions
 
-None - all clarifications resolved in spec phase.
+None - all clarifications resolved in spec/clarify phases.
 
 ## Sources
 
+- Audit session 2025-12-24 - Tool interface design discussion
+- Systems architect agent analysis
 - `internal/step/service.go` - Current step execution logic
-- `internal/step/feature.go` - Feature step implementation with initiative/cycle handling
-- `internal/step/loader.go` - Step loading and error messages
-- `templates/steps/*.md` - Current step templates
-- Spec clarifications - Legacy removal, hard block enforcement
+- `internal/step/feature.go` - Current creation logic to migrate
+- `internal/mcp/tools/step/tool.go` - Current MCP interface to simplify
+- SpecKit shell scripts - Reference for creation workflow

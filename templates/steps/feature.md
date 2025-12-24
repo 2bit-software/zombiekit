@@ -38,6 +38,36 @@ You are executing the feature specification workflow. Your goal is to create a c
 
 ---
 
+## Response Handling
+
+When you receive the MCP response, process fields in this order:
+
+1. **Check `prerequisites.met`**: If false, follow `prerequisites.hint` to unblock
+2. **Read `files_to_read`**: Load research.md, spec.md, and any previous cycle artifacts
+3. **Parse `workflow_phases`**: Understand the 4-phase structure (research→create→audit→highlight)
+4. **Follow `directive`**: Execute according to this document
+5. **Output to `cycle_folder`**: Save artifacts (research.md, spec.md, audit/) here
+6. **Reference `composed_prompt`**: Additional context from research, create, audit profiles
+
+### Understanding `workflow_phases`
+
+The response includes phase definitions:
+
+```json
+{
+  "workflow_phases": [
+    {"name": "research", "parallel": true, "outputs": ["research.md"]},
+    {"name": "create", "parallel": false, "outputs": ["spec.md"]},
+    {"name": "audit", "parallel": true, "outputs": ["audit/{date}.md"]},
+    {"name": "highlight", "parallel": false, "outputs": []}
+  ]
+}
+```
+
+Execute phases in order. Parallel phases can spawn multiple agents.
+
+---
+
 ## Phase I: Research (Parallel Agents)
 
 ### Input

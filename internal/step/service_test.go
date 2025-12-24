@@ -132,7 +132,7 @@ Directive`),
 		assert.Contains(t, err.Error(), "NO_ACTIVE_INITIATIVE")
 	})
 
-	t.Run("allows feature step without active initiative", func(t *testing.T) {
+	t.Run("feature step requires active initiative", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Create .brains directory without active initiative
@@ -147,14 +147,39 @@ description: Create new feature
 ---
 Create a new feature specification.`),
 			},
-			"templates/spec-template.md": &fstest.MapFile{
+		}
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+		svc.SetEmbeddedFS(embeddedFS)
+
+		// Feature step without active initiative should fail
+		_, err = svc.Execute("feature", nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "NO_ACTIVE_INITIATIVE")
+	})
+
+	t.Run("feature step works with active initiative", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create history folder with cycle
+		historyDir := filepath.Join(tmpDir, "history", "675d8a3f-feature-test")
+		cycleDir := filepath.Join(historyDir, "cycle-001")
+		require.NoError(t, os.MkdirAll(cycleDir, 0755))
+
+		// Create .brains with active initiative
+		brainsDir := filepath.Join(tmpDir, ".brains")
+		require.NoError(t, os.MkdirAll(brainsDir, 0755))
+		activeJSON := `{"initiative": "history/675d8a3f-feature-test", "cycle": "history/675d8a3f-feature-test/cycle-001", "status": "active"}`
+		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
+
+		embeddedFS := fstest.MapFS{
+			"steps/feature.md": &fstest.MapFile{
 				Data: []byte(`---
-status: draft
+name: feature
+description: Create new feature
 ---
-# Specification`),
-			},
-			"templates/research-template.md": &fstest.MapFile{
-				Data: []byte(`# Research`),
+Create a new feature specification.`),
 			},
 		}
 
@@ -162,16 +187,14 @@ status: draft
 		require.NoError(t, err)
 		svc.SetEmbeddedFS(embeddedFS)
 
-		// Feature step requires name parameter
-		opts := &ExecuteOptions{
-			Name: "test-feature",
-		}
-		resp, err := svc.Execute("feature", opts)
+		resp, err := svc.Execute("feature", nil)
 		require.NoError(t, err)
 
 		assert.Contains(t, resp.Directive, "Create a new feature specification")
-		assert.NotEmpty(t, resp.InitiativeFolder)
-		assert.NotEmpty(t, resp.CycleFolder)
+		assert.Equal(t, historyDir, resp.InitiativeFolder)
+		assert.Equal(t, cycleDir, resp.CycleFolder)
+		// Feature step should include workflow phases
+		assert.NotEmpty(t, resp.WorkflowPhases)
 	})
 
 	t.Run("resolves file glob patterns", func(t *testing.T) {
@@ -256,12 +279,19 @@ Directive`),
 }
 
 func TestService_FeatureStep(t *testing.T) {
-	t.Run("feature step creates initiative with templates", func(t *testing.T) {
+	t.Run("feature step returns workflow phases", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		// Create .brains directory
+		// Create history folder with cycle
+		historyDir := filepath.Join(tmpDir, "history", "test-feature")
+		cycleDir := filepath.Join(historyDir, "cycle-001")
+		require.NoError(t, os.MkdirAll(cycleDir, 0755))
+
+		// Create .brains directory with active initiative
 		brainsDir := filepath.Join(tmpDir, ".brains")
 		require.NoError(t, os.MkdirAll(brainsDir, 0755))
+		activeJSON := `{"initiative": "history/test-feature", "cycle": "history/test-feature/cycle-001", "status": "active"}`
+		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
 
 		embeddedFS := fstest.MapFS{
 			"steps/feature.md": &fstest.MapFile{
@@ -271,40 +301,20 @@ description: Create new feature
 ---
 Create a new feature specification.`),
 			},
-			"templates/spec-template.md": &fstest.MapFile{
-				Data: []byte(`---
-status: draft
----
-# Specification Template`),
-			},
-			"templates/research-template.md": &fstest.MapFile{
-				Data: []byte(`# Research Template`),
-			},
 		}
 
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 		svc.SetEmbeddedFS(embeddedFS)
 
-		opts := &ExecuteOptions{
-			Name: "user-auth",
-		}
-		resp, err := svc.Execute("feature", opts)
+		resp, err := svc.Execute("feature", nil)
 		require.NoError(t, err)
 
-		// Verify response
-		assert.NotEmpty(t, resp.InitiativeFolder)
-		assert.NotEmpty(t, resp.CycleFolder)
+		// Verify response includes workflow phases
+		assert.NotEmpty(t, resp.WorkflowPhases)
+		assert.Equal(t, historyDir, resp.InitiativeFolder)
+		assert.Equal(t, cycleDir, resp.CycleFolder)
 		assert.Contains(t, resp.Directive, "Create a new feature specification")
-
-		// Verify templates were copied
-		specPath := filepath.Join(resp.CycleFolder, "spec.md")
-		_, err = os.Stat(specPath)
-		assert.NoError(t, err)
-
-		researchPath := filepath.Join(resp.CycleFolder, "research.md")
-		_, err = os.Stat(researchPath)
-		assert.NoError(t, err)
 	})
 }
 
@@ -352,12 +362,19 @@ Eat`),
 }
 
 func TestService_BugStep(t *testing.T) {
-	t.Run("bug step creates bug-type initiative", func(t *testing.T) {
+	t.Run("bug step returns workflow phases with active initiative", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		// Create .brains directory
+		// Create history folder with cycle
+		historyDir := filepath.Join(tmpDir, "history", "test-bug")
+		cycleDir := filepath.Join(historyDir, "cycle-001")
+		require.NoError(t, os.MkdirAll(cycleDir, 0755))
+
+		// Create .brains directory with active initiative
 		brainsDir := filepath.Join(tmpDir, ".brains")
 		require.NoError(t, os.MkdirAll(brainsDir, 0755))
+		activeJSON := `{"initiative": "history/test-bug", "cycle": "history/test-bug/cycle-001", "type": "bug", "status": "active"}`
+		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
 
 		embeddedFS := fstest.MapFS{
 			"steps/bug.md": &fstest.MapFile{
@@ -367,40 +384,37 @@ description: Bug investigation
 ---
 Investigate and fix the bug.`),
 			},
-			"templates/spec-template.md": &fstest.MapFile{
-				Data: []byte(`---
-status: draft
----
-# Bug Specification`),
-			},
-			"templates/research-template.md": &fstest.MapFile{
-				Data: []byte(`# Research`),
-			},
 		}
 
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 		svc.SetEmbeddedFS(embeddedFS)
 
-		opts := &ExecuteOptions{
-			Name: "login-bug",
-		}
-		resp, err := svc.Execute("bug", opts)
+		resp, err := svc.Execute("bug", nil)
 		require.NoError(t, err)
 
-		assert.NotEmpty(t, resp.InitiativeFolder)
-		assert.NotEmpty(t, resp.CycleFolder)
+		assert.Equal(t, historyDir, resp.InitiativeFolder)
+		assert.Equal(t, cycleDir, resp.CycleFolder)
 		assert.Contains(t, resp.Directive, "Investigate and fix the bug")
+		// Bug step should include workflow phases
+		assert.NotEmpty(t, resp.WorkflowPhases)
 	})
 }
 
 func TestService_RefactorStep(t *testing.T) {
-	t.Run("refactor step creates refactor-type initiative", func(t *testing.T) {
+	t.Run("refactor step returns workflow phases with active initiative", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		// Create .brains directory
+		// Create history folder with cycle
+		historyDir := filepath.Join(tmpDir, "history", "test-refactor")
+		cycleDir := filepath.Join(historyDir, "cycle-001")
+		require.NoError(t, os.MkdirAll(cycleDir, 0755))
+
+		// Create .brains directory with active initiative
 		brainsDir := filepath.Join(tmpDir, ".brains")
 		require.NoError(t, os.MkdirAll(brainsDir, 0755))
+		activeJSON := `{"initiative": "history/test-refactor", "cycle": "history/test-refactor/cycle-001", "type": "refactor", "status": "active"}`
+		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
 
 		embeddedFS := fstest.MapFS{
 			"steps/refactor.md": &fstest.MapFile{
@@ -410,30 +424,20 @@ description: Refactoring specification
 ---
 Refactor the code with behavior preservation.`),
 			},
-			"templates/spec-template.md": &fstest.MapFile{
-				Data: []byte(`---
-status: draft
----
-# Refactor Specification`),
-			},
-			"templates/research-template.md": &fstest.MapFile{
-				Data: []byte(`# Research`),
-			},
 		}
 
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 		svc.SetEmbeddedFS(embeddedFS)
 
-		opts := &ExecuteOptions{
-			Name: "auth-refactor",
-		}
-		resp, err := svc.Execute("refactor", opts)
+		resp, err := svc.Execute("refactor", nil)
 		require.NoError(t, err)
 
-		assert.NotEmpty(t, resp.InitiativeFolder)
-		assert.NotEmpty(t, resp.CycleFolder)
+		assert.Equal(t, historyDir, resp.InitiativeFolder)
+		assert.Equal(t, cycleDir, resp.CycleFolder)
 		assert.Contains(t, resp.Directive, "Refactor the code with behavior preservation")
+		// Refactor step should include workflow phases
+		assert.NotEmpty(t, resp.WorkflowPhases)
 	})
 }
 
@@ -715,18 +719,8 @@ Eat`),
 }
 
 func TestService_CompleteStep(t *testing.T) {
-	t.Run("complete step clears active state", func(t *testing.T) {
+	t.Run("complete step returns UNKNOWN_STEP (now initiative action)", func(t *testing.T) {
 		tmpDir := t.TempDir()
-
-		// Create history folder
-		historyDir := filepath.Join(tmpDir, "history", "test-feature")
-		require.NoError(t, os.MkdirAll(historyDir, 0755))
-
-		// Create INITIATIVE.md with active status
-		require.NoError(t, os.WriteFile(filepath.Join(historyDir, "INITIATIVE.md"), []byte(`---
-status: active
----
-# Initiative`), 0644))
 
 		// Create .brains with active initiative
 		brainsDir := filepath.Join(tmpDir, ".brains")
@@ -734,12 +728,13 @@ status: active
 		activeJSON := `{"initiative": "history/test-feature", "status": "active"}`
 		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
 
+		// Empty embedded FS - no complete step (it's been removed)
 		embeddedFS := fstest.MapFS{
-			"steps/complete.md": &fstest.MapFile{
+			"steps/feature.md": &fstest.MapFile{
 				Data: []byte(`---
-name: complete
+name: feature
 ---
-Mark initiative as complete.`),
+Feature`),
 			},
 		}
 
@@ -747,8 +742,9 @@ Mark initiative as complete.`),
 		require.NoError(t, err)
 		svc.SetEmbeddedFS(embeddedFS)
 
-		resp, err := svc.Execute("complete", nil)
-		require.NoError(t, err)
-		assert.Contains(t, resp.Directive, "Mark initiative as complete")
+		// complete is now an initiative action, not a step
+		_, err = svc.GetStep("complete")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "UNKNOWN_STEP")
 	})
 }

@@ -217,6 +217,119 @@ func (s *Service) Complete() error {
 	return s.stateManager.Clear()
 }
 
+// StatusResult contains the status of the active initiative.
+type StatusResult struct {
+	Active         bool     `json:"active"`
+	InitiativeID   string   `json:"initiative_id,omitempty"`
+	InitiativeType string   `json:"initiative_type,omitempty"`
+	CurrentStep    string   `json:"current_step,omitempty"`
+	CycleID        string   `json:"cycle_id,omitempty"`
+	AvailableDocs  []string `json:"available_docs,omitempty"`
+	SuggestedNext  string   `json:"suggested_next,omitempty"`
+}
+
+// Status returns the status of the active initiative.
+// Returns active=false if no initiative is active.
+func (s *Service) Status() (*StatusResult, error) {
+	state, err := s.stateManager.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	if state.IsEmpty() {
+		return &StatusResult{
+			Active:        false,
+			SuggestedNext: "initiative create",
+		}, nil
+	}
+
+	// Get active initiative info
+	init, err := s.GetActive()
+	if err != nil || init == nil {
+		return &StatusResult{
+			Active:        false,
+			SuggestedNext: "initiative create",
+		}, nil
+	}
+
+	// Determine cycle path
+	cyclePath := ""
+	cycleID := ""
+	if state.Cycle != "" {
+		cyclePath = filepath.Join(s.workDir, state.Cycle)
+		cycleID = filepath.Base(state.Cycle)
+	} else {
+		cyclePath = init.Path
+	}
+
+	// Find available docs in cycle folder
+	availableDocs := s.findAvailableDocs(cyclePath)
+
+	// Determine suggested next step based on available artifacts
+	suggestedNext := s.determineSuggestedNext(availableDocs, state.CurrentStep)
+
+	return &StatusResult{
+		Active:         true,
+		InitiativeID:   init.ID,
+		InitiativeType: string(init.Type),
+		CurrentStep:    state.CurrentStep,
+		CycleID:        cycleID,
+		AvailableDocs:  availableDocs,
+		SuggestedNext:  suggestedNext,
+	}, nil
+}
+
+// findAvailableDocs scans the cycle folder for known artifact files.
+func (s *Service) findAvailableDocs(cyclePath string) []string {
+	knownDocs := []string{"spec.md", "research.md", "plan.md", "tasks.md", "data-model.md", "quickstart.md"}
+	var available []string
+
+	for _, doc := range knownDocs {
+		docPath := filepath.Join(cyclePath, doc)
+		if _, err := os.Stat(docPath); err == nil {
+			available = append(available, doc)
+		}
+	}
+
+	// Check for contracts directory
+	contractsDir := filepath.Join(cyclePath, "contracts")
+	if info, err := os.Stat(contractsDir); err == nil && info.IsDir() {
+		available = append(available, "contracts/")
+	}
+
+	return available
+}
+
+// determineSuggestedNext suggests the next step based on available artifacts.
+func (s *Service) determineSuggestedNext(availableDocs []string, currentStep string) string {
+	hasDoc := func(name string) bool {
+		for _, d := range availableDocs {
+			if d == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	// If no spec, suggest starting with feature/bug/refactor step
+	if !hasDoc("spec.md") {
+		return "feature"
+	}
+
+	// If spec exists but no plan, suggest plan
+	if !hasDoc("plan.md") {
+		return "plan"
+	}
+
+	// If plan exists but no tasks, suggest tasks
+	if !hasDoc("tasks.md") {
+		return "tasks"
+	}
+
+	// If tasks exist, suggest eat
+	return "eat"
+}
+
 // generateID generates a unique initiative ID in format: {hex-timestamp}-{type}-{name}
 func (s *Service) generateID(initType InitiativeType, name string) string {
 	timestamp := fmt.Sprintf("%08x", time.Now().Unix())

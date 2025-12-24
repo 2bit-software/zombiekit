@@ -65,9 +65,6 @@ When reasoning through problems, apply these principles:
 
 ### 2. Investigate the Codebase
 
-- **Check `.quint/context.md` first** — Project context, constraints, and tech stack
-- **Check `.quint/knowledge/`** — Project knowledge base with verified claims at different assurance levels
-- **Check `.context/` directory** — Architectural documentation and design decisions
 - Use Task tool for broader/multi-file exploration (preferred for context efficiency)
 - Explore relevant files and directories
 - Search for key functions, classes, variables
@@ -116,83 +113,6 @@ When reasoning through problems, apply these principles:
 - After tests pass, think about original intent
 - Ensure solution addresses the root cause
 - Never commit unless explicitly asked
-
-## Decision Framework (Quick Mode)
-
-**When to use:** Single decisions, easily reversible, doesn't need persistent evidence trail.
-
-**Process:** Present this framework to the user and work through it together.
-
-```
-DECISION: [What we're deciding]
-CONTEXT: [Why now, what triggered this]
-
-OPTIONS:
-1. [Option A] 
-   + [Pros]
-   - [Cons]
-   
-2. [Option B]
-   + [Pros]
-   - [Cons]
-
-WEAKEST LINK: [What breaks first in each option?]
-
-REVERSIBILITY: [Can we undo in 2 weeks? 2 months? Never?]
-
-RECOMMENDATION: [Which + why, or "need your input on X"]
-```
-
-## FPF Mode (Structured Reasoning)
-
-**When to use:**
-
-- Architectural decisions with long-term consequences
-- Multiple viable approaches requiring systematic evaluation
-- Need auditable reasoning trail for team/future reference
-- Complex problems requiring hypothesis → verification cycle
-- Building up project knowledge base over time
-
-**When NOT to use:**
-
-- Quick fixes, obvious solutions
-- Easily reversible decisions
-- Time-critical situations where overhead isn't justified
-
-**Activation:** Run `/q0-init` to initialize, or `/q1-hypothesize <problem>` to start directly.
-
-**Commands (in order):**
-
-| # | Command | Phase | What it does |
-|---|---------|-------|--------------|
-| 0 | `/q0-init` | Setup | Initialize `.quint/` structure |
-| 1 | `/q1-hypothesize` | Abduction | Generate hypotheses → `L0/` |
-| 1b| `/q1-add` | Abduction | Inject user hypothesis → `L0/` |
-| 2 | `/q2-verify` | Deduction | Logical verification → `L1/` |
-| 3 | `/q3-validate` | Induction | Test (internal) or Research (external) → `L2/` |
-| 4 | `/q4-audit` | Bias-Audit | WLNK analysis, congruence check |
-| 5 | `/q5-decide` | Decision | Create DRR from winning hypothesis |
-| S | `/q-status` | — | Show current state and next steps |
-| Q | `/q-query` | — | Search knowledge base |
-| D | `/q-decay` | — | Check evidence freshness |
-
-**Assurance Levels:**
-
-- **L0** (Observation): Unverified hypothesis or note
-- **L1** (Substantiated): Passed logical consistency check
-- **L2** (Verified): Empirically tested and confirmed
-- **Invalid**: Disproved claims (kept for learning)
-
-**Key Concepts:**
-
-- **WLNK (Weakest Link)**: Assurance = min(evidence), never average
-- **Congruence**: External evidence must match our context (high/medium/low)
-- **Validity**: Evidence expires — check with `/q-decay`
-- **Scope**: Knowledge applies within specified conditions only
-
-**State Location:** `.quint/` directory (git-tracked)
-
-**Key Principle:** You (Claude) generate options with evidence. Human decides. This is the Transformer Mandate — a system cannot transform itself.
 
 ## Code Generation Guidelines
 
@@ -262,112 +182,15 @@ RECOMMENDATION: [Which + why, or "need your input on X"]
 - Never assume a non-standard library is available
 - Never expose or log secrets and keys
 
-## MCP Tools (Optional)
-
-If you have MCP servers configured, these are recommended:
-
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `context7` | Library/framework documentation | API references, usage patterns, migration guides |
-
-**Context7 usage:**
-
-```
-mcp__context7__resolve-library-id  — find library ID
-mcp__context7__get-library-docs    — fetch documentation
-```
-
-Prefer Context7 over web search for library docs — it's more accurate and structured.
-
-## Available Subagents
-
-Invoke via Task tool:
-
-| Agent | Purpose | Tools |
-|-------|---------|-------|
-| `code-reviewer` | Code review (AFTER significant implementation) | Read, Grep, Glob (read-only) |
-
 ## Critical Reminders
 
 1. **Ultrathink Always**: Use maximum reasoning depth for every non-trivial task
-2. **Check Knowledge First**: Read `.quint/knowledge/` for verified project claims before making assumptions
-3. **Decision Framework vs FPF**: Quick decisions → inline framework. Complex/persistent → FPF mode
-4. **Use TodoWrite**: For ANY multi-step task, mark complete IMMEDIATELY
-5. **Actually Do Work**: When you say "I will do X", DO X
-6. **No Commits Without Permission**: Only commit when explicitly asked
-7. **Test Contracts**: Test behavior through public interfaces, not implementation
-8. **Follow Architecture**: Functional core (pure), imperative shell (I/O)
-9. **No Silent Failures**: Empty catch blocks are bugs
-10. **Be Direct**: "No" is a complete sentence. Disagree when you should.
-11. **Transformer Mandate**: Generate options, human decides. Don't make architectural choices autonomously.
+3. **Use TodoWrite**: For ANY multi-step task, mark complete IMMEDIATELY
+4. **Actually Do Work**: When you say "I will do X", DO X
+5. **No Commits Without Permission**: Only commit when explicitly asked
+6. **Test Contracts**: Test behavior through public interfaces, not implementation
+7. **Follow Architecture**: Functional core (pure), imperative shell (I/O)
+8. **No Silent Failures**: Empty catch blocks are bugs
+9. **Be Direct**: "No" is a complete sentence. Disagree when you should.
+10. **Transformer Mandate**: Generate options, human decides. Don't make architectural choices autonomously.
 
----
-
-## FPF Glossary (Quick Reference)
-
-### Knowledge Layers (Epistemic Status)
-| Layer | Name | Meaning | How to reach |
-|-------|------|---------|--------------|
-| **L0** | Conjecture | Unverified hypothesis | `quint_propose` |
-| **L1** | Substantiated | Logically verified | `quint_verify` PASS |
-| **L2** | Corroborated | Empirically validated | `quint_test` PASS |
-| **invalid** | Falsified | Failed verification/validation | FAIL verdict |
-
-### Core Concepts
-
-**Holon** — A knowledge unit (hypothesis, decision, evidence) stored in `.quint/`. Holons have identity, layer, kind, and assurance scores.
-
-**Kind** — Classification of holon:
-- `system` — Code, architecture, technical implementation
-- `episteme` — Process, documentation, methodology
-
-**Scope (G)** — Where a claim applies. "Redis caching" might have scope "read-heavy endpoints, >1000 RPS".
-
-**R_eff (Effective Reliability)** — Computed trust score (0-1). NOT estimated — must be calculated via `quint_calculate_r`.
-
-**WLNK (Weakest Link)** — R_eff = min(evidence_scores), never average. A chain is only as strong as its weakest link.
-
-### Structural Relations (B.1.1)
-
-Relations are declared during hypothesis creation (Phase 1), not as standalone operations.
-
-**ComponentOf** — System A is physical/functional part of System B.
-- Created via: `quint_propose(..., depends_on=["A"], kind="system")`
-- WLNK effect: `B.R_eff ≤ A.R_eff`
-- Use for: modules, services, subsystems
-
-**ConstituentOf** — Epistemic claim A supports claim B.
-- Created via: `quint_propose(..., depends_on=["A"], kind="episteme")`
-- WLNK effect: `B.R_eff ≤ A.R_eff`
-- Use for: arguments, proofs, documentation
-
-**MemberOf** — A belongs to collection B (non-mereological).
-- Created via: `quint_propose(..., decision_context="B")`
-- No R_eff propagation
-- Use for: grouping alternatives in a decision space
-
-**CL (Congruence Level)** — How well evidence transfers across contexts:
-- CL3: Same context (internal test) — no penalty
-- CL2: Similar context (related project) — minor penalty
-- CL1: Different context (external docs) — significant penalty
-
-**DRR (Design Rationale Record)** — Persisted decision with context, rationale, consequences. Created via `quint_decide`.
-
-**Epistemic Debt** — Accumulated staleness when evidence expires. Managed via `/q-decay`.
-
-**Transformer Mandate** — Systems cannot transform themselves. Humans decide; agents document. Autonomous architectural decisions = protocol violation.
-
-### State Machine Phases
-```
-IDLE → ABDUCTION → DEDUCTION → INDUCTION → DECISION → IDLE
-       (q1)         (q2)         (q3)        (q4→q5)
-```
-
-Each phase has preconditions. Skipping phases = blocked tools.
-
-## Active Technologies
-- Go 1.24.0 (per go.mod) + urfave/cli/v2, mark3labs/mcp-go, gopkg.in/yaml.v3, adrg/frontmatter (023-update-step-types)
-- File-based (YAML frontmatter in markdown, JSON for state) (023-update-step-types)
-
-## Recent Changes
-- 023-update-step-types: Added Go 1.24.0 (per go.mod) + urfave/cli/v2, mark3labs/mcp-go, gopkg.in/yaml.v3, adrg/frontmatter

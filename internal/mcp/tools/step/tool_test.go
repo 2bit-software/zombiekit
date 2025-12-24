@@ -199,7 +199,7 @@ Directive`),
 		assert.Contains(t, result, "second")
 	})
 
-	t.Run("feature step works without active initiative", func(t *testing.T) {
+	t.Run("feature step requires active initiative", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Create .brains directory without active initiative
@@ -214,14 +214,43 @@ description: Create new feature
 ---
 Create a new feature specification.`),
 			},
-			"templates/spec-template.md": &fstest.MapFile{
+		}
+
+		tool := NewTool()
+		tool.SetEmbeddedFS(embeddedFS)
+
+		args := map[string]interface{}{
+			"step": "feature",
+			"dir":  tmpDir,
+		}
+
+		// Feature step now requires active initiative
+		_, err := tool.Execute(context.Background(), args)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "NO_ACTIVE_INITIATIVE")
+	})
+
+	t.Run("feature step works with active initiative", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create history folder with cycle
+		historyDir := filepath.Join(tmpDir, "history", "test-feature")
+		cycleDir := filepath.Join(historyDir, "cycle-001")
+		require.NoError(t, os.MkdirAll(cycleDir, 0755))
+
+		// Create .brains directory with active initiative
+		brainsDir := filepath.Join(tmpDir, ".brains")
+		require.NoError(t, os.MkdirAll(brainsDir, 0755))
+		activeJSON := `{"initiative": "history/test-feature", "cycle": "history/test-feature/cycle-001", "status": "active"}`
+		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
+
+		embeddedFS := fstest.MapFS{
+			"steps/feature.md": &fstest.MapFile{
 				Data: []byte(`---
-status: draft
+name: feature
+description: Create new feature
 ---
-# Specification`),
-			},
-			"templates/research-template.md": &fstest.MapFile{
-				Data: []byte(`# Research`),
+Create a new feature specification.`),
 			},
 		}
 
@@ -231,12 +260,12 @@ status: draft
 		args := map[string]interface{}{
 			"step": "feature",
 			"dir":  tmpDir,
-			"name": "test-feature",
 		}
 
 		result, err := tool.Execute(context.Background(), args)
 		require.NoError(t, err)
 		assert.Contains(t, result, "directive")
+		assert.Contains(t, result, "workflow_phases")
 	})
 }
 

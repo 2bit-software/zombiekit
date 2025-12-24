@@ -80,6 +80,30 @@ type StepResponse struct {
 	CycleFolder string `json:"cycle_folder,omitempty"`
 	// WorkflowPhases describes the phases in a multi-phase workflow step.
 	WorkflowPhases []Phase `json:"workflow_phases,omitempty"`
+	// NextTask contains info about the next incomplete task (for eat step).
+	NextTask *TaskInfo `json:"next_task,omitempty"`
+	// Prerequisites contains prerequisite status info.
+	Prerequisites PrerequisiteInfo `json:"prerequisites,omitempty"`
+}
+
+// TaskInfo contains information about a task from tasks.md.
+type TaskInfo struct {
+	// ID is the task identifier (e.g., "T005").
+	ID string `json:"id"`
+	// Description is the task description.
+	Description string `json:"description"`
+	// Phase is the phase the task belongs to.
+	Phase string `json:"phase"`
+}
+
+// PrerequisiteInfo contains prerequisite check results.
+type PrerequisiteInfo struct {
+	// Met indicates whether all prerequisites are satisfied.
+	Met bool `json:"met"`
+	// Required describes what is required if not met.
+	Required string `json:"required,omitempty"`
+	// Hint provides guidance on how to satisfy the prerequisite.
+	Hint string `json:"hint,omitempty"`
 }
 
 // Phase represents a workflow phase in a multi-phase step.

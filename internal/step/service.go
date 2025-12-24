@@ -46,14 +46,6 @@ type Service struct {
 type ExecuteOptions struct {
 	// Initiative overrides the active initiative (path relative to history/).
 	Initiative string
-	// Type is required for the "feature", "bug", and "refactor" steps.
-	Type string
-	// Name is required for the "feature", "bug", and "refactor" steps.
-	Name string
-	// Description is an optional description for the initiative.
-	Description string
-	// NewInitiative forces creation of a new initiative even if one is active.
-	NewInitiative bool
 }
 
 // NewService creates a new step service for the given working directory.
@@ -107,34 +99,15 @@ func (s *Service) ListSteps() ([]*Step, error) {
 
 // Execute runs a step and returns the structured response.
 // The response includes the directive, history folder, files to read, and composed prompt.
+// All steps now require an active initiative (created via the initiative tool).
 func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse, error) {
-	// Load the step definition
+	// Load the step definition first to validate the step name
 	step, err := s.loader.Get(stepName)
 	if err != nil {
 		return nil, err
 	}
 
-	// Handle feature step specially - it creates initiatives with cycles
-	if stepName == "feature" {
-		return s.executeFeatureStep(step, opts)
-	}
-
-	// Handle bug step - creates bug-type initiative
-	if stepName == "bug" {
-		return s.executeBugStep(step, opts)
-	}
-
-	// Handle refactor step - creates refactor-type initiative
-	if stepName == "refactor" {
-		return s.executeRefactorStep(step, opts)
-	}
-
-	// Handle complete step specially - it marks initiative as complete
-	if stepName == "complete" {
-		return s.executeCompleteStep(step, opts)
-	}
-
-	// Get the initiative context
+	// Get the initiative context - ALL steps require an active initiative
 	var historyFolder string
 	var cyclePath string
 
@@ -145,10 +118,10 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 			return nil, &StepError{
 				Code:    "INITIATIVE_NOT_FOUND",
 				Message: fmt.Sprintf("initiative '%s' not found in history/", opts.Initiative),
-				Hint:    "Check the initiative path or use 'feature' to create a new one",
+				Hint:    "Check the initiative path or use 'initiative create' to create a new one",
 			}
 		}
-		cyclePath = historyFolder // Use initiative folder as cycle path for override
+		cyclePath = historyFolder
 	} else {
 		// Load active initiative from state
 		state, err := s.stateManager.Load()
@@ -160,7 +133,7 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 			return nil, &StepError{
 				Code:    "NO_ACTIVE_INITIATIVE",
 				Message: "no active initiative",
-				Hint:    "Run step='feature', 'bug', or 'refactor' with a name parameter to create a new initiative",
+				Hint:    "Use 'initiative create' to start a new initiative first",
 			}
 		}
 
@@ -188,17 +161,34 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 		if err == nil {
 			composedPrompt = result.Content
 		}
-		// If composition fails, continue with empty prompt
 	}
 
-	return &StepResponse{
+	// Build the response
+	resp := &StepResponse{
 		Directive:        step.Directive,
 		HistoryFolder:    historyFolder,
 		InitiativeFolder: historyFolder,
 		CycleFolder:      cyclePath,
 		FilesToRead:      filesToRead,
 		ComposedPrompt:   composedPrompt,
-	}, nil
+		Prerequisites:    PrerequisiteInfo{Met: true},
+	}
+
+	// Add workflow phases for feature/bug/refactor steps
+	if stepName == "feature" || stepName == "bug" || stepName == "refactor" {
+		resp.WorkflowPhases = buildWorkflowPhases()
+	}
+
+	// For eat step, find the next incomplete task
+	if stepName == "eat" {
+		nextTask := s.findNextTask(cyclePath)
+		resp.NextTask = nextTask
+		if nextTask == nil {
+			resp.Directive = "All tasks complete! Run 'initiative complete' to finish."
+		}
+	}
+
+	return resp, nil
 }
 
 // resolveFiles expands glob patterns relative to the history folder.
@@ -262,22 +252,52 @@ func (s *Service) UpdateState(stepName string, initiativeID string) error {
 	return s.stateManager.Save(state)
 }
 
-// executeBugStep handles the "bug" step that creates a bug-type initiative.
-func (s *Service) executeBugStep(step *Step, opts *ExecuteOptions) (*StepResponse, error) {
-	if opts == nil {
-		opts = &ExecuteOptions{}
+// findNextTask parses tasks.md and finds the first unchecked task.
+func (s *Service) findNextTask(cyclePath string) *TaskInfo {
+	tasksPath := filepath.Join(cyclePath, "tasks.md")
+	content, err := os.ReadFile(tasksPath)
+	if err != nil {
+		return nil
 	}
-	opts.Type = "bug"
-	return s.executeFeatureStep(step, opts)
-}
 
-// executeRefactorStep handles the "refactor" step that creates a refactor-type initiative.
-func (s *Service) executeRefactorStep(step *Step, opts *ExecuteOptions) (*StepResponse, error) {
-	if opts == nil {
-		opts = &ExecuteOptions{}
+	lines := strings.Split(string(content), "\n")
+	currentPhase := ""
+
+	for _, line := range lines {
+		// Track current phase (## Phase X: ...)
+		if strings.HasPrefix(line, "## Phase") || strings.HasPrefix(line, "## ") {
+			currentPhase = strings.TrimPrefix(line, "## ")
+			currentPhase = strings.TrimSpace(currentPhase)
+		}
+
+		// Find unchecked task: - [ ] TXXX ...
+		if strings.Contains(line, "- [ ]") {
+			// Extract task ID and description
+			// Format: - [ ] T001 Description here
+			trimmed := strings.TrimSpace(line)
+			trimmed = strings.TrimPrefix(trimmed, "- [ ]")
+			trimmed = strings.TrimSpace(trimmed)
+
+			// Split into ID and description
+			parts := strings.SplitN(trimmed, " ", 2)
+			taskID := ""
+			description := trimmed
+			if len(parts) >= 1 {
+				taskID = parts[0]
+			}
+			if len(parts) >= 2 {
+				description = parts[1]
+			}
+
+			return &TaskInfo{
+				ID:          taskID,
+				Description: description,
+				Phase:       currentPhase,
+			}
+		}
 	}
-	opts.Type = "refactor"
-	return s.executeFeatureStep(step, opts)
+
+	return nil // All tasks complete
 }
 
 // checkPrerequisite validates that a step's prerequisite is met.
@@ -337,40 +357,4 @@ func (s *Service) checkPrerequisite(stepName string, cyclePath string) error {
 	}
 
 	return nil
-}
-
-// executeCompleteStep handles the special "complete" step that marks an initiative as done.
-func (s *Service) executeCompleteStep(step *Step, opts *ExecuteOptions) (*StepResponse, error) {
-	// Load active initiative
-	state, err := s.stateManager.Load()
-	if err != nil {
-		return nil, fmt.Errorf("loading initiative state: %w", err)
-	}
-	if state.IsEmpty() {
-		return nil, &StepError{
-			Code:    "NO_ACTIVE_INITIATIVE",
-			Message: "no active initiative to complete",
-			Hint:    "There is no active initiative to mark as complete",
-		}
-	}
-
-	historyFolder := filepath.Join(s.workDir, state.Initiative)
-
-	// Create initiative service
-	initSvc, err := initiative.NewService(s.workDir)
-	if err != nil {
-		return nil, fmt.Errorf("creating initiative service: %w", err)
-	}
-
-	// Complete the initiative
-	if err := initSvc.Complete(); err != nil {
-		return nil, err
-	}
-
-	return &StepResponse{
-		Directive:      step.Directive,
-		HistoryFolder:  historyFolder,
-		FilesToRead:    s.resolveFiles(step.Files, historyFolder),
-		ComposedPrompt: "",
-	}, nil
 }
