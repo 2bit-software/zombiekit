@@ -181,7 +181,7 @@ Updated spec.md with the following clarifications:
 
 **Remaining Ambiguities**: None identified
 
-**Next Step**: Continue with /brains.plan or /brains.tasks
+**Next Step**: Call the `step` MCP tool with `step: "plan"` or `step: "tasks"`
 ```
 
 ---

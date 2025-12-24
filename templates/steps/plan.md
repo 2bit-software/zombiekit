@@ -181,7 +181,7 @@ Create `plan.md` in `cycle_folder` with this structure:
 
 ## Next Step
 
-Run `/speckit.tasks` to generate the detailed task breakdown.
+Call the `step` MCP tool with `step: "tasks"` to generate the detailed task breakdown.
 ```
 
 ---

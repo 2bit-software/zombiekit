@@ -139,7 +139,7 @@ Summary:
 Next steps:
 - Run full test suite
 - Review implementation
-- Consider running /brains.audit for alignment check
+- Consider calling the `step` MCP tool with `step: "audit"` for alignment check
 ```
 
 ---

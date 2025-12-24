@@ -226,7 +226,7 @@ Present to user:
 IF user approves:
     - Mark spec.md status as "approved"
     - Report completion with artifact paths
-    - Suggest next step: /brains.plan
+    - Suggest next step: Call `step` MCP tool with `step: "plan"`
 ELSE IF user rejects with feedback:
     - Incorporate feedback into research
     - Return to Phase I (counts toward 3-loop limit)
