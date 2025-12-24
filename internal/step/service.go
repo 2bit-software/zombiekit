@@ -5,10 +5,34 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/adrg/frontmatter"
 	"github.com/zombiekit/brains/internal/initiative"
 	"github.com/zombiekit/brains/internal/profile"
 )
+
+// stepPrerequisites defines the prerequisites for steps that require them.
+var stepPrerequisites = map[string]StepPrerequisite{
+	"plan": {
+		RequiredArtifact: "spec.md",
+		RequiredStatus:   "approved",
+		Hint:             "Run feature, bug, or refactor first and approve the spec",
+		BlockingStep:     "feature",
+	},
+	"tasks": {
+		RequiredArtifact: "plan.md",
+		RequiredStatus:   "approved",
+		Hint:             "Run plan first and approve the plan",
+		BlockingStep:     "plan",
+	},
+	"eat": {
+		RequiredArtifact: "tasks.md",
+		RequiredStatus:   "", // No status check, just existence
+		Hint:             "Run tasks first to generate the task list",
+		BlockingStep:     "tasks",
+	},
+}
 
 // Service provides step execution and management functionality.
 type Service struct {
@@ -22,10 +46,14 @@ type Service struct {
 type ExecuteOptions struct {
 	// Initiative overrides the active initiative (path relative to history/).
 	Initiative string
-	// Type is required for the "init" step.
+	// Type is required for the "feature", "bug", and "refactor" steps.
 	Type string
-	// Name is required for the "init" step.
+	// Name is required for the "feature", "bug", and "refactor" steps.
 	Name string
+	// Description is an optional description for the initiative.
+	Description string
+	// NewInitiative forces creation of a new initiative even if one is active.
+	NewInitiative bool
 }
 
 // NewService creates a new step service for the given working directory.
@@ -86,9 +114,19 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 		return nil, err
 	}
 
-	// Handle init step specially - it creates a new initiative
-	if stepName == "init" {
-		return s.executeInitStep(step, opts)
+	// Handle feature step specially - it creates initiatives with cycles
+	if stepName == "feature" {
+		return s.executeFeatureStep(step, opts)
+	}
+
+	// Handle bug step - creates bug-type initiative
+	if stepName == "bug" {
+		return s.executeBugStep(step, opts)
+	}
+
+	// Handle refactor step - creates refactor-type initiative
+	if stepName == "refactor" {
+		return s.executeRefactorStep(step, opts)
 	}
 
 	// Handle complete step specially - it marks initiative as complete
@@ -98,6 +136,7 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 
 	// Get the initiative context
 	var historyFolder string
+	var cyclePath string
 
 	// Check for initiative override
 	if opts != nil && opts.Initiative != "" {
@@ -106,9 +145,10 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 			return nil, &StepError{
 				Code:    "INITIATIVE_NOT_FOUND",
 				Message: fmt.Sprintf("initiative '%s' not found in history/", opts.Initiative),
-				Hint:    "Check the initiative path or use 'init' to create a new one",
+				Hint:    "Check the initiative path or use 'feature' to create a new one",
 			}
 		}
+		cyclePath = historyFolder // Use initiative folder as cycle path for override
 	} else {
 		// Load active initiative from state
 		state, err := s.stateManager.Load()
@@ -120,15 +160,26 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 			return nil, &StepError{
 				Code:    "NO_ACTIVE_INITIATIVE",
 				Message: "no active initiative",
-				Hint:    "Run step='init' with type and name parameters to create a new initiative",
+				Hint:    "Run step='feature', 'bug', or 'refactor' with a name parameter to create a new initiative",
 			}
 		}
 
 		historyFolder = filepath.Join(s.workDir, state.Initiative)
+		// Use cycle path if available, otherwise fall back to initiative folder
+		if state.Cycle != "" {
+			cyclePath = filepath.Join(s.workDir, state.Cycle)
+		} else {
+			cyclePath = historyFolder
+		}
+	}
+
+	// Check prerequisites for steps that require them
+	if err := s.checkPrerequisite(stepName, cyclePath); err != nil {
+		return nil, err
 	}
 
 	// Resolve file patterns to actual files
-	filesToRead := s.resolveFiles(step.Files, historyFolder)
+	filesToRead := s.resolveFiles(step.Files, cyclePath)
 
 	// Compose profiles
 	composedPrompt := ""
@@ -141,10 +192,12 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 	}
 
 	return &StepResponse{
-		Directive:      step.Directive,
-		HistoryFolder:  historyFolder,
-		FilesToRead:    filesToRead,
-		ComposedPrompt: composedPrompt,
+		Directive:        step.Directive,
+		HistoryFolder:    historyFolder,
+		InitiativeFolder: historyFolder,
+		CycleFolder:      cyclePath,
+		FilesToRead:      filesToRead,
+		ComposedPrompt:   composedPrompt,
 	}, nil
 }
 
@@ -209,53 +262,81 @@ func (s *Service) UpdateState(stepName string, initiativeID string) error {
 	return s.stateManager.Save(state)
 }
 
-// executeInitStep handles the special "init" step that creates a new initiative.
-func (s *Service) executeInitStep(step *Step, opts *ExecuteOptions) (*StepResponse, error) {
-	// Validate required parameters
-	if opts == nil || opts.Type == "" {
-		return nil, &StepError{
-			Code:    "MISSING_TYPE",
-			Message: "type parameter is required for init step",
-			Hint:    "Provide type: feature, bug, or refactor",
-		}
+// executeBugStep handles the "bug" step that creates a bug-type initiative.
+func (s *Service) executeBugStep(step *Step, opts *ExecuteOptions) (*StepResponse, error) {
+	if opts == nil {
+		opts = &ExecuteOptions{}
 	}
-	if opts.Name == "" {
-		return nil, &StepError{
-			Code:    "MISSING_NAME",
-			Message: "name parameter is required for init step",
-			Hint:    "Provide a name for the initiative (e.g., 'user-auth')",
+	opts.Type = "bug"
+	return s.executeFeatureStep(step, opts)
+}
+
+// executeRefactorStep handles the "refactor" step that creates a refactor-type initiative.
+func (s *Service) executeRefactorStep(step *Step, opts *ExecuteOptions) (*StepResponse, error) {
+	if opts == nil {
+		opts = &ExecuteOptions{}
+	}
+	opts.Type = "refactor"
+	return s.executeFeatureStep(step, opts)
+}
+
+// checkPrerequisite validates that a step's prerequisite is met.
+// Returns nil if the prerequisite is met or the step has no prerequisite.
+// Returns a StepError with code PREREQUISITE_NOT_MET if not met.
+func (s *Service) checkPrerequisite(stepName string, cyclePath string) error {
+	prereq, exists := stepPrerequisites[stepName]
+	if !exists {
+		return nil // No prerequisite for this step
+	}
+
+	artifactPath := filepath.Join(cyclePath, prereq.RequiredArtifact)
+
+	// Check if artifact exists
+	if _, err := os.Stat(artifactPath); os.IsNotExist(err) {
+		return &StepError{
+			Code:    "PREREQUISITE_NOT_MET",
+			Message: fmt.Sprintf("required artifact '%s' not found", prereq.RequiredArtifact),
+			Hint:    prereq.Hint,
 		}
 	}
 
-	// Validate type
-	initType := initiative.InitiativeType(opts.Type)
-	if !initType.IsValid() {
-		return nil, &StepError{
-			Code:    "INVALID_TYPE",
-			Message: fmt.Sprintf("invalid initiative type '%s'", opts.Type),
-			Hint:    "Type must be one of: feature, bug, refactor",
-		}
+	// If no status check required, we're done
+	if prereq.RequiredStatus == "" {
+		return nil
 	}
 
-	// Create initiative service
-	initSvc, err := initiative.NewService(s.workDir)
+	// Check frontmatter status
+	content, err := os.ReadFile(artifactPath)
 	if err != nil {
-		return nil, fmt.Errorf("creating initiative service: %w", err)
+		return &StepError{
+			Code:    "PREREQUISITE_NOT_MET",
+			Message: fmt.Sprintf("cannot read artifact '%s': %v", prereq.RequiredArtifact, err),
+			Hint:    prereq.Hint,
+		}
 	}
 
-	// Create the initiative
-	init, err := initSvc.Create(initType, opts.Name)
+	var meta struct {
+		Status string `yaml:"status"`
+	}
+	_, err = frontmatter.Parse(strings.NewReader(string(content)), &meta)
 	if err != nil {
-		return nil, err
+		// If frontmatter parsing fails, check if status is not in frontmatter format
+		return &StepError{
+			Code:    "PREREQUISITE_NOT_MET",
+			Message: fmt.Sprintf("artifact '%s' has no valid frontmatter", prereq.RequiredArtifact),
+			Hint:    prereq.Hint,
+		}
 	}
 
-	// Return response with the new initiative's history folder
-	return &StepResponse{
-		Directive:      step.Directive,
-		HistoryFolder:  init.Path,
-		FilesToRead:    []string{},
-		ComposedPrompt: "",
-	}, nil
+	if meta.Status != prereq.RequiredStatus {
+		return &StepError{
+			Code:    "PREREQUISITE_NOT_MET",
+			Message: fmt.Sprintf("artifact '%s' has status '%s', requires '%s'", prereq.RequiredArtifact, meta.Status, prereq.RequiredStatus),
+			Hint:    prereq.Hint,
+		}
+	}
+
+	return nil
 }
 
 // executeCompleteStep handles the special "complete" step that marks an initiative as done.

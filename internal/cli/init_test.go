@@ -145,11 +145,11 @@ func TestInitCommand_FileCount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 15, len(entries), "should have 15 command files")
 
-	// Count template files (should be 5)
+	// Count template files (should be 7)
 	templatesDir := filepath.Join(tmpDir, ".brains", "templates")
 	entries, err = os.ReadDir(templatesDir)
 	require.NoError(t, err)
-	assert.Equal(t, 5, len(entries), "should have 5 template files")
+	assert.Equal(t, 7, len(entries), "should have 7 template files")
 }
 
 func TestInitCommand_SpecificFiles(t *testing.T) {

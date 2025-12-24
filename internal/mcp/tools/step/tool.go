@@ -44,7 +44,7 @@ func (t *Tool) Definition() ToolDefinition {
 			"properties": map[string]interface{}{
 				"step": map[string]interface{}{
 					"type":        "string",
-					"description": "Step name to execute. Built-in steps: init, specify, plan, tasks, implement, audit, clarify, complete",
+					"description": "Step name to execute. Built-in steps: init, feature, specify, plan, tasks, implement, audit, clarify, complete",
 				},
 				"dir": map[string]interface{}{
 					"type":        "string",
@@ -57,11 +57,19 @@ func (t *Tool) Definition() ToolDefinition {
 				"type": map[string]interface{}{
 					"type":        "string",
 					"enum":        []string{"feature", "bug", "refactor"},
-					"description": "Required for 'init' step: Type of initiative to create",
+					"description": "Initiative type. Required for 'init' and 'feature' steps when creating new initiative.",
 				},
 				"name": map[string]interface{}{
 					"type":        "string",
-					"description": "Required for 'init' step: Name/slug for the new initiative (e.g., 'user-auth')",
+					"description": "Name/slug for the new initiative or cycle (e.g., 'user-auth'). Required for 'init' and 'feature' steps.",
+				},
+				"description": map[string]interface{}{
+					"type":        "string",
+					"description": "Optional: Description of the feature or initiative.",
+				},
+				"new_initiative": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Optional: Force creation of a new initiative even if one is active. Default false.",
 				},
 			},
 			"required": []string{"step", "dir"},
@@ -105,9 +113,11 @@ func (t *Tool) Execute(ctx context.Context, args map[string]interface{}) (string
 
 	// Build execution options
 	opts := &internalStep.ExecuteOptions{
-		Initiative: getStringArg(args, "initiative"),
-		Type:       getStringArg(args, "type"),
-		Name:       getStringArg(args, "name"),
+		Initiative:    getStringArg(args, "initiative"),
+		Type:          getStringArg(args, "type"),
+		Name:          getStringArg(args, "name"),
+		Description:   getStringArg(args, "description"),
+		NewInitiative: getBoolArg(args, "new_initiative"),
 	}
 
 	// Execute the step
@@ -144,6 +154,16 @@ func getStringArg(args map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// getBoolArg extracts a boolean argument from the args map.
+func getBoolArg(args map[string]interface{}, key string) bool {
+	if val, ok := args[key]; ok {
+		if b, ok := val.(bool); ok {
+			return b
+		}
+	}
+	return false
 }
 
 // StepToolError represents an error in the step tool with an error code.

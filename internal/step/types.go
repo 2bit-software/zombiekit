@@ -68,9 +68,43 @@ type StepResponse struct {
 	// Directive is the step directive/instruction text.
 	Directive string `json:"directive"`
 	// HistoryFolder is the absolute path to the initiative's history folder.
+	// Deprecated: Use InitiativeFolder instead.
 	HistoryFolder string `json:"history_folder"`
 	// FilesToRead is the list of files the agent should read.
 	FilesToRead []string `json:"files_to_read"`
 	// ComposedPrompt is the pre-composed profile prompt for this step.
 	ComposedPrompt string `json:"composed_prompt"`
+	// InitiativeFolder is the absolute path to the initiative folder.
+	InitiativeFolder string `json:"initiative_folder,omitempty"`
+	// CycleFolder is the absolute path to the active cycle folder.
+	CycleFolder string `json:"cycle_folder,omitempty"`
+	// WorkflowPhases describes the phases in a multi-phase workflow step.
+	WorkflowPhases []Phase `json:"workflow_phases,omitempty"`
+}
+
+// Phase represents a workflow phase in a multi-phase step.
+type Phase struct {
+	// Name is the phase identifier (e.g., "research", "create", "audit", "highlight").
+	Name string `json:"name"`
+	// Description is a human-readable description of the phase.
+	Description string `json:"description"`
+	// Agents lists the agent types to spawn for this phase.
+	Agents []string `json:"agents"`
+	// Outputs lists the expected artifacts from this phase.
+	Outputs []string `json:"outputs"`
+	// Parallel indicates whether agents can run in parallel.
+	Parallel bool `json:"parallel"`
+}
+
+// StepPrerequisite defines requirements that must be met before a step can execute.
+type StepPrerequisite struct {
+	// RequiredArtifact is the file that must exist (e.g., "spec.md").
+	RequiredArtifact string
+	// RequiredStatus is the optional status in frontmatter (e.g., "approved").
+	// If empty, only file existence is checked.
+	RequiredStatus string
+	// Hint is guidance shown when prerequisite is not met.
+	Hint string
+	// BlockingStep is the name of the step that produces the required artifact.
+	BlockingStep string
 }

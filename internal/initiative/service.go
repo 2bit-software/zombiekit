@@ -92,14 +92,11 @@ func (s *Service) Create(initType InitiativeType, name string) (*Initiative, err
 		return nil, fmt.Errorf("creating INITIATIVE.md: %w", err)
 	}
 
-	// Set as active initiative
+	// Set as active initiative (pointer only, no status)
 	state := &InitiativeState{
 		Initiative:   filepath.Join(HistoryDir, id),
-		Type:         initType,
-		Name:         normalizedName,
 		Started:      now,
 		LastActivity: now,
-		Status:       StatusActive,
 	}
 	if err := s.stateManager.Save(state); err != nil {
 		return nil, fmt.Errorf("saving state: %w", err)
@@ -162,13 +159,12 @@ func (s *Service) GetActive() (*Initiative, error) {
 	}
 
 	id := filepath.Base(state.Initiative)
-	return &Initiative{
-		ID:     id,
-		Type:   state.Type,
-		Name:   state.Name,
-		Path:   initPath,
-		Status: state.Status,
-	}, nil
+	// Parse initiative info from folder name (type/name/status from folder + INITIATIVE.md)
+	init := s.parseInitiativeFromFolder(id, initPath)
+	if init == nil {
+		return nil, nil
+	}
+	return init, nil
 }
 
 // SetActive sets the specified initiative as active.
@@ -192,14 +188,11 @@ func (s *Service) SetActive(initiativeID string) error {
 		}
 	}
 
-	// Update state
+	// Update state (pointer only, no status)
 	state := &InitiativeState{
 		Initiative:   filepath.Join(HistoryDir, initiativeID),
-		Type:         init.Type,
-		Name:         init.Name,
 		Started:      time.Now(),
 		LastActivity: time.Now(),
-		Status:       StatusActive,
 	}
 
 	return s.stateManager.Save(state)

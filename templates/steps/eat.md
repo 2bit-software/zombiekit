@@ -1,6 +1,6 @@
 ---
-name: implement
-description: Execute the implementation tasks
+name: eat
+description: Execute the implementation tasks (BRAAAAINS!)
 profiles: []
 files:
   - "spec.md"
@@ -8,7 +8,7 @@ files:
   - "tasks.md"
 type: step
 ---
-# Implement Feature
+# Eat Feature (Execute Implementation)
 
 Your task is to implement the feature according to the task list.
 

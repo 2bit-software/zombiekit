@@ -74,14 +74,11 @@ func TestService_Create(t *testing.T) {
 		init, err := svc.Create(TypeBug, "login-crash")
 		require.NoError(t, err)
 
-		// Check state was updated
+		// Check state was updated (pointer only - no type/name/status stored in state)
 		state, err := svc.stateManager.Load()
 		require.NoError(t, err)
 		assert.False(t, state.IsEmpty())
 		assert.Contains(t, state.Initiative, init.ID)
-		assert.Equal(t, TypeBug, state.Type)
-		assert.Equal(t, "login-crash", state.Name)
-		assert.Equal(t, StatusActive, state.Status)
 	})
 
 	t.Run("creates history folder if missing", func(t *testing.T) {

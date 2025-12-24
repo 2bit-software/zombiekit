@@ -51,24 +51,28 @@ func TestTool_Execute(t *testing.T) {
 		brainsDir := filepath.Join(tmpDir, ".brains")
 		require.NoError(t, os.MkdirAll(brainsDir, 0755))
 
-		// Create history folder
+		// Create history folder with cycle
 		historyDir := filepath.Join(tmpDir, "history", "test-feature")
-		require.NoError(t, os.MkdirAll(historyDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(historyDir, "spec.md"), []byte("# Spec"), 0644))
+		cycleDir := filepath.Join(historyDir, "cycle-001")
+		require.NoError(t, os.MkdirAll(cycleDir, 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(cycleDir, "spec.md"), []byte(`---
+status: approved
+---
+# Spec`), 0644))
 
 		// Set active initiative
-		activeJSON := `{"initiative": "history/test-feature", "status": "active"}`
+		activeJSON := `{"initiative": "history/test-feature", "cycle": "history/test-feature/cycle-001", "status": "active"}`
 		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
 
 		embeddedFS := fstest.MapFS{
-			"steps/specify.md": &fstest.MapFile{
+			"steps/plan.md": &fstest.MapFile{
 				Data: []byte(`---
-name: specify
-description: Create specification
+name: plan
+description: Create implementation plan
 files:
   - "spec.md"
 ---
-Create the specification.`),
+Create the implementation plan.`),
 			},
 		}
 
@@ -76,7 +80,7 @@ Create the specification.`),
 		tool.SetEmbeddedFS(embeddedFS)
 
 		args := map[string]interface{}{
-			"step": "specify",
+			"step": "plan",
 			"dir":  tmpDir,
 		}
 
@@ -103,7 +107,7 @@ Create the specification.`),
 		tool := NewTool()
 
 		args := map[string]interface{}{
-			"step": "specify",
+			"step": "plan",
 		}
 
 		_, err := tool.Execute(context.Background(), args)
@@ -115,9 +119,9 @@ Create the specification.`),
 		tmpDir := t.TempDir()
 
 		embeddedFS := fstest.MapFS{
-			"steps/specify.md": &fstest.MapFile{
+			"steps/plan.md": &fstest.MapFile{
 				Data: []byte(`---
-name: specify
+name: plan
 ---
 Directive`),
 			},
@@ -127,7 +131,7 @@ Directive`),
 		tool.SetEmbeddedFS(embeddedFS)
 
 		args := map[string]interface{}{
-			"step": "specify",
+			"step": "plan",
 			"dir":  tmpDir,
 		}
 
@@ -173,9 +177,9 @@ Directive`),
 		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
 
 		embeddedFS := fstest.MapFS{
-			"steps/specify.md": &fstest.MapFile{
+			"steps/audit.md": &fstest.MapFile{
 				Data: []byte(`---
-name: specify
+name: audit
 ---
 Directive`),
 			},
@@ -185,7 +189,7 @@ Directive`),
 		tool.SetEmbeddedFS(embeddedFS)
 
 		args := map[string]interface{}{
-			"step":       "specify",
+			"step":       "audit",
 			"dir":        tmpDir,
 			"initiative": "second",
 		}
@@ -195,7 +199,7 @@ Directive`),
 		assert.Contains(t, result, "second")
 	})
 
-	t.Run("init step works without active initiative", func(t *testing.T) {
+	t.Run("feature step works without active initiative", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Create .brains directory without active initiative
@@ -203,12 +207,21 @@ Directive`),
 		require.NoError(t, os.MkdirAll(brainsDir, 0755))
 
 		embeddedFS := fstest.MapFS{
-			"steps/init.md": &fstest.MapFile{
+			"steps/feature.md": &fstest.MapFile{
 				Data: []byte(`---
-name: init
-description: Initialize new initiative
+name: feature
+description: Create new feature
 ---
-Initialize a new initiative.`),
+Create a new feature specification.`),
+			},
+			"templates/spec-template.md": &fstest.MapFile{
+				Data: []byte(`---
+status: draft
+---
+# Specification`),
+			},
+			"templates/research-template.md": &fstest.MapFile{
+				Data: []byte(`# Research`),
 			},
 		}
 
@@ -216,9 +229,8 @@ Initialize a new initiative.`),
 		tool.SetEmbeddedFS(embeddedFS)
 
 		args := map[string]interface{}{
-			"step": "init",
+			"step": "feature",
 			"dir":  tmpDir,
-			"type": "feature",
 			"name": "test-feature",
 		}
 

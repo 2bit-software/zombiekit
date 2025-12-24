@@ -71,9 +71,7 @@ func TestFileStateManager_Load(t *testing.T) {
 
 		stateJSON := `{
 			"initiative": "history/675d8a3f-feature-user-auth",
-			"type": "feature",
-			"name": "user-auth",
-			"status": "active",
+			"cycle": "history/675d8a3f-feature-user-auth/675d8a40-feat-user-auth",
 			"current_step": "specify"
 		}`
 		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, StateFileName), []byte(stateJSON), 0644))
@@ -85,9 +83,7 @@ func TestFileStateManager_Load(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, state.IsEmpty())
 		assert.Equal(t, "history/675d8a3f-feature-user-auth", state.Initiative)
-		assert.Equal(t, TypeFeature, state.Type)
-		assert.Equal(t, "user-auth", state.Name)
-		assert.Equal(t, StatusActive, state.Status)
+		assert.Equal(t, "history/675d8a3f-feature-user-auth/675d8a40-feat-user-auth", state.Cycle)
 		assert.Equal(t, "specify", state.CurrentStep)
 	})
 
@@ -114,9 +110,7 @@ func TestFileStateManager_Save(t *testing.T) {
 
 		state := &InitiativeState{
 			Initiative:  "history/675d8a3f-feature-user-auth",
-			Type:        TypeFeature,
-			Name:        "user-auth",
-			Status:      StatusActive,
+			Cycle:       "history/675d8a3f-feature-user-auth/675d8a40-feat-user-auth",
 			Started:     time.Now(),
 			CurrentStep: "specify",
 		}
@@ -132,9 +126,7 @@ func TestFileStateManager_Save(t *testing.T) {
 		loaded, err := mgr.Load()
 		require.NoError(t, err)
 		assert.Equal(t, state.Initiative, loaded.Initiative)
-		assert.Equal(t, state.Type, loaded.Type)
-		assert.Equal(t, state.Name, loaded.Name)
-		assert.Equal(t, state.Status, loaded.Status)
+		assert.Equal(t, state.Cycle, loaded.Cycle)
 		assert.Equal(t, state.CurrentStep, loaded.CurrentStep)
 	})
 
@@ -165,14 +157,12 @@ func TestFileStateManager_Save(t *testing.T) {
 		// Save first state
 		state1 := &InitiativeState{
 			Initiative: "history/first",
-			Name:       "first",
 		}
 		require.NoError(t, mgr.Save(state1))
 
 		// Save second state
 		state2 := &InitiativeState{
 			Initiative: "history/second",
-			Name:       "second",
 		}
 		require.NoError(t, mgr.Save(state2))
 
@@ -180,7 +170,6 @@ func TestFileStateManager_Save(t *testing.T) {
 		loaded, err := mgr.Load()
 		require.NoError(t, err)
 		assert.Equal(t, "history/second", loaded.Initiative)
-		assert.Equal(t, "second", loaded.Name)
 	})
 }
 

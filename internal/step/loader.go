@@ -104,7 +104,7 @@ func (l *Loader) Get(name string) (*Step, error) {
 	return nil, &StepError{
 		Code:    "UNKNOWN_STEP",
 		Message: fmt.Sprintf("step '%s' not found", name),
-		Hint:    "Available steps: init, specify, plan, tasks, implement, audit, clarify, complete",
+		Hint:    "Available steps: feature, bug, refactor, plan, tasks, eat, audit, clarify, complete",
 	}
 }
 
