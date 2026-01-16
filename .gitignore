@@ -50,3 +50,9 @@ tmp/
 
 # Development data directory (SQLite databases)
 .data/
+
+# Local brains configuration (user-specific)
+.brains/
+
+# Claude Code commands (user-specific)
+.claude/commands/
