@@ -4,6 +4,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,8 +13,11 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/zombiekit/brains/internal/config"
+	"github.com/zombiekit/brains/internal/database"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/mcp"
+	"github.com/zombiekit/brains/internal/memory"
+	"github.com/zombiekit/brains/internal/memory/postgres"
 	"github.com/zombiekit/brains/internal/memory/sqlite"
 )
 
@@ -79,30 +83,20 @@ func runServe(c *cli.Context) error {
 	config.WarnUnknownTools(logger, enabledTools)
 	config.WarnUnknownTools(logger, disabledTools)
 
-	// Load storage configuration
-	storageCfg := config.LoadStorageConfigFromEnv()
+	// Load storage configuration from files + env vars
+	storageCfg := config.LoadStorageConfig(logger)
 
-	// Override with CLI flags
-	if dbType := c.String("db-type"); dbType != "" {
-		storageCfg.Backend = config.BackendType(dbType)
+	// Override with CLI flags (highest precedence)
+	if c.IsSet("db-type") {
+		storageCfg.Backend = config.BackendType(c.String("db-type"))
 	}
 
-	// For now, only support SQLite (PostgreSQL can be added later)
-	if storageCfg.Backend != config.BackendSQLite {
-		return fmt.Errorf("only sqlite backend is currently supported, got: %s", storageCfg.Backend)
-	}
-
-	// Create storage
-	storage, err := sqlite.NewSQLiteStorage(ctx, storageCfg.SQLitePath)
+	// Initialize storage with fallback support
+	storage, storageCfg, err := initializeStorage(ctx, storageCfg, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
 	defer storage.Close()
-
-	logger.Info("Storage initialized",
-		"backend", storageCfg.Backend,
-		"path", storageCfg.SQLitePath,
-	)
 
 	// Create MCP server with tool configuration
 	server := mcp.NewServer(storage, toolCfg)
@@ -126,6 +120,101 @@ func runServe(c *cli.Context) error {
 	default:
 		return fmt.Errorf("unsupported transport mode: %s", mode)
 	}
+}
+
+// initializeStorage creates the appropriate storage backend based on configuration.
+// If PostgreSQL is configured but unavailable, it falls back to SQLite with a warning.
+// Returns the storage, the (potentially updated) config, and any error.
+func initializeStorage(ctx context.Context, cfg config.StorageConfig, logger *slog.Logger) (memory.Storage, config.StorageConfig, error) {
+	switch cfg.Backend {
+	case config.BackendPostgres:
+		storage, err := connectPostgres(ctx, cfg, logger)
+		if err != nil {
+			// Fallback to SQLite
+			logger.Warn("PostgreSQL connection failed, falling back to SQLite",
+				"error", err.Error(),
+			)
+			cfg.Backend = config.BackendSQLite
+			return initializeSQLite(ctx, cfg, logger)
+		}
+		return storage, cfg, nil
+
+	case config.BackendSQLite:
+		return initializeSQLite(ctx, cfg, logger)
+
+	default:
+		return nil, cfg, fmt.Errorf("unsupported backend: %s", cfg.Backend)
+	}
+}
+
+// connectPostgres attempts to connect to PostgreSQL with the configured timeout.
+func connectPostgres(ctx context.Context, cfg config.StorageConfig, logger *slog.Logger) (memory.Storage, error) {
+	// Create context with connection timeout
+	connCtx, cancel := context.WithTimeout(ctx, cfg.ConnectionTimeout)
+	defer cancel()
+
+	// Attempt PostgreSQL connection
+	pool, err := database.NewPostgresPool(connCtx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create storage using the pool
+	storage, err := postgres.NewPostgresStorage(ctx, pool.Pool())
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("failed to initialize postgres storage: %w", err)
+	}
+
+	logger.Info("Storage initialized",
+		"backend", "postgres",
+		"host", sanitizePostgresURL(cfg.PostgresURL),
+	)
+
+	// Wrap to ensure pool cleanup
+	return &postgresStorageWrapper{
+		Storage: storage,
+		pool:    pool,
+	}, nil
+}
+
+// initializeSQLite creates a SQLite storage backend.
+func initializeSQLite(ctx context.Context, cfg config.StorageConfig, logger *slog.Logger) (memory.Storage, config.StorageConfig, error) {
+	storage, err := sqlite.NewSQLiteStorage(ctx, cfg.SQLitePath)
+	if err != nil {
+		return nil, cfg, fmt.Errorf("failed to initialize SQLite storage: %w", err)
+	}
+
+	logger.Info("Storage initialized",
+		"backend", "sqlite",
+		"path", cfg.SQLitePath,
+	)
+
+	return storage, cfg, nil
+}
+
+// postgresStorageWrapper wraps PostgresStorage to manage pool lifecycle.
+type postgresStorageWrapper struct {
+	memory.Storage
+	pool *database.PostgresPool
+}
+
+// Close closes both the storage and the underlying pool.
+func (w *postgresStorageWrapper) Close() error {
+	err := w.Storage.Close()
+	w.pool.Close()
+	return err
+}
+
+// sanitizePostgresURL removes credentials from a PostgreSQL URL for logging.
+func sanitizePostgresURL(connURL string) string {
+	// Simple sanitization - just show host/db, hide credentials
+	// More sophisticated parsing is in web/status.go
+	if connURL == "" {
+		return "(not configured)"
+	}
+	// This is a simplified version; the full version is in web/status.go
+	return "(configured)"
 }
 
 func runStdio(s *mcp.Server, logger interface{}) error {

@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/urfave/cli/v2"
+	"github.com/zombiekit/brains/internal/config"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/memory/sqlite"
 	"github.com/zombiekit/brains/internal/profile"
@@ -63,8 +64,13 @@ func runGUI(c *cli.Context) error {
 	}
 
 	// Create memory storage (SQLite default)
-	homeDir, _ := os.UserHomeDir()
-	memoryDBPath := filepath.Join(homeDir, ".brains", "memory.db")
+	// Use BRAINS_DATA_DIR if set (for containerized environments), otherwise default to ~/.brains
+	dataDir := os.Getenv("BRAINS_DATA_DIR")
+	if dataDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		dataDir = filepath.Join(homeDir, ".brains")
+	}
+	memoryDBPath := filepath.Join(dataDir, "memory.db")
 	memoryStorage, err := sqlite.NewSQLiteStorage(context.Background(), memoryDBPath)
 	if err != nil {
 		logger.Warn("failed to initialize memory storage, memory plugin will show errors",
@@ -76,13 +82,25 @@ func runGUI(c *cli.Context) error {
 		registry.Register("memory", memoryPlugin)
 	}
 
+	// Load storage config for status display
+	storageConfig := config.LoadStorageConfigFromEnv()
+	// Override SQLite path if using default local storage
+	if storageConfig.Backend == config.BackendSQLite && storageConfig.SQLitePath == config.DefaultSQLitePath() {
+		storageConfig.SQLitePath = memoryDBPath
+	}
+
 	// Create server config
-	config := web.ServerConfig{
+	serverConfig := web.ServerConfig{
 		Port: c.Int("port"),
+		StatusConfig: web.StatusConfig{
+			ServerPort:    c.Int("port"),
+			LogLevel:      logLevel,
+			StorageConfig: storageConfig,
+		},
 	}
 
 	// Create server
-	server, err := web.NewServer(registry, config, logger)
+	server, err := web.NewServer(registry, serverConfig, logger)
 	if err != nil {
 		return err
 	}
@@ -101,7 +119,7 @@ func runGUI(c *cli.Context) error {
 	}()
 
 	logger.Info("starting web GUI",
-		"port", config.Port,
+		"port", serverConfig.Port,
 		"url", "http://localhost:"+c.String("port"),
 	)
 

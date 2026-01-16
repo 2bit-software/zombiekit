@@ -102,8 +102,10 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Task dependencies**: Sequential vs parallel execution rules
    - **Task details**: ID, description, file paths, parallel markers [P]
    - **Execution flow**: Order and dependency requirements
+   - **Agent assignment**: Which agent is responsible for each task (if specified)
 
 6. Execute implementation following the task plan:
+   - **Agent delegation**: Use specified agent for tasks, default to inline if none. When using an agent, ensure it has the full context of the implementation plan and relevant documents. Include the entire task description and any dependencies, as well as the constitution rules.
    - **Phase-by-phase execution**: Complete each phase before moving to the next
    - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P] can run together  
    - **Follow TDD approach**: Execute test tasks before their corresponding implementation tasks

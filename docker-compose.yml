@@ -16,5 +16,19 @@ services:
       timeout: 5s
       retries: 5
 
+  webgui-dev:
+    build:
+      context: .
+      dockerfile: docker/webgui-dev/Dockerfile
+    container_name: brains-webgui-dev
+    ports:
+      - "9981:9981"
+    volumes:
+      - .:/app
+      - .data:/app/.data
+    environment:
+      - BRAINS_DATA_DIR=/app/.data
+    working_dir: /app
+
 volumes:
   postgres_data:

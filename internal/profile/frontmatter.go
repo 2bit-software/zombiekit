@@ -44,6 +44,7 @@ func ParseProfile(content []byte, name, path string, source ProfileSource) (*Pro
 		Description: fm.Description,
 		Includes:    fm.Includes,
 		Inherits:    fm.GetInherits(),
+		Type:        fm.Type,
 		Body:        body,
 		RawContent:  content,
 	}, nil

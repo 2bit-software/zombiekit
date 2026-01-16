@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 )
 
 // BackendType represents the database backend type.
@@ -16,6 +17,35 @@ const (
 	// BackendPostgres uses PostgreSQL as the storage backend.
 	BackendPostgres BackendType = "postgres"
 )
+
+// Default configuration values.
+const (
+	DefaultConnectionTimeout = 5 * time.Second
+	MinConnectionTimeout     = 1 * time.Second
+	MaxConnectionTimeout     = 300 * time.Second
+)
+
+// FileStorageConfig represents the [storage] section in TOML config files.
+// Field names use snake_case TOML tags to match the config file format.
+type FileStorageConfig struct {
+	// Backend is the storage backend type ("sqlite" or "postgres").
+	Backend string `toml:"backend"`
+
+	// PostgresURL is the PostgreSQL connection string.
+	PostgresURL string `toml:"postgres_url"`
+
+	// SQLitePath is the path to the SQLite database file.
+	SQLitePath string `toml:"sqlite_path"`
+
+	// ConnectionTimeout is the timeout for PostgreSQL connection attempts in seconds.
+	ConnectionTimeout int `toml:"connection_timeout"`
+
+	// MaxConnections is the maximum number of connections in the PostgreSQL pool.
+	MaxConnections int `toml:"max_connections"`
+
+	// MinConnections is the minimum number of connections in the PostgreSQL pool.
+	MinConnections int `toml:"min_connections"`
+}
 
 // StorageConfig holds configuration for the storage backend.
 type StorageConfig struct {
@@ -37,6 +67,10 @@ type StorageConfig struct {
 	// MinConns is the minimum number of connections in the pool.
 	// Only used for PostgreSQL.
 	MinConns int32
+
+	// ConnectionTimeout is the timeout for PostgreSQL connection attempts.
+	// Defaults to 5 seconds if not configured.
+	ConnectionTimeout time.Duration
 }
 
 // DefaultSQLitePath returns the default SQLite database path.
@@ -57,6 +91,7 @@ func DefaultSQLitePath() string {
 //   - BRAINS_POSTGRES_URL: PostgreSQL connection string
 //   - BRAINS_POSTGRES_MAX_CONNS: Max connections (default: 10)
 //   - BRAINS_POSTGRES_MIN_CONNS: Min connections (default: 2)
+//   - BRAINS_POSTGRES_TIMEOUT: Connection timeout in seconds (default: 5)
 func LoadStorageConfigFromEnv() StorageConfig {
 	backend := os.Getenv("BRAINS_BACKEND")
 	if backend == "" {
@@ -82,12 +117,31 @@ func LoadStorageConfigFromEnv() StorageConfig {
 		}
 	}
 
+	timeout := DefaultConnectionTimeout
+	if v := os.Getenv("BRAINS_POSTGRES_TIMEOUT"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			timeout = time.Duration(n) * time.Second
+		}
+	}
+
 	return StorageConfig{
-		Backend:     BackendType(backend),
-		SQLitePath:  sqlitePath,
-		PostgresURL: os.Getenv("BRAINS_POSTGRES_URL"),
-		MaxConns:    maxConns,
-		MinConns:    minConns,
+		Backend:           BackendType(backend),
+		SQLitePath:        sqlitePath,
+		PostgresURL:       os.Getenv("BRAINS_POSTGRES_URL"),
+		MaxConns:          maxConns,
+		MinConns:          minConns,
+		ConnectionTimeout: timeout,
+	}
+}
+
+// NewDefaultStorageConfig returns a StorageConfig with default values.
+func NewDefaultStorageConfig() StorageConfig {
+	return StorageConfig{
+		Backend:           BackendSQLite,
+		SQLitePath:        DefaultSQLitePath(),
+		ConnectionTimeout: DefaultConnectionTimeout,
+		MaxConns:          10,
+		MinConns:          2,
 	}
 }
 

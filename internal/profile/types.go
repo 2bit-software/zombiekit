@@ -12,6 +12,8 @@ const (
 	SourceParent
 	// SourceGlobal is a profile from ~/.brains/profiles/.
 	SourceGlobal
+	// SourceEmbedded is a profile embedded in the binary at build time.
+	SourceEmbedded
 )
 
 // String returns the string representation of the profile source.
@@ -23,6 +25,8 @@ func (s ProfileSource) String() string {
 		return "parent"
 	case SourceGlobal:
 		return "global"
+	case SourceEmbedded:
+		return "embedded"
 	default:
 		return "unknown"
 	}
@@ -43,6 +47,7 @@ type Profile struct {
 	// Claude-specific fields (optional, only set for Claude agents)
 	Model string // Claude model (e.g., "opus", "sonnet")
 	Color string // UI color for Claude Code display
+	Type  string // Profile type: "action", "domain", or "step"
 
 	// Content
 	Body       string // Markdown content after frontmatter
@@ -55,6 +60,7 @@ type ProfileFrontmatter struct {
 	Description string   `yaml:"description"`
 	Includes    []string `yaml:"includes"`
 	Inherits    *bool    `yaml:"inherits"` // Pointer to detect unset vs explicit false
+	Type        string   `yaml:"type"`     // Profile type: "action", "domain", or "step"
 }
 
 // GetInherits returns the inherits value, defaulting to true if not set.
@@ -123,6 +129,7 @@ type ListEntry struct {
 	Shadowed    bool          `json:"shadowed,omitempty"` // True if shadowed by higher-precedence profile
 	Model       string        `json:"model,omitempty"`    // Claude-specific: model name
 	Color       string        `json:"color,omitempty"`    // Claude-specific: UI color
+	Type        string        `json:"type,omitempty"`     // Profile type: "action", "domain", or "step"
 }
 
 // ShowResult contains the result of showing a single profile.
@@ -139,6 +146,7 @@ type ShowResult struct {
 	InheritedFrom []InheritedFrom `json:"inherited_from,omitempty"`
 	Model         string          `json:"model,omitempty"` // Claude-specific: model name
 	Color         string          `json:"color,omitempty"` // Claude-specific: UI color
+	Type          string          `json:"type,omitempty"`  // Profile type: "action", "domain", or "step"
 }
 
 // ImportResult summarizes the outcome of an import operation.

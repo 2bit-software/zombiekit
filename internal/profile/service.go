@@ -2,6 +2,8 @@ package profile
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -82,6 +84,7 @@ func (s *Service) List() ([]ListEntry, error) {
 				Shadowed:    i > 0, // First one wins, rest are shadowed
 				Model:       p.Model,
 				Color:       p.Color,
+				Type:        p.Type,
 			}
 			if !seen[name] || entry.Shadowed {
 				entries = append(entries, entry)
@@ -125,6 +128,7 @@ func (s *Service) Show(name string, raw bool) (*ShowResult, error) {
 		RawContent:  string(profile.RawContent),
 		Model:       profile.Model,
 		Color:       profile.Color,
+		Type:        profile.Type,
 	}
 
 	if raw {
@@ -176,6 +180,59 @@ func (s *Service) Create(name string, global bool) (string, error) {
 // If global is true, returns the global directory.
 func (s *Service) GetInitDir(global bool) (string, error) {
 	return s.source.GetInitDir(global)
+}
+
+// Write writes a profile with the given name and content to disk.
+// Location must be "local" or "global".
+// If overwrite is false and the profile exists, returns ProfileExistsError.
+// Creates the target directory if it doesn't exist.
+// Uses atomic write (temp file + rename) for safety.
+func (s *Service) Write(name, content, location string, overwrite bool) (string, error) {
+	// Normalize name
+	normalizedName := s.normalizeName(name)
+	if err := s.validateName(normalizedName); err != nil {
+		return "", err
+	}
+
+	// Validate location
+	if location != "local" && location != "global" {
+		return "", fmt.Errorf("invalid location %q: must be 'local' or 'global'", location)
+	}
+
+	// Get target directory
+	targetDir, err := s.source.GetInitDir(location == "global")
+	if err != nil {
+		return "", fmt.Errorf("getting target directory: %w", err)
+	}
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return "", fmt.Errorf("creating directory %s: %w", targetDir, err)
+	}
+
+	// Build file path
+	filePath := filepath.Join(targetDir, normalizedName+".md")
+
+	// Check if file exists
+	if !overwrite {
+		if _, err := os.Stat(filePath); err == nil {
+			return "", &ProfileExistsError{Name: normalizedName, Path: filePath}
+		}
+	}
+
+	// Write atomically: temp file + rename
+	tempFile := filePath + ".tmp"
+	if err := os.WriteFile(tempFile, []byte(content), 0o644); err != nil {
+		return "", fmt.Errorf("writing temp file: %w", err)
+	}
+
+	if err := os.Rename(tempFile, filePath); err != nil {
+		// Clean up temp file on rename failure
+		os.Remove(tempFile)
+		return "", fmt.Errorf("renaming temp file: %w", err)
+	}
+
+	return filePath, nil
 }
 
 // SourceName returns the human-readable name of the source.

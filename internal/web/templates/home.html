@@ -1,30 +1,170 @@
-<div class="bg-white rounded-lg shadow p-6">
-    <h1 class="text-2xl font-bold text-gray-900 mb-4">Welcome to Brains</h1>
-    <p class="text-gray-600 mb-6">
-        Brains is a profile composition and MCP tool management system.
-    </p>
+<div class="space-y-6">
+    <!-- Welcome Section -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">Welcome to Brains</h1>
+        <p class="text-gray-600">
+            Brains is a profile composition and MCP tool management system.
+        </p>
+    </div>
 
-    {{if .Content.Plugins}}
-    <div class="mt-8">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Registered Plugins</h2>
-        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {{range .Content.Plugins}}
-            {{range .SidebarItems}}
-            <a href="{{.Path}}"
-               hx-get="{{.Path}}"
-               hx-target="#content"
-               hx-push-url="true"
-               class="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <h3 class="font-medium text-gray-900">{{.Label}}</h3>
-                <p class="text-sm text-gray-500 mt-1">{{.Path}}</p>
-            </a>
-            {{end}}
+    <!-- Status Grid -->
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <!-- Version Info Card -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Version
+            </h2>
+            <dl class="space-y-2">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Version</dt>
+                    <dd class="text-sm font-medium text-gray-900">{{if .Content.Status.Version.Version}}{{.Content.Status.Version.Version}}{{else}}N/A{{end}}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Commit</dt>
+                    <dd class="text-sm font-mono text-gray-900">{{if .Content.Status.Version.Commit}}{{.Content.Status.Version.Commit}}{{else}}N/A{{end}}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Build Date</dt>
+                    <dd class="text-sm text-gray-900">{{if .Content.Status.Version.BuildDate}}{{.Content.Status.Version.BuildDate}}{{else}}N/A{{end}}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Go Version</dt>
+                    <dd class="text-sm text-gray-900">{{if .Content.Status.Version.GoVersion}}{{.Content.Status.Version.GoVersion}}{{else}}N/A{{end}}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Database Status Card -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                </svg>
+                Database
+            </h2>
+            <dl class="space-y-2">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Backend</dt>
+                    <dd class="text-sm font-medium text-gray-900 uppercase">{{if .Content.Status.Database.Backend}}{{.Content.Status.Database.Backend}}{{else}}N/A{{end}}</dd>
+                </div>
+                <div class="flex justify-between items-start">
+                    <dt class="text-sm text-gray-500">Location</dt>
+                    <dd class="text-sm text-gray-900 text-right break-all max-w-[200px]">{{if .Content.Status.Database.Location}}{{.Content.Status.Database.Location}}{{else}}N/A{{end}}</dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500">Status</dt>
+                    <dd class="flex items-center">
+                        {{if .Content.Status.Database.Connected}}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span class="w-2 h-2 mr-1.5 bg-green-400 rounded-full"></span>
+                            Connected
+                        </span>
+                        {{else}}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <span class="w-2 h-2 mr-1.5 bg-red-400 rounded-full"></span>
+                            Disconnected
+                        </span>
+                        {{end}}
+                    </dd>
+                </div>
+                {{if .Content.Status.Database.Error}}
+                <div class="mt-2 text-sm text-red-600">
+                    {{.Content.Status.Database.Error}}
+                </div>
+                {{end}}
+            </dl>
+        </div>
+
+        <!-- Runtime Info Card -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                </svg>
+                Runtime
+            </h2>
+            <dl class="space-y-2">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Platform</dt>
+                    <dd class="text-sm font-medium text-gray-900">{{if .Content.Status.Runtime.Platform}}{{.Content.Status.Runtime.Platform}}{{else}}N/A{{end}}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Uptime</dt>
+                    <dd class="text-sm text-gray-900">{{if .Content.Status.Runtime.UptimeHuman}}{{.Content.Status.Runtime.UptimeHuman}}{{else}}N/A{{end}}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">CPUs</dt>
+                    <dd class="text-sm text-gray-900">{{.Content.Status.Runtime.NumCPU}}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Goroutines</dt>
+                    <dd class="text-sm text-gray-900">{{.Content.Status.Runtime.NumGoroutines}}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Configuration Card -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                Configuration
+            </h2>
+            <dl class="space-y-2">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">HTTP Port</dt>
+                    <dd class="text-sm font-medium text-gray-900">{{.Content.Status.Config.Port}}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500">Log Level</dt>
+                    <dd class="text-sm text-gray-900 uppercase">{{if .Content.Status.Config.LogLevel}}{{.Content.Status.Config.LogLevel}}{{else}}N/A{{end}}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Plugins Card -->
+        <div class="bg-white rounded-lg shadow p-6 md:col-span-2">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z"></path>
+                </svg>
+                Plugins
+                {{if .Content.Status.Plugins}}
+                <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                    {{len .Content.Status.Plugins}} registered
+                </span>
+                {{end}}
+            </h2>
+            {{if .Content.Status.Plugins}}
+            <div class="grid gap-3 sm:grid-cols-2">
+                {{range .Content.Status.Plugins}}
+                <a href="{{.Path}}"
+                   hx-get="{{.Path}}"
+                   hx-target="#content"
+                   hx-push-url="true"
+                   class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div class="flex items-center">
+                        {{if .Healthy}}
+                        <span class="w-2 h-2 mr-3 bg-green-400 rounded-full"></span>
+                        {{else}}
+                        <span class="w-2 h-2 mr-3 bg-red-400 rounded-full"></span>
+                        {{end}}
+                        <span class="font-medium text-gray-900">{{.Name}}</span>
+                    </div>
+                    <span class="text-sm text-gray-500">{{.Path}}</span>
+                </a>
+                {{end}}
+            </div>
+            {{else}}
+            <div class="text-center py-4 text-gray-500">
+                <p>No plugins registered.</p>
+            </div>
             {{end}}
         </div>
     </div>
-    {{else}}
-    <div class="text-center py-8 text-gray-500">
-        <p>No plugins registered yet.</p>
-    </div>
-    {{end}}
 </div>

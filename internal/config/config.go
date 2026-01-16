@@ -14,6 +14,10 @@ type ToolConfig struct {
 type Config struct {
 	// Tools maps tool/category names to their configuration.
 	Tools map[string]ToolConfig `toml:"tools"`
+
+	// Storage holds the storage backend configuration from TOML files.
+	// This is loaded from the [storage] section in config files.
+	Storage *FileStorageConfig `toml:"storage"`
 }
 
 // NewDefaultConfig creates a new Config with all tools enabled by default.

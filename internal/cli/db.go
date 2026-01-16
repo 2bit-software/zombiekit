@@ -50,6 +50,7 @@ func newDBCommand() *cli.Command {
 					},
 				},
 			},
+			newImportCommand(),
 		},
 	}
 }

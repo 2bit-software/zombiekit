@@ -13,6 +13,8 @@ var KnownTools = []string{
 	"profile-list",
 	"profile-show",
 	"profile-validate",
+	"feature",
+	"step",
 }
 
 // ToolCategory derives the category name from a tool name.

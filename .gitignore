@@ -1,4 +1,5 @@
 # Binaries
+brains
 bin/
 *.exe
 *.exe~
@@ -47,3 +48,15 @@ dist/
 # Temporary files
 *.tmp
 tmp/
+
+# Development data directory (SQLite databases)
+.data/
+
+# Local brains configuration (user-specific)
+.brains/
+
+# Claude Code commands (user-specific)
+.claude/commands/
+
+# Initiative history (local development artifacts)
+history/
