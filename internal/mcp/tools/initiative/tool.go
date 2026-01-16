@@ -230,6 +230,9 @@ func (t *Tool) handleStatus(ctx context.Context, dir string) (string, error) {
 		CycleID:        status.CycleID,
 		AvailableDocs:  status.AvailableDocs,
 		SuggestedNext:  status.SuggestedNext,
+		HistoryPath:    status.HistoryPath,
+		InitiativeFile: status.InitiativeFile,
+		Files:          status.Files,
 	}
 
 	return marshalResponse(resp)
@@ -313,10 +316,10 @@ func (t *Tool) handleList(ctx context.Context, dir string) (string, error) {
 func (t *Tool) copyTemplatesToCycle(workDir, cyclePath string) error {
 	embFS := t.embeddedFS
 	if embFS == nil {
-		embFS = step.GetEmbeddedFS()
+		embFS = step.GetTemplateFS()
 	}
 	if embFS == nil {
-		return fmt.Errorf("no embedded filesystem available")
+		return fmt.Errorf("no embedded template filesystem available")
 	}
 
 	templates := []struct {

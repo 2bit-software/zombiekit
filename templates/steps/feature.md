@@ -3,9 +3,10 @@ name: feature
 description: Execute the research-create-audit-highlight workflow for a new feature specification
 profiles:
   - research
-  - create
+  - feature
   - audit
 files:
+  - "../INITIATIVE.md"
   - "research.md"
   - "spec.md"
   - "audit/**/*.md"
@@ -68,6 +69,32 @@ Execute phases in order. Parallel phases can spawn multiple agents.
 
 ---
 
+## Phase 0: Initialize Initiative
+
+### Input
+- User's feature description
+- `INITIATIVE.md` template in initiative folder
+
+### Actions
+1. Read the user's feature description from the input
+2. Open `INITIATIVE.md` in the initiative folder (parent of cycle folder)
+3. Fill in the Description section with a clear summary of what this feature is about
+4. Fill in the Goals section with 2-4 concrete goals derived from the description
+
+### Output
+Update `INITIATIVE.md` with:
+- Description: Clear 2-3 sentence summary of the feature
+- Goals: Bullet list of concrete, measurable goals
+
+### Success Criteria
+- [ ] INITIATIVE.md Description section is filled (no placeholder comments)
+- [ ] INITIATIVE.md Goals section has at least 2 goals
+- [ ] Goals are derived from the user's feature description
+
+**IMPORTANT**: Complete this phase BEFORE starting research. The initiative context informs all subsequent phases.
+
+---
+
 ## Phase I: Research (Parallel Agents)
 
 ### Input
@@ -87,14 +114,17 @@ Execute phases in order. Parallel phases can spawn multiple agents.
    - Preserve sources for all claims
 
 ### Output
+**CRITICAL**: Write all research findings to `research.md` in the cycle folder. Replace placeholder content with actual findings.
+
 Populate `research.md` with:
 - Executive summary (2-3 sentences)
-- Findings organized by category
+- Findings organized by category (Codebase Context, Domain Knowledge)
 - Decision points identified
 - Recommendations with rationale
 - Sources cited
 
 ### Success Criteria
+- [ ] research.md has been written (not just template placeholders)
 - [ ] research.md has non-empty Executive Summary
 - [ ] At least 2 finding categories populated
 - [ ] All claims have sources cited

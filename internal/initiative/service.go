@@ -226,6 +226,9 @@ type StatusResult struct {
 	CycleID        string   `json:"cycle_id,omitempty"`
 	AvailableDocs  []string `json:"available_docs,omitempty"`
 	SuggestedNext  string   `json:"suggested_next,omitempty"`
+	HistoryPath    string   `json:"history_path,omitempty"`
+	InitiativeFile string   `json:"initiative_file,omitempty"`
+	Files          []string `json:"files,omitempty"`
 }
 
 // Status returns the status of the active initiative.
@@ -268,6 +271,25 @@ func (s *Service) Status() (*StatusResult, error) {
 	// Determine suggested next step based on available artifacts
 	suggestedNext := s.determineSuggestedNext(availableDocs, state.CurrentStep)
 
+	// Build relative paths for client use
+	historyPath := state.Initiative // Already relative (e.g., "history/695c116e-feature-go-project-setup")
+	initiativeFile := filepath.Join(state.Initiative, InitiativeMDFile)
+
+	// Build list of relative file paths to read
+	var files []string
+	// Determine relative cycle path
+	relativeCyclePath := state.Cycle
+	if relativeCyclePath == "" {
+		relativeCyclePath = state.Initiative
+	}
+	for _, doc := range availableDocs {
+		if strings.HasSuffix(doc, "/") {
+			// Directory, skip
+			continue
+		}
+		files = append(files, filepath.Join(relativeCyclePath, doc))
+	}
+
 	return &StatusResult{
 		Active:         true,
 		InitiativeID:   init.ID,
@@ -276,6 +298,9 @@ func (s *Service) Status() (*StatusResult, error) {
 		CycleID:        cycleID,
 		AvailableDocs:  availableDocs,
 		SuggestedNext:  suggestedNext,
+		HistoryPath:    historyPath,
+		InitiativeFile: initiativeFile,
+		Files:          files,
 	}, nil
 }
 

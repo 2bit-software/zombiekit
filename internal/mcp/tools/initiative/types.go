@@ -35,6 +35,9 @@ type StatusResponse struct {
 	CycleID        string   `json:"cycle_id,omitempty"`
 	AvailableDocs  []string `json:"available_docs,omitempty"`
 	SuggestedNext  string   `json:"suggested_next,omitempty"`
+	HistoryPath    string   `json:"history_path,omitempty"`
+	InitiativeFile string   `json:"initiative_file,omitempty"`
+	Files          []string `json:"files,omitempty"`
 }
 
 // CompleteResponse is returned for action=complete.

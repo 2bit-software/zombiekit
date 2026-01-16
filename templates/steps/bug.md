@@ -3,9 +3,10 @@ name: bug
 description: Create a bug investigation and fix specification
 profiles:
   - research
-  - create
+  - bug
   - audit
 files:
+  - "../INITIATIVE.md"
   - "research.md"
   - "spec.md"
   - "audit/**/*.md"
@@ -56,6 +57,32 @@ The response includes phase definitions similar to feature workflow. Execute pha
 
 ---
 
+## Phase 0: Initialize Initiative
+
+### Input
+- User's bug description
+- `INITIATIVE.md` template in initiative folder
+
+### Actions
+1. Read the user's bug description from the input
+2. Open `INITIATIVE.md` in the initiative folder (parent of cycle folder)
+3. Fill in the Description section with a summary of the bug being investigated
+4. Fill in the Goals section with investigation and fix goals
+
+### Output
+Update `INITIATIVE.md` with:
+- Description: Clear summary of the bug (symptoms, affected area)
+- Goals: Investigation goals (find root cause, determine fix approach, verify fix)
+
+### Success Criteria
+- [ ] INITIATIVE.md Description section is filled (no placeholder comments)
+- [ ] INITIATIVE.md Goals section has at least 2 goals
+- [ ] Goals reflect bug investigation objectives
+
+**IMPORTANT**: Complete this phase BEFORE starting investigation. The initiative context informs all subsequent phases.
+
+---
+
 ## Phase I: Investigation (Parallel Agents)
 
 ### Input
@@ -75,6 +102,8 @@ The response includes phase definitions similar to feature workflow. Execute pha
    - Note affected areas
 
 ### Output
+**CRITICAL**: Write all investigation findings to `research.md` in the cycle folder. Replace placeholder content with actual findings.
+
 Populate `research.md` with:
 - Bug summary (what's happening)
 - Root cause analysis
@@ -83,6 +112,7 @@ Populate `research.md` with:
 - Related code/files
 
 ### Success Criteria
+- [ ] research.md has been written (not just template placeholders)
 - [ ] Root cause identified or hypotheses documented
 - [ ] Reproduction steps clear and testable
 - [ ] Impact scope defined

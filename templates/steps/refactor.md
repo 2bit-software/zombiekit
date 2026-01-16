@@ -3,9 +3,10 @@ name: refactor
 description: Create a refactoring specification with behavior preservation focus
 profiles:
   - research
-  - create
+  - refactor
   - audit
 files:
+  - "../INITIATIVE.md"
   - "research.md"
   - "spec.md"
   - "audit/**/*.md"
@@ -56,6 +57,32 @@ The response includes phase definitions similar to feature workflow. Execute pha
 
 ---
 
+## Phase 0: Initialize Initiative
+
+### Input
+- User's refactoring goal
+- `INITIATIVE.md` template in initiative folder
+
+### Actions
+1. Read the user's refactoring goal from the input
+2. Open `INITIATIVE.md` in the initiative folder (parent of cycle folder)
+3. Fill in the Description section with the refactoring scope and motivation
+4. Fill in the Goals section with specific refactoring objectives
+
+### Output
+Update `INITIATIVE.md` with:
+- Description: Clear summary of what is being refactored and why
+- Goals: Specific refactoring objectives (e.g., improve testability, reduce complexity)
+
+### Success Criteria
+- [ ] INITIATIVE.md Description section is filled (no placeholder comments)
+- [ ] INITIATIVE.md Goals section has at least 2 goals
+- [ ] Goals specify behavior preservation as a constraint
+
+**IMPORTANT**: Complete this phase BEFORE starting analysis. The initiative context informs all subsequent phases.
+
+---
+
 ## Phase I: Analysis (Parallel Agents)
 
 ### Input
@@ -75,6 +102,8 @@ The response includes phase definitions similar to feature workflow. Execute pha
    - Behavior inventory
 
 ### Output
+**CRITICAL**: Write all analysis findings to `research.md` in the cycle folder. Replace placeholder content with actual findings.
+
 Populate `research.md` with:
 - Current structure overview
 - Dependency map
@@ -82,6 +111,7 @@ Populate `research.md` with:
 - Risk assessment
 
 ### Success Criteria
+- [ ] research.md has been written (not just template placeholders)
 - [ ] Current structure documented
 - [ ] All dependencies identified
 - [ ] Observable behaviors catalogued
