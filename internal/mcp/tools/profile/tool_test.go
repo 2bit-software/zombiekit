@@ -104,3 +104,112 @@ func TestMCPTool_ValidateIncludesEmbedded(t *testing.T) {
 	// Should validate successfully (no missing includes)
 	assert.Contains(t, strings.ToLower(result), "validated successfully")
 }
+
+func TestMCPTool_HandleWrite(t *testing.T) {
+	t.Run("returns error when name is missing", func(t *testing.T) {
+		tool := NewTool()
+		ctx := context.Background()
+
+		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+			"content":  "test content",
+			"location": "local",
+		})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "name is required")
+	})
+
+	t.Run("returns error when content is missing", func(t *testing.T) {
+		tool := NewTool()
+		ctx := context.Background()
+
+		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+			"name":     "test",
+			"location": "local",
+		})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "content is required")
+	})
+
+	t.Run("returns error when location is missing", func(t *testing.T) {
+		tool := NewTool()
+		ctx := context.Background()
+
+		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+			"name":    "test",
+			"content": "test content",
+		})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "location is required")
+	})
+
+	t.Run("returns error for invalid location", func(t *testing.T) {
+		tool := NewTool()
+		ctx := context.Background()
+
+		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+			"name":     "test",
+			"content":  "test content",
+			"location": "invalid",
+		})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "local")
+	})
+
+	t.Run("writes profile successfully", func(t *testing.T) {
+		tool := NewTool()
+		ctx := context.Background()
+		tempDir := t.TempDir()
+
+		content := `---
+name: handler-test
+description: Test profile
+---
+
+Handler test content.
+`
+		result, err := tool.HandleWrite(ctx, map[string]interface{}{
+			"name":              "handler-test",
+			"content":           content,
+			"location":          "local",
+			"working_directory": tempDir,
+		})
+
+		require.NoError(t, err)
+		assert.Contains(t, result, `"success": true`)
+		assert.Contains(t, result, "handler-test.md")
+	})
+
+	t.Run("returns PROFILE_EXISTS error without overwrite", func(t *testing.T) {
+		tool := NewTool()
+		ctx := context.Background()
+		tempDir := t.TempDir()
+
+		content := "---\nname: exists-test\n---\nContent"
+
+		// Write first time
+		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+			"name":              "exists-test",
+			"content":           content,
+			"location":          "local",
+			"working_directory": tempDir,
+		})
+		require.NoError(t, err)
+
+		// Write second time without overwrite
+		result, err := tool.HandleWrite(ctx, map[string]interface{}{
+			"name":              "exists-test",
+			"content":           "new content",
+			"location":          "local",
+			"working_directory": tempDir,
+		})
+
+		// Should return success=false response, not error
+		require.NoError(t, err)
+		assert.Contains(t, result, `"success": false`)
+		assert.Contains(t, result, "PROFILE_EXISTS")
+	})
+}

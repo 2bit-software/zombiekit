@@ -3,6 +3,7 @@ package profile
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -152,6 +153,71 @@ func (t *Tool) HandleValidate(ctx context.Context, args map[string]interface{}) 
 	}
 
 	return sb.String(), nil
+}
+
+// HandleWrite handles the profile-write tool call.
+func (t *Tool) HandleWrite(ctx context.Context, args map[string]interface{}) (string, error) {
+	// Extract required parameters
+	name, ok := args["name"].(string)
+	if !ok || name == "" {
+		return "", fmt.Errorf("name is required")
+	}
+
+	content, ok := args["content"].(string)
+	if !ok || content == "" {
+		return "", fmt.Errorf("content is required")
+	}
+
+	location, ok := args["location"].(string)
+	if !ok || location == "" {
+		return "", fmt.Errorf("location is required")
+	}
+
+	if location != "local" && location != "global" {
+		return "", fmt.Errorf("location must be 'local' or 'global'")
+	}
+
+	// Extract optional parameters
+	overwrite := false
+	if ow, ok := args["overwrite"].(bool); ok {
+		overwrite = ow
+	}
+
+	workingDir := getWorkingDir(args)
+	svc, err := profile.NewService(workingDir)
+	if err != nil {
+		return "", fmt.Errorf("initializing profile service: %w", err)
+	}
+
+	path, err := svc.Write(name, content, location, overwrite)
+	if err != nil {
+		// Handle ProfileExistsError specially
+		if existsErr, ok := err.(*profile.ProfileExistsError); ok {
+			resp := WriteResponse{
+				Success: false,
+				Error:   "PROFILE_EXISTS",
+				Message: fmt.Sprintf("Profile '%s' already exists at %s", existsErr.Name, existsErr.Path),
+				Hint:    "Use overwrite: true to replace, or choose a different name",
+			}
+			return marshalResponse(resp)
+		}
+		return "", fmt.Errorf("writing profile: %w", err)
+	}
+
+	resp := WriteResponse{
+		Success: true,
+		Path:    path,
+	}
+	return marshalResponse(resp)
+}
+
+// marshalResponse marshals a response struct to JSON.
+func marshalResponse(v any) (string, error) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshaling response: %w", err)
+	}
+	return string(b), nil
 }
 
 // getWorkingDir extracts the working_directory parameter from args.

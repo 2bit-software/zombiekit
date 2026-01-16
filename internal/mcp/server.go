@@ -255,6 +255,32 @@ func (s *Server) registerProfileTools() {
 		)
 		s.mcpServer.AddTool(listTool, s.handleProfileList)
 	}
+
+	// profile-write
+	if s.config.IsToolEnabled("profile-write") {
+		writeTool := mcp.NewTool("profile-write",
+			mcp.WithDescription("Write a profile to disk at the specified location. Creates the directory if needed."),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Profile name (will be used as filename)"),
+			),
+			mcp.WithString("content",
+				mcp.Required(),
+				mcp.Description("Full profile content including frontmatter"),
+			),
+			mcp.WithString("location",
+				mcp.Required(),
+				mcp.Description("'local' (.brains/profiles/) or 'global' (~/.brains/profiles/)"),
+			),
+			mcp.WithBoolean("overwrite",
+				mcp.Description("Allow overwriting existing profile (default: false)"),
+			),
+			mcp.WithString("working_directory",
+				mcp.Description("Working directory for local profile resolution (defaults to CWD)"),
+			),
+		)
+		s.mcpServer.AddTool(writeTool, s.handleProfileWrite)
+	}
 }
 
 // handleProfileCompose handles profile-compose tool calls.
@@ -280,6 +306,21 @@ func (s *Server) handleProfileList(ctx context.Context, req mcp.CallToolRequest)
 	}
 
 	result, err := s.profileTool.HandleList(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// handleProfileWrite handles profile-write tool calls.
+func (s *Server) handleProfileWrite(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]interface{})
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	result, err := s.profileTool.HandleWrite(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
