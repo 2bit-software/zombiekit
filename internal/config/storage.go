@@ -45,6 +45,12 @@ type FileStorageConfig struct {
 
 	// MinConnections is the minimum number of connections in the PostgreSQL pool.
 	MinConnections int `toml:"min_connections"`
+
+	// OllamaURL is the URL for the Ollama API server.
+	OllamaURL string `toml:"ollama_url"`
+
+	// EmbeddingModel is the Ollama model to use for generating embeddings.
+	EmbeddingModel string `toml:"embedding_model"`
 }
 
 // StorageConfig holds configuration for the storage backend.
@@ -71,6 +77,14 @@ type StorageConfig struct {
 	// ConnectionTimeout is the timeout for PostgreSQL connection attempts.
 	// Defaults to 5 seconds if not configured.
 	ConnectionTimeout time.Duration
+
+	// OllamaURL is the URL for the Ollama API server.
+	// Defaults to http://localhost:11434.
+	OllamaURL string
+
+	// EmbeddingModel is the Ollama model to use for generating embeddings.
+	// Defaults to nomic-embed-text.
+	EmbeddingModel string
 }
 
 // DefaultSQLitePath returns the default SQLite database path.
@@ -83,6 +97,12 @@ func DefaultSQLitePath() string {
 	return filepath.Join(homeDir, ".brains", "memories.db")
 }
 
+// Default Ollama configuration values.
+const (
+	DefaultOllamaURL       = "http://localhost:11434"
+	DefaultEmbeddingModel  = "nomic-embed-text"
+)
+
 // LoadStorageConfigFromEnv loads storage configuration from environment variables.
 //
 // Environment variables:
@@ -92,6 +112,8 @@ func DefaultSQLitePath() string {
 //   - BRAINS_POSTGRES_MAX_CONNS: Max connections (default: 10)
 //   - BRAINS_POSTGRES_MIN_CONNS: Min connections (default: 2)
 //   - BRAINS_POSTGRES_TIMEOUT: Connection timeout in seconds (default: 5)
+//   - BRAINS_OLLAMA_URL: Ollama API URL (default: http://localhost:11434)
+//   - BRAINS_EMBEDDING_MODEL: Embedding model (default: nomic-embed-text)
 func LoadStorageConfigFromEnv() StorageConfig {
 	backend := os.Getenv("BRAINS_BACKEND")
 	if backend == "" {
@@ -124,6 +146,16 @@ func LoadStorageConfigFromEnv() StorageConfig {
 		}
 	}
 
+	ollamaURL := os.Getenv("BRAINS_OLLAMA_URL")
+	if ollamaURL == "" {
+		ollamaURL = DefaultOllamaURL
+	}
+
+	embeddingModel := os.Getenv("BRAINS_EMBEDDING_MODEL")
+	if embeddingModel == "" {
+		embeddingModel = DefaultEmbeddingModel
+	}
+
 	return StorageConfig{
 		Backend:           BackendType(backend),
 		SQLitePath:        sqlitePath,
@@ -131,6 +163,8 @@ func LoadStorageConfigFromEnv() StorageConfig {
 		MaxConns:          maxConns,
 		MinConns:          minConns,
 		ConnectionTimeout: timeout,
+		OllamaURL:         ollamaURL,
+		EmbeddingModel:    embeddingModel,
 	}
 }
 
@@ -142,6 +176,8 @@ func NewDefaultStorageConfig() StorageConfig {
 		ConnectionTimeout: DefaultConnectionTimeout,
 		MaxConns:          10,
 		MinConns:          2,
+		OllamaURL:         DefaultOllamaURL,
+		EmbeddingModel:    DefaultEmbeddingModel,
 	}
 }
 
