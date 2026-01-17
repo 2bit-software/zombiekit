@@ -55,8 +55,7 @@ tmp/
 # Local brains configuration (user-specific)
 .brains/
 
-# Claude Code commands (user-specific)
-.claude/commands/
+.claude/settings.local.json
 
 # Initiative history (local development artifacts)
 history/
