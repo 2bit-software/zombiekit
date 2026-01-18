@@ -256,10 +256,10 @@ func (s *Server) registerProfileTools() {
 		s.mcpServer.AddTool(listTool, s.handleProfileList)
 	}
 
-	// profile-write
-	if s.config.IsToolEnabled("profile-write") {
-		writeTool := mcp.NewTool("profile-write",
-			mcp.WithDescription("Write a profile to disk at the specified location. Creates the directory if needed."),
+	// profile-save (renamed from profile-write to distinguish from CLI workflow)
+	if s.config.IsToolEnabled("profile-save") {
+		saveTool := mcp.NewTool("profile-save",
+			mcp.WithDescription("Save a profile to disk at the specified location. Creates the directory if needed."),
 			mcp.WithString("name",
 				mcp.Required(),
 				mcp.Description("Profile name (will be used as filename)"),
@@ -279,7 +279,7 @@ func (s *Server) registerProfileTools() {
 				mcp.Description("Working directory for local profile resolution (defaults to CWD)"),
 			),
 		)
-		s.mcpServer.AddTool(writeTool, s.handleProfileWrite)
+		s.mcpServer.AddTool(saveTool, s.handleProfileSave)
 	}
 }
 
@@ -313,14 +313,14 @@ func (s *Server) handleProfileList(ctx context.Context, req mcp.CallToolRequest)
 	return mcp.NewToolResultText(result), nil
 }
 
-// handleProfileWrite handles profile-write tool calls.
-func (s *Server) handleProfileWrite(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// handleProfileSave handles profile-save tool calls.
+func (s *Server) handleProfileSave(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	args, ok := req.Params.Arguments.(map[string]interface{})
 	if !ok {
 		return mcp.NewToolResultError("invalid arguments format"), nil
 	}
 
-	result, err := s.profileTool.HandleWrite(ctx, args)
+	result, err := s.profileTool.HandleSave(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

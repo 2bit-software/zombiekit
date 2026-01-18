@@ -155,8 +155,8 @@ func (t *Tool) HandleValidate(ctx context.Context, args map[string]interface{}) 
 	return sb.String(), nil
 }
 
-// HandleWrite handles the profile-write tool call.
-func (t *Tool) HandleWrite(ctx context.Context, args map[string]interface{}) (string, error) {
+// HandleSave handles the profile-save tool call (renamed from profile-write).
+func (t *Tool) HandleSave(ctx context.Context, args map[string]interface{}) (string, error) {
 	// Extract required parameters
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
@@ -193,7 +193,7 @@ func (t *Tool) HandleWrite(ctx context.Context, args map[string]interface{}) (st
 	if err != nil {
 		// Handle ProfileExistsError specially
 		if existsErr, ok := err.(*profile.ProfileExistsError); ok {
-			resp := WriteResponse{
+			resp := SaveResponse{
 				Success: false,
 				Error:   "PROFILE_EXISTS",
 				Message: fmt.Sprintf("Profile '%s' already exists at %s", existsErr.Name, existsErr.Path),
@@ -204,7 +204,7 @@ func (t *Tool) HandleWrite(ctx context.Context, args map[string]interface{}) (st
 		return "", fmt.Errorf("writing profile: %w", err)
 	}
 
-	resp := WriteResponse{
+	resp := SaveResponse{
 		Success: true,
 		Path:    path,
 	}

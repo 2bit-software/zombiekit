@@ -120,7 +120,7 @@ Approve this profile? (yes/no)
 
 On user approval:
 
-1. **Call profile-write tool**
+1. **Call profile-save tool**
    ```json
    {
      "name": "{name}",

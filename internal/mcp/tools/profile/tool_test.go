@@ -105,12 +105,12 @@ func TestMCPTool_ValidateIncludesEmbedded(t *testing.T) {
 	assert.Contains(t, strings.ToLower(result), "validated successfully")
 }
 
-func TestMCPTool_HandleWrite(t *testing.T) {
+func TestMCPTool_HandleSave(t *testing.T) {
 	t.Run("returns error when name is missing", func(t *testing.T) {
 		tool := NewTool()
 		ctx := context.Background()
 
-		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+		_, err := tool.HandleSave(ctx, map[string]interface{}{
 			"content":  "test content",
 			"location": "local",
 		})
@@ -123,7 +123,7 @@ func TestMCPTool_HandleWrite(t *testing.T) {
 		tool := NewTool()
 		ctx := context.Background()
 
-		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+		_, err := tool.HandleSave(ctx, map[string]interface{}{
 			"name":     "test",
 			"location": "local",
 		})
@@ -136,7 +136,7 @@ func TestMCPTool_HandleWrite(t *testing.T) {
 		tool := NewTool()
 		ctx := context.Background()
 
-		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+		_, err := tool.HandleSave(ctx, map[string]interface{}{
 			"name":    "test",
 			"content": "test content",
 		})
@@ -149,7 +149,7 @@ func TestMCPTool_HandleWrite(t *testing.T) {
 		tool := NewTool()
 		ctx := context.Background()
 
-		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+		_, err := tool.HandleSave(ctx, map[string]interface{}{
 			"name":     "test",
 			"content":  "test content",
 			"location": "invalid",
@@ -171,7 +171,7 @@ description: Test profile
 
 Handler test content.
 `
-		result, err := tool.HandleWrite(ctx, map[string]interface{}{
+		result, err := tool.HandleSave(ctx, map[string]interface{}{
 			"name":              "handler-test",
 			"content":           content,
 			"location":          "local",
@@ -191,7 +191,7 @@ Handler test content.
 		content := "---\nname: exists-test\n---\nContent"
 
 		// Write first time
-		_, err := tool.HandleWrite(ctx, map[string]interface{}{
+		_, err := tool.HandleSave(ctx, map[string]interface{}{
 			"name":              "exists-test",
 			"content":           content,
 			"location":          "local",
@@ -200,7 +200,7 @@ Handler test content.
 		require.NoError(t, err)
 
 		// Write second time without overwrite
-		result, err := tool.HandleWrite(ctx, map[string]interface{}{
+		result, err := tool.HandleSave(ctx, map[string]interface{}{
 			"name":              "exists-test",
 			"content":           "new content",
 			"location":          "local",
