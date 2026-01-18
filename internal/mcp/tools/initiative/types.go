@@ -23,6 +23,10 @@ type CreateResponse struct {
 	Type           string `json:"type"`
 	Name           string `json:"name"`
 	NextStep       string `json:"next_step"`
+	// Idempotency fields - indicate whether an existing initiative was returned
+	AlreadyExisted bool     `json:"already_existed"`
+	SkippedFiles   []string `json:"skipped_files,omitempty"`
+	CopiedFiles    []string `json:"copied_files,omitempty"`
 }
 
 // StatusResponse is returned for action=status.

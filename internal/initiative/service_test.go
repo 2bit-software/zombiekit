@@ -347,3 +347,95 @@ func TestValidateName(t *testing.T) {
 		})
 	}
 }
+
+func TestService_FindActiveByNameAndType(t *testing.T) {
+	t.Run("returns nil when no active initiative", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		found, err := svc.FindActiveByNameAndType("test", TypeFeature)
+		require.NoError(t, err)
+		assert.Nil(t, found)
+	})
+
+	t.Run("returns nil when active initiative has different name", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		// Create an initiative with name "foo"
+		_, err = svc.Create(TypeFeature, "foo")
+		require.NoError(t, err)
+
+		// Look for "bar" - should not find it
+		found, err := svc.FindActiveByNameAndType("bar", TypeFeature)
+		require.NoError(t, err)
+		assert.Nil(t, found)
+	})
+
+	t.Run("returns nil when active initiative has different type", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		// Create a feature initiative
+		_, err = svc.Create(TypeFeature, "test")
+		require.NoError(t, err)
+
+		// Look for bug type - should not find it
+		found, err := svc.FindActiveByNameAndType("test", TypeBug)
+		require.NoError(t, err)
+		assert.Nil(t, found)
+	})
+
+	t.Run("returns initiative when name and type match", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		// Create an initiative
+		created, err := svc.Create(TypeFeature, "my-feature")
+		require.NoError(t, err)
+
+		// Look for same name+type - should find it
+		found, err := svc.FindActiveByNameAndType("my-feature", TypeFeature)
+		require.NoError(t, err)
+		require.NotNil(t, found)
+		assert.Equal(t, created.ID, found.ID)
+		assert.Equal(t, created.Name, found.Name)
+		assert.Equal(t, created.Type, found.Type)
+	})
+
+	t.Run("normalizes name before comparison", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		// Create an initiative with normalized name "user-auth"
+		created, err := svc.Create(TypeFeature, "user-auth")
+		require.NoError(t, err)
+
+		// Look with non-normalized name - should still find it
+		found, err := svc.FindActiveByNameAndType("User Auth", TypeFeature)
+		require.NoError(t, err)
+		require.NotNil(t, found)
+		assert.Equal(t, created.ID, found.ID)
+
+		// Also try with underscores
+		found2, err := svc.FindActiveByNameAndType("user_auth", TypeFeature)
+		require.NoError(t, err)
+		require.NotNil(t, found2)
+		assert.Equal(t, created.ID, found2.ID)
+	})
+}

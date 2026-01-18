@@ -167,6 +167,28 @@ func (s *Service) GetActive() (*Initiative, error) {
 	return init, nil
 }
 
+// FindActiveByNameAndType returns the active initiative if it matches the given name and type.
+// Returns nil if no active initiative exists or if the active initiative doesn't match.
+// This enables idempotent initiative creation - calling create with the same name+type
+// returns the existing initiative instead of creating a duplicate.
+func (s *Service) FindActiveByNameAndType(name string, initType InitiativeType) (*Initiative, error) {
+	active, err := s.GetActive()
+	if err != nil {
+		return nil, err
+	}
+	if active == nil {
+		return nil, nil
+	}
+
+	// Use same normalization as Create() uses
+	normalizedName := normalizeName(name)
+
+	if active.Name == normalizedName && active.Type == initType {
+		return active, nil
+	}
+	return nil, nil
+}
+
 // SetActive sets the specified initiative as active.
 func (s *Service) SetActive(initiativeID string) error {
 	// Check if initiative exists

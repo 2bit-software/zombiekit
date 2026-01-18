@@ -1,6 +1,7 @@
 package initiative
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -120,6 +121,8 @@ func (t *Tool) Execute(ctx context.Context, args map[string]interface{}) (string
 }
 
 // handleCreate handles the create action.
+// This implementation is idempotent: calling create with the same name+type
+// returns the existing initiative instead of creating a duplicate.
 func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]interface{}) (string, error) {
 	initType := getStringArg(args, "type")
 	if initType == "" {
@@ -145,15 +148,48 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 		return "", fmt.Errorf("creating initiative service: %w", err)
 	}
 
-	// Check if an initiative is already active
-	existing, err := initSvc.GetActive()
+	// IDEMPOTENCY CHECK: See if active initiative matches the requested name+type
+	existing, err := initSvc.FindActiveByNameAndType(name, internalInit.InitiativeType(initType))
+	if err != nil {
+		return "", fmt.Errorf("checking for existing initiative: %w", err)
+	}
+
+	if existing != nil {
+		// Idempotent case: return existing initiative
+		cyclePath, cycleID := t.findFirstCycle(existing.Path)
+
+		// Still run template copy (safe - skips existing files with content)
+		skipped, copied, err := t.copyTemplatesToCycle(dir, cyclePath)
+		if err != nil {
+			return "", fmt.Errorf("copying templates: %w", err)
+		}
+
+		resp := CreateResponse{
+			Action:         "create",
+			InitiativeID:   existing.ID,
+			InitiativePath: existing.Path,
+			CycleID:        cycleID,
+			CyclePath:      cyclePath,
+			Branch:         existing.ID,
+			Type:           initType,
+			Name:           name,
+			NextStep:       initType,
+			AlreadyExisted: true,
+			SkippedFiles:   skipped,
+			CopiedFiles:    copied,
+		}
+		return marshalResponse(resp)
+	}
+
+	// Check if a DIFFERENT initiative is active (error case)
+	active, err := initSvc.GetActive()
 	if err != nil {
 		return "", fmt.Errorf("checking active initiative: %w", err)
 	}
-	if existing != nil {
+	if active != nil {
 		return "", &ToolError{
 			Code:    "INITIATIVE_ALREADY_ACTIVE",
-			Message: fmt.Sprintf("an initiative is already active: %s", existing.ID),
+			Message: fmt.Sprintf("a different initiative is already active: %s", active.ID),
 			Hint:    "Complete or abandon the current initiative first with 'initiative complete'",
 		}
 	}
@@ -179,7 +215,8 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 	}
 
 	// Copy templates to cycle folder
-	if err := t.copyTemplatesToCycle(dir, cycle.Path); err != nil {
+	skipped, copied, err := t.copyTemplatesToCycle(dir, cycle.Path)
+	if err != nil {
 		return "", fmt.Errorf("copying templates: %w", err)
 	}
 
@@ -204,6 +241,9 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 		Type:           initType,
 		Name:           name,
 		NextStep:       nextStep,
+		AlreadyExisted: false,
+		SkippedFiles:   skipped,
+		CopiedFiles:    copied,
 	}
 
 	return marshalResponse(resp)
@@ -312,14 +352,68 @@ func (t *Tool) handleList(ctx context.Context, dir string) (string, error) {
 	return marshalResponse(resp)
 }
 
+// findFirstCycle finds the first cycle folder in an initiative directory.
+// Returns the full path and cycle ID. If no cycle is found, returns the initiative path.
+// Cycles are identified by the presence of spec.md or research.md files.
+func (t *Tool) findFirstCycle(initiativePath string) (cyclePath, cycleID string) {
+	entries, err := os.ReadDir(initiativePath)
+	if err != nil {
+		return initiativePath, "" // Fall back to initiative path
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "." && entry.Name() != ".." {
+			// Check if it looks like a cycle folder (contains spec.md or research.md)
+			candidatePath := filepath.Join(initiativePath, entry.Name())
+			if _, err := os.Stat(filepath.Join(candidatePath, "spec.md")); err == nil {
+				return candidatePath, entry.Name()
+			}
+			if _, err := os.Stat(filepath.Join(candidatePath, "research.md")); err == nil {
+				return candidatePath, entry.Name()
+			}
+		}
+	}
+
+	// No cycle found, use initiative path
+	return initiativePath, ""
+}
+
+// copyTemplateIfNotExists copies template content to destination if destination doesn't exist
+// or is empty/whitespace-only. Returns whether the file was copied.
+// This enables idempotent template copying - existing content is preserved.
+func copyTemplateIfNotExists(templateContent []byte, destPath string) (copied bool, err error) {
+	// Check if destination exists
+	if _, err := os.Stat(destPath); err == nil {
+		// File exists - check if it has non-whitespace content
+		content, err := os.ReadFile(destPath)
+		if err != nil {
+			return false, fmt.Errorf("reading existing file %s: %w", destPath, err)
+		}
+		if len(bytes.TrimSpace(content)) > 0 {
+			return false, nil // Skip - file has content
+		}
+		// File is empty or whitespace-only, fall through to overwrite
+	} else if !os.IsNotExist(err) {
+		// Unexpected error (not just "file doesn't exist")
+		return false, fmt.Errorf("checking file %s: %w", destPath, err)
+	}
+
+	// Copy template (file doesn't exist OR is empty/whitespace)
+	if err := os.WriteFile(destPath, templateContent, 0644); err != nil {
+		return false, fmt.Errorf("writing template to %s: %w", destPath, err)
+	}
+	return true, nil
+}
+
 // copyTemplatesToCycle copies spec and research templates to the cycle folder.
-func (t *Tool) copyTemplatesToCycle(workDir, cyclePath string) error {
+// Returns lists of skipped and copied file names for idempotency reporting.
+func (t *Tool) copyTemplatesToCycle(workDir, cyclePath string) (skipped, copied []string, err error) {
 	embFS := t.embeddedFS
 	if embFS == nil {
 		embFS = step.GetTemplateFS()
 	}
 	if embFS == nil {
-		return fmt.Errorf("no embedded template filesystem available")
+		return nil, nil, fmt.Errorf("no embedded template filesystem available")
 	}
 
 	templates := []struct {
@@ -334,7 +428,6 @@ func (t *Tool) copyTemplatesToCycle(workDir, cyclePath string) error {
 		// First check if local override exists
 		localPath := filepath.Join(workDir, ".brains", "templates", filepath.Base(tmpl.src))
 		var content []byte
-		var err error
 
 		if _, statErr := os.Stat(localPath); statErr == nil {
 			content, err = os.ReadFile(localPath)
@@ -343,16 +436,23 @@ func (t *Tool) copyTemplatesToCycle(workDir, cyclePath string) error {
 		}
 
 		if err != nil {
-			return fmt.Errorf("reading template %s: %w", tmpl.src, err)
+			return nil, nil, fmt.Errorf("reading template %s: %w", tmpl.src, err)
 		}
 
 		destPath := filepath.Join(cyclePath, tmpl.dest)
-		if err := os.WriteFile(destPath, content, 0644); err != nil {
-			return fmt.Errorf("writing %s: %w", tmpl.dest, err)
+		wasCopied, copyErr := copyTemplateIfNotExists(content, destPath)
+		if copyErr != nil {
+			return nil, nil, fmt.Errorf("copying template %s: %w", tmpl.dest, copyErr)
+		}
+
+		if wasCopied {
+			copied = append(copied, tmpl.dest)
+		} else {
+			skipped = append(skipped, tmpl.dest)
 		}
 	}
 
-	return nil
+	return skipped, copied, nil
 }
 
 // mapInitTypeToCycleType converts an initiative type to a cycle type.
