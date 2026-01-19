@@ -14,11 +14,6 @@ tasks:
     cmds:
       - task --taskfile Taskfile.dev.yml {{.CLI_ARGS}}
 
-  setup:
-    desc: Set up development environment
-    cmds:
-      - task --taskfile Taskfile.dev.yml setup
-
   install:
     desc: Install brains CLI to GOBIN with bs symlink
     vars:
@@ -40,11 +35,6 @@ tasks:
         echo "  bs:     {{.INSTALL_DIR}}/bs -> brains"
         echo ""
         {{.INSTALL_DIR}}/brains version
-
-  test:
-    desc: Run tests with coverage
-    cmds:
-      - task --taskfile Taskfile.dev.yml test
 
   up:
     desc: Start recall stack (PostgreSQL, importer, web GUI)
@@ -77,8 +67,3 @@ tasks:
     desc: Stop all services
     cmds:
       - docker compose down
-
-  ci:
-    desc: Run all CI checks (fmt, vet, lint, test, build)
-    cmds:
-      - task --taskfile Taskfile.dev.yml ci

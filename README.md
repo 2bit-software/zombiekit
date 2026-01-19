@@ -113,7 +113,7 @@ For contributors or those wanting to use the recall (semantic search) features:
 
 ```bash
 # Check dependencies and create .env
-task setup
+task dev -- setup
 
 # Pull embedding model (required for recall)
 task dev -- ollama:pull
@@ -122,17 +122,20 @@ task dev -- ollama:pull
 task up
 ```
 
-Individual components can be run separately via the dev Taskfile:
+All development tasks are in the dev Taskfile (`task dev -- --list` to see all):
 
 ```bash
+task dev -- setup        # Create .env, check deps, install tools
+task dev -- build        # Build the binary
+task dev -- test         # Run tests
+task dev -- ci           # Run all CI checks
 task dev -- db:up        # Start PostgreSQL only
 task dev -- db:migrate   # Run migrations
 task dev -- recall:watch # Start Claude importer only
 task dev -- gui          # Start web GUI only
-task dev -- build        # Build the binary
 ```
 
-Configuration is in `.env` (copied from `.env.example` by `task setup`). Key settings:
+Configuration is in `.env` (copied from `.env.example` by `task dev -- setup`). Key settings:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
