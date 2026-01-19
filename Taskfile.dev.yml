@@ -17,7 +17,7 @@ tasks:
     desc: List development tasks
     silent: true
     cmds:
-      - task --taskfile Taskfile.dev.yml --list
+      - task --taskfile Taskfile.dev.yml --sort alphanumeric --list
 
   # === Setup ===
 
@@ -171,9 +171,20 @@ tasks:
 
   # === Recall ===
 
+  recall:reset:
+    desc: Wipe all recall data (keeps sticky memories)
+    prompt: This will delete all recall chunks and import state. Continue?
+    cmds:
+      - |
+        echo "Truncating recall tables..."
+        docker compose exec -T postgres psql -U ${POSTGRES_USER:-brains} -d ${POSTGRES_DB:-brains} <<'SQL'
+        TRUNCATE TABLE recall_chunks CASCADE;
+        TRUNCATE TABLE recall_import_state CASCADE;
+        SQL
+        echo "Recall data wiped. Import state reset."
+
   recall:preflight:
     desc: Check recall dependencies (docker, ollama)
-    internal: true
     silent: true
     cmds:
       - |
