@@ -9,6 +9,79 @@ tasks:
     cmds:
       - task --taskfile Taskfile.dev.yml --list
 
+  # === Setup ===
+
+  setup:
+    desc: Set up development environment (creates .env, installs tools)
+    cmds:
+      - task: setup:env
+      - task: setup:check
+      - task: init
+
+  setup:env:
+    desc: Create .env from .env.example if missing
+    silent: true
+    status:
+      - test -f .env
+    cmds:
+      - cp .env.example .env
+      - echo "Created .env from .env.example"
+
+  setup:check:
+    desc: Check for required dependencies
+    silent: true
+    cmds:
+      - |
+        echo "Checking dependencies..."
+        missing=""
+
+        if ! command -v go &> /dev/null; then
+          echo "  [MISSING] go - install from https://go.dev/dl/"
+          missing="$missing go"
+        else
+          echo "  [OK] go $(go version | awk '{print $3}')"
+        fi
+
+        if ! command -v docker &> /dev/null; then
+          echo "  [MISSING] docker - install from https://docs.docker.com/get-docker/"
+          missing="$missing docker"
+        else
+          echo "  [OK] docker $(docker --version | awk '{print $3}' | tr -d ',')"
+        fi
+
+        if ! command -v ollama &> /dev/null; then
+          echo "  [MISSING] ollama - install from https://ollama.ai (required for recall)"
+          missing="$missing ollama"
+        else
+          echo "  [OK] ollama $(ollama --version 2>/dev/null | awk '{print $NF}' || echo 'installed')"
+        fi
+
+        echo ""
+        if [ -n "$missing" ]; then
+          echo "Some dependencies are missing. Install them to use all features."
+          exit 0
+        else
+          echo "All dependencies installed."
+        fi
+
+  init:
+    desc: Download Go dependencies and install dev tools
+    cmds:
+      - go mod download
+      - go mod tidy
+      - task: init:golangci-lint
+
+  init:golangci-lint:
+    desc: Install golangci-lint if not present
+    internal: true
+    status:
+      - command -v golangci-lint
+    cmds:
+      - echo "Installing golangci-lint..."
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+  # === Quality ===
+
   test:
     desc: Run tests with coverage
     cmds:
@@ -42,8 +115,26 @@ tasks:
     cmds:
       - golangci-lint run --config configs/.golangci.yml ./...
 
+  # === Database ===
+
+  db:up:
+    desc: Start PostgreSQL container
+    cmds:
+      - docker compose up -d postgres
+      - echo "Waiting for PostgreSQL to be ready..."
+      - |
+        for i in $(seq 1 30); do
+          if docker compose exec -T postgres pg_isready -U ${POSTGRES_USER:-brains} -d ${POSTGRES_DB:-brains} > /dev/null 2>&1; then
+            echo "PostgreSQL is ready on port ${POSTGRES_PORT:-9432}"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Timeout waiting for PostgreSQL"
+        exit 1
+
   db:migrate:
-    desc: Run all database migrations
+    desc: Run database migrations
     silent: true
     cmds:
       - |
@@ -54,14 +145,68 @@ tasks:
         done
         echo "Migrations complete."
 
-  ollama:pull:
-    desc: Pull required embedding model for recall
+  # === Recall ===
+
+  recall:preflight:
+    desc: Check recall dependencies (docker, ollama)
+    internal: true
+    silent: true
     cmds:
-      - ollama pull nomic-embed-text
-      - echo "Model nomic-embed-text ready for recall embeddings"
+      - |
+        # Check Docker is running
+        if ! docker info > /dev/null 2>&1; then
+          echo "ERROR: Docker is not running"
+          echo ""
+          echo "Start Docker Desktop or OrbStack, then try again."
+          exit 1
+        fi
+
+        # Check Ollama is running
+        ollama_url="${BRAINS_OLLAMA_URL:-http://localhost:11434}"
+        if ! curl -s --max-time 2 "$ollama_url/api/tags" > /dev/null 2>&1; then
+          echo "ERROR: Ollama is not running at $ollama_url"
+          echo ""
+          echo "Start Ollama with: ollama serve"
+          echo "Then pull the model: ollama pull nomic-embed-text"
+          exit 1
+        fi
+
+        # Check embedding model is available
+        if ! curl -s "$ollama_url/api/tags" | grep -q "nomic-embed-text"; then
+          echo "WARNING: Embedding model 'nomic-embed-text' not found"
+          echo "Pull it with: ollama pull nomic-embed-text"
+          exit 1
+        fi
+
+        echo "Preflight checks passed."
+
+  recall:watch:
+    desc: Watch and import Claude conversation history
+    cmds:
+      - task: recall:preflight
+      - task --taskfile Taskfile.yml build
+      - task: db:up
+      - task: db:migrate
+      - |
+        echo "Starting Claude conversation importer..."
+        echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
+        echo "  Ollama: ${BRAINS_OLLAMA_URL:-http://localhost:11434}"
+        echo ""
+        ./bin/brains recall watch claude --verbose
+
+  recall:import:
+    desc: Import Claude conversation history once (no watch)
+    cmds:
+      - task: recall:preflight
+      - task --taskfile Taskfile.yml build
+      - task: db:up
+      - task: db:migrate
+      - |
+        echo "Importing Claude conversations..."
+        ./bin/brains recall watch claude --once --verbose
 
   recall:demo:
-    desc: Demo the recall feature (requires db:up and ollama)
+    desc: Demo recall feature with sample data
     cmds:
       - ./bin/brains recall save "The deployment failed due to memory limits"
       - ./bin/brains recall save "CSS styling updated for login page"
@@ -73,7 +218,17 @@ tasks:
       - echo "=== Search for memory-related issues ==="
       - ./bin/brains recall search "memory problems"
 
-  webgui:dev:
-    desc: Start WebGUI in development mode with hot-reloading
+  # === GUI ===
+
+  gui:dev:
+    desc: Start web GUI in development mode with hot-reloading
     cmds:
       - docker compose up --build webgui-dev
+
+  # === Ollama ===
+
+  ollama:pull:
+    desc: Pull required embedding model for recall
+    cmds:
+      - ollama pull nomic-embed-text
+      - echo "Model nomic-embed-text ready for recall embeddings"

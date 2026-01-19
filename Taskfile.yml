@@ -20,77 +20,14 @@ tasks:
       - task --list
 
   dev:
-    desc: Run development tasks. Use like `task dev -- <args>`
+    desc: Run development tasks (use `task dev -- --list` to see all)
     cmds:
       - task --taskfile Taskfile.dev.yml {{.CLI_ARGS}}
 
-  init:
-    desc: Download dependencies and install development tools
-    cmds:
-      - go mod download
-      - go mod tidy
-      - task: init:golangci-lint
-
   setup:
-    desc: Set up development environment (creates .env, checks dependencies)
+    desc: Set up development environment
     cmds:
-      - task: setup:env
-      - task: setup:check
-
-  setup:env:
-    desc: Create .env from .env.example if it doesn't exist
-    silent: true
-    status:
-      - test -f .env
-    cmds:
-      - cp .env.example .env
-      - echo "Created .env from .env.example"
-
-  setup:check:
-    desc: Check for required dependencies
-    silent: true
-    cmds:
-      - |
-        echo "Checking dependencies..."
-        missing=""
-
-        if ! command -v go &> /dev/null; then
-          echo "  [MISSING] go - install from https://go.dev/dl/"
-          missing="$missing go"
-        else
-          echo "  [OK] go $(go version | awk '{print $3}')"
-        fi
-
-        if ! command -v docker &> /dev/null; then
-          echo "  [MISSING] docker - install from https://docs.docker.com/get-docker/"
-          missing="$missing docker"
-        else
-          echo "  [OK] docker $(docker --version | awk '{print $3}' | tr -d ',')"
-        fi
-
-        if ! command -v ollama &> /dev/null; then
-          echo "  [MISSING] ollama - install from https://ollama.ai (required for recall)"
-          missing="$missing ollama"
-        else
-          echo "  [OK] ollama $(ollama --version 2>/dev/null | awk '{print $NF}' || echo 'installed')"
-        fi
-
-        echo ""
-        if [ -n "$missing" ]; then
-          echo "Some dependencies are missing. Install them to use all features."
-          exit 0
-        else
-          echo "All dependencies installed."
-        fi
-
-  init:golangci-lint:
-    internal: true
-    desc: Install golangci-lint if not present
-    status:
-      - command -v golangci-lint
-    cmds:
-      - echo "Installing golangci-lint..."
-      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - task --taskfile Taskfile.dev.yml setup
 
   build:
     desc: Build the brains CLI binary
@@ -132,108 +69,14 @@ tasks:
       - task --taskfile Taskfile.dev.yml test
 
   up:
-    desc: Start PostgreSQL database container
+    desc: Start recall stack (PostgreSQL, importer, web GUI)
     cmds:
-      - docker compose up -d postgres
-      - echo "Waiting for PostgreSQL to be ready..."
-      - |
-        for i in $(seq 1 30); do
-          if docker compose exec -T postgres pg_isready -U ${POSTGRES_USER:-brains} -d ${POSTGRES_DB:-brains} > /dev/null 2>&1; then
-            echo "PostgreSQL is ready on port ${POSTGRES_PORT:-9432}"
-            exit 0
-          fi
-          sleep 1
-        done
-        echo "Timeout waiting for PostgreSQL"
-        exit 1
-
-  down:
-    desc: Stop and remove PostgreSQL container
-    cmds:
-      - docker compose down
-
-  recall:preflight:
-    desc: Check recall dependencies (docker, ollama)
-    internal: true
-    silent: true
-    cmds:
-      - |
-        # Check Docker is running
-        if ! docker info > /dev/null 2>&1; then
-          echo "ERROR: Docker is not running"
-          echo ""
-          echo "Start Docker Desktop or OrbStack, then try again."
-          exit 1
-        fi
-
-        # Check Ollama is running
-        ollama_url="${BRAINS_OLLAMA_URL:-http://localhost:11434}"
-        if ! curl -s --max-time 2 "$ollama_url/api/tags" > /dev/null 2>&1; then
-          echo "ERROR: Ollama is not running at $ollama_url"
-          echo ""
-          echo "Start Ollama with: ollama serve"
-          echo "Then pull the model: ollama pull nomic-embed-text"
-          exit 1
-        fi
-
-        # Check embedding model is available
-        if ! curl -s "$ollama_url/api/tags" | grep -q "nomic-embed-text"; then
-          echo "WARNING: Embedding model 'nomic-embed-text' not found"
-          echo "Pull it with: ollama pull nomic-embed-text"
-          exit 1
-        fi
-
-        echo "Preflight checks passed."
-
-  recall:watch:claude:
-    desc: Watch and import Claude Code conversation history
-    cmds:
-      - task: recall:preflight
+      - task --taskfile Taskfile.dev.yml recall:preflight
       - task: build
-      - task: up
+      - task --taskfile Taskfile.dev.yml db:up
       - task --taskfile Taskfile.dev.yml db:migrate
       - |
-        echo "Starting Claude conversation importer..."
-        echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
-        echo "  Ollama: ${BRAINS_OLLAMA_URL:-http://localhost:11434}"
-        echo ""
-        ./bin/brains recall watch claude --verbose
-
-  recall:import:claude:
-    desc: Import Claude Code conversation history once (no watch)
-    cmds:
-      - task: recall:preflight
-      - task: build
-      - task: up
-      - task --taskfile Taskfile.dev.yml db:migrate
-      - |
-        echo "Importing Claude conversations..."
-        ./bin/brains recall watch claude --once --verbose
-
-  gui:
-    desc: Start the web GUI with PostgreSQL backend
-    cmds:
-      - task: recall:preflight
-      - task: build
-      - task: up
-      - task --taskfile Taskfile.dev.yml db:migrate
-      - |
-        echo "Starting web GUI..."
-        echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
-        echo "  Ollama: ${BRAINS_OLLAMA_URL:-http://localhost:11434}"
-        echo "  GUI: http://localhost:${WEBGUI_PORT:-9981}"
-        echo ""
-        ./bin/brains gui --port ${WEBGUI_PORT:-9981}
-
-  recall:full:
-    desc: Start PostgreSQL, Claude importer (background), and web GUI
-    cmds:
-      - task: recall:preflight
-      - task: build
-      - task: up
-      - task --taskfile Taskfile.dev.yml db:migrate
-      - |
-        echo "Starting full recall stack..."
+        echo "Starting recall stack..."
         echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
         echo "  Ollama: ${BRAINS_OLLAMA_URL:-http://localhost:11434}"
         echo "  GUI: http://localhost:${WEBGUI_PORT:-9981}"
@@ -247,11 +90,25 @@ tasks:
         # Trap to kill importer on exit
         trap "echo 'Stopping importer...'; kill $IMPORTER_PID 2>/dev/null" EXIT INT TERM
 
-        # Give importer a moment to start
         sleep 1
 
-        # Start GUI in foreground
         echo "Starting web GUI..."
+        ./bin/brains gui --port ${WEBGUI_PORT:-9981}
+
+  down:
+    desc: Stop all services
+    cmds:
+      - docker compose down
+
+  gui:
+    desc: Start web GUI only (requires db already running)
+    cmds:
+      - task --taskfile Taskfile.dev.yml recall:preflight
+      - task: build
+      - |
+        echo "Starting web GUI..."
+        echo "  GUI: http://localhost:${WEBGUI_PORT:-9981}"
+        echo ""
         ./bin/brains gui --port ${WEBGUI_PORT:-9981}
 
   ci:
