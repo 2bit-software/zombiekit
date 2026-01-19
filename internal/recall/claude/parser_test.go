@@ -298,3 +298,141 @@ func createTempFile(t *testing.T, content string) string {
 	}
 	return tmpFile
 }
+
+// ============================================================
+// Tests for ParseFileFromUUID (incremental import)
+// ============================================================
+
+func TestParseFileFromUUID_EmptyUUID(t *testing.T) {
+	// When lastKnownUUID is empty, should return all importable entries
+	content := `{"type":"user","uuid":"msg-001","sessionId":"sess1","timestamp":"2024-01-15T10:00:00Z","message":{"role":"user","content":"First"},"isMeta":false}
+{"type":"assistant","uuid":"msg-002","sessionId":"sess1","timestamp":"2024-01-15T10:01:00Z","message":{"role":"assistant","content":"Second"},"isMeta":false}
+{"type":"user","uuid":"msg-003","sessionId":"sess1","timestamp":"2024-01-15T10:02:00Z","message":{"role":"user","content":"Third"},"isMeta":false}`
+
+	tmpFile := createTempFile(t, content)
+	defer os.Remove(tmpFile)
+
+	entries, lastUUID, err := ParseFileFromUUID(tmpFile, "")
+	if err != nil {
+		t.Fatalf("ParseFileFromUUID failed: %v", err)
+	}
+
+	if len(entries) != 3 {
+		t.Errorf("expected 3 entries, got %d", len(entries))
+	}
+
+	if lastUUID != "msg-003" {
+		t.Errorf("expected lastUUID 'msg-003', got %q", lastUUID)
+	}
+}
+
+func TestParseFileFromUUID_ValidUUID(t *testing.T) {
+	// When lastKnownUUID is found, should return entries after it
+	content := `{"type":"user","uuid":"msg-001","sessionId":"sess1","timestamp":"2024-01-15T10:00:00Z","message":{"role":"user","content":"First"},"isMeta":false}
+{"type":"assistant","uuid":"msg-002","sessionId":"sess1","timestamp":"2024-01-15T10:01:00Z","message":{"role":"assistant","content":"Second"},"isMeta":false}
+{"type":"user","uuid":"msg-003","sessionId":"sess1","timestamp":"2024-01-15T10:02:00Z","message":{"role":"user","content":"Third"},"isMeta":false}`
+
+	tmpFile := createTempFile(t, content)
+	defer os.Remove(tmpFile)
+
+	entries, lastUUID, err := ParseFileFromUUID(tmpFile, "msg-001")
+	if err != nil {
+		t.Fatalf("ParseFileFromUUID failed: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Errorf("expected 2 entries after msg-001, got %d", len(entries))
+	}
+
+	if entries[0].UUID != "msg-002" {
+		t.Errorf("expected first entry UUID 'msg-002', got %q", entries[0].UUID)
+	}
+
+	if lastUUID != "msg-003" {
+		t.Errorf("expected lastUUID 'msg-003', got %q", lastUUID)
+	}
+}
+
+func TestParseFileFromUUID_MissingUUID(t *testing.T) {
+	// When lastKnownUUID is not found, should return ErrSyncPointNotFound
+	content := `{"type":"user","uuid":"msg-001","sessionId":"sess1","timestamp":"2024-01-15T10:00:00Z","message":{"role":"user","content":"First"},"isMeta":false}
+{"type":"assistant","uuid":"msg-002","sessionId":"sess1","timestamp":"2024-01-15T10:01:00Z","message":{"role":"assistant","content":"Second"},"isMeta":false}`
+
+	tmpFile := createTempFile(t, content)
+	defer os.Remove(tmpFile)
+
+	_, lastUUID, err := ParseFileFromUUID(tmpFile, "nonexistent-uuid")
+	if err != ErrSyncPointNotFound {
+		t.Errorf("expected ErrSyncPointNotFound, got %v", err)
+	}
+
+	// Should still return the last UUID for state update
+	if lastUUID != "msg-002" {
+		t.Errorf("expected lastUUID 'msg-002' even on error, got %q", lastUUID)
+	}
+}
+
+func TestParseFileFromUUID_LastUUIDInFile(t *testing.T) {
+	// When lastKnownUUID is the last entry, should return empty entries
+	content := `{"type":"user","uuid":"msg-001","sessionId":"sess1","timestamp":"2024-01-15T10:00:00Z","message":{"role":"user","content":"First"},"isMeta":false}
+{"type":"assistant","uuid":"msg-002","sessionId":"sess1","timestamp":"2024-01-15T10:01:00Z","message":{"role":"assistant","content":"Second"},"isMeta":false}`
+
+	tmpFile := createTempFile(t, content)
+	defer os.Remove(tmpFile)
+
+	entries, lastUUID, err := ParseFileFromUUID(tmpFile, "msg-002")
+	if err != nil {
+		t.Fatalf("ParseFileFromUUID failed: %v", err)
+	}
+
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries (already at end), got %d", len(entries))
+	}
+
+	if lastUUID != "msg-002" {
+		t.Errorf("expected lastUUID 'msg-002', got %q", lastUUID)
+	}
+}
+
+func TestParseFileFromUUID_EmptyFile(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+	defer os.Remove(tmpFile)
+
+	entries, lastUUID, err := ParseFileFromUUID(tmpFile, "")
+	if err != nil {
+		t.Fatalf("ParseFileFromUUID failed on empty file: %v", err)
+	}
+
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries for empty file, got %d", len(entries))
+	}
+
+	if lastUUID != "" {
+		t.Errorf("expected empty lastUUID for empty file, got %q", lastUUID)
+	}
+}
+
+func TestParseFileFromUUID_FiltersMetaMessages(t *testing.T) {
+	// Meta messages should be filtered out from returned entries
+	content := `{"type":"user","uuid":"msg-001","sessionId":"sess1","timestamp":"2024-01-15T10:00:00Z","message":{"role":"user","content":"User"},"isMeta":false}
+{"type":"system","uuid":"msg-002","sessionId":"sess1","timestamp":"2024-01-15T10:01:00Z","message":{"role":"system","content":"Meta"},"isMeta":true}
+{"type":"assistant","uuid":"msg-003","sessionId":"sess1","timestamp":"2024-01-15T10:02:00Z","message":{"role":"assistant","content":"Assistant"},"isMeta":false}`
+
+	tmpFile := createTempFile(t, content)
+	defer os.Remove(tmpFile)
+
+	entries, lastUUID, err := ParseFileFromUUID(tmpFile, "")
+	if err != nil {
+		t.Fatalf("ParseFileFromUUID failed: %v", err)
+	}
+
+	// Should only have 2 entries (meta filtered out)
+	if len(entries) != 2 {
+		t.Errorf("expected 2 entries (meta filtered), got %d", len(entries))
+	}
+
+	// lastUUID should still be the actual last entry in file
+	if lastUUID != "msg-003" {
+		t.Errorf("expected lastUUID 'msg-003', got %q", lastUUID)
+	}
+}

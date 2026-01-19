@@ -81,7 +81,19 @@ func setupTestStorage(t *testing.T) *Storage {
 			source TEXT,
 			source_id TEXT,
 			conversation_id TEXT,
-			metadata JSONB
+			metadata JSONB,
+			history_gap BOOLEAN NOT NULL DEFAULT FALSE
+		)
+	`)
+	require.NoError(t, err)
+
+	// Create import state table for incremental import tracking
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS recall_import_state (
+			file_path TEXT PRIMARY KEY,
+			last_entry_uuid TEXT NOT NULL,
+			file_mtime BIGINT NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
 	require.NoError(t, err)
@@ -939,4 +951,223 @@ func TestListDistinctProjects_IgnoresNullCWD(t *testing.T) {
 	// Should only have the one with CWD
 	assert.Len(t, projects, 1)
 	assert.Equal(t, "/project/x", projects[0])
+}
+
+// ============================================================
+// Tests for Import State CRUD operations (DEV-87)
+// ============================================================
+
+func TestGetImportState_NotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	state, err := storage.GetImportState(ctx, "/nonexistent/file.jsonl")
+	require.NoError(t, err)
+	assert.Nil(t, state, "expected nil for non-existent import state")
+}
+
+func TestSaveImportState_New(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	state := &recall.ImportState{
+		FilePath:      "/test/history.jsonl",
+		LastEntryUUID: "msg-uuid-123",
+		FileMtime:     1705000000000000000,
+	}
+
+	err := storage.SaveImportState(ctx, state)
+	require.NoError(t, err)
+
+	// Retrieve and verify
+	retrieved, err := storage.GetImportState(ctx, state.FilePath)
+	require.NoError(t, err)
+	require.NotNil(t, retrieved)
+	assert.Equal(t, state.FilePath, retrieved.FilePath)
+	assert.Equal(t, state.LastEntryUUID, retrieved.LastEntryUUID)
+	assert.Equal(t, state.FileMtime, retrieved.FileMtime)
+	assert.False(t, retrieved.UpdatedAt.IsZero())
+}
+
+func TestSaveImportState_Update(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	filePath := "/test/update.jsonl"
+
+	// Create initial state
+	state1 := &recall.ImportState{
+		FilePath:      filePath,
+		LastEntryUUID: "msg-001",
+		FileMtime:     1705000000000000000,
+	}
+	err := storage.SaveImportState(ctx, state1)
+	require.NoError(t, err)
+
+	// Update with new values
+	state2 := &recall.ImportState{
+		FilePath:      filePath,
+		LastEntryUUID: "msg-002",
+		FileMtime:     1705000001000000000,
+	}
+	err = storage.SaveImportState(ctx, state2)
+	require.NoError(t, err)
+
+	// Retrieve and verify updated values
+	retrieved, err := storage.GetImportState(ctx, filePath)
+	require.NoError(t, err)
+	require.NotNil(t, retrieved)
+	assert.Equal(t, "msg-002", retrieved.LastEntryUUID)
+	assert.Equal(t, int64(1705000001000000000), retrieved.FileMtime)
+}
+
+func TestDeleteImportState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	filePath := "/test/delete.jsonl"
+
+	// Create state
+	state := &recall.ImportState{
+		FilePath:      filePath,
+		LastEntryUUID: "msg-001",
+		FileMtime:     1705000000000000000,
+	}
+	err := storage.SaveImportState(ctx, state)
+	require.NoError(t, err)
+
+	// Delete it
+	err = storage.DeleteImportState(ctx, filePath)
+	require.NoError(t, err)
+
+	// Verify it's gone
+	retrieved, err := storage.GetImportState(ctx, filePath)
+	require.NoError(t, err)
+	assert.Nil(t, retrieved)
+}
+
+func TestDeleteImportState_NonExistent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Should not error when deleting non-existent state
+	err := storage.DeleteImportState(ctx, "/nonexistent/file.jsonl")
+	require.NoError(t, err)
+}
+
+func TestCleanupStaleImportStates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Create multiple import states
+	files := []string{"/valid/file1.jsonl", "/valid/file2.jsonl", "/stale/file3.jsonl"}
+	for _, filePath := range files {
+		state := &recall.ImportState{
+			FilePath:      filePath,
+			LastEntryUUID: "msg-001",
+			FileMtime:     1705000000000000000,
+		}
+		err := storage.SaveImportState(ctx, state)
+		require.NoError(t, err)
+	}
+
+	// Cleanup, keeping only first two
+	validPaths := []string{"/valid/file1.jsonl", "/valid/file2.jsonl"}
+	err := storage.CleanupStaleImportStates(ctx, validPaths)
+	require.NoError(t, err)
+
+	// Verify valid states still exist
+	state1, err := storage.GetImportState(ctx, "/valid/file1.jsonl")
+	require.NoError(t, err)
+	assert.NotNil(t, state1)
+
+	state2, err := storage.GetImportState(ctx, "/valid/file2.jsonl")
+	require.NoError(t, err)
+	assert.NotNil(t, state2)
+
+	// Verify stale state was deleted
+	stale, err := storage.GetImportState(ctx, "/stale/file3.jsonl")
+	require.NoError(t, err)
+	assert.Nil(t, stale)
+}
+
+func TestCleanupStaleImportStates_EmptyValidPaths(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Create a state
+	state := &recall.ImportState{
+		FilePath:      "/test/file.jsonl",
+		LastEntryUUID: "msg-001",
+		FileMtime:     1705000000000000000,
+	}
+	err := storage.SaveImportState(ctx, state)
+	require.NoError(t, err)
+
+	// Cleanup with empty valid paths should delete all
+	err = storage.CleanupStaleImportStates(ctx, []string{})
+	require.NoError(t, err)
+
+	// Verify state was deleted
+	retrieved, err := storage.GetImportState(ctx, "/test/file.jsonl")
+	require.NoError(t, err)
+	assert.Nil(t, retrieved)
+}
+
+func TestSaveWithSource_HistoryGapFlag(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Save chunk with history_gap = true
+	input := recall.ChunkInput{
+		Content:        "Message with history gap",
+		Source:         "claude",
+		SourceID:       "gap-msg",
+		ConversationID: "conv-gap",
+		HistoryGap:     true,
+		Metadata:       &recall.Metadata{Role: "user"},
+	}
+	_, created, err := storage.SaveWithSource(ctx, input, generateTestEmbedding(input.Content))
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	// Verify history_gap is stored (query directly since GetByConversation doesn't return it)
+	var historyGap bool
+	err = storage.pool.QueryRow(ctx, `
+		SELECT history_gap FROM recall_chunks WHERE source_id = $1
+	`, "gap-msg").Scan(&historyGap)
+	require.NoError(t, err)
+	assert.True(t, historyGap, "history_gap should be true")
 }

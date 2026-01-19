@@ -69,6 +69,22 @@ func (m *mockStorage) ListDistinctProjects(ctx context.Context) ([]string, error
 	return m.projects, nil
 }
 
+func (m *mockStorage) GetImportState(ctx context.Context, filePath string) (*recall.ImportState, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) SaveImportState(ctx context.Context, state *recall.ImportState) error {
+	return nil
+}
+
+func (m *mockStorage) DeleteImportState(ctx context.Context, filePath string) error {
+	return nil
+}
+
+func (m *mockStorage) CleanupStaleImportStates(ctx context.Context, validPaths []string) error {
+	return nil
+}
+
 func (m *mockStorage) Close() error {
 	return nil
 }

@@ -214,12 +214,12 @@ func (s *Storage) SaveWithSource(ctx context.Context, input recall.ChunkInput, e
 	}
 
 	result, err := s.pool.Exec(ctx, `
-		INSERT INTO recall_chunks (id, content, content_hash, embedding, source, source_id, conversation_id, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO recall_chunks (id, content, content_hash, embedding, source, source_id, conversation_id, metadata, history_gap)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (source, source_id) WHERE source_id IS NOT NULL DO NOTHING
 	`, id, input.Content, hash, pgvector.NewVector(embedding),
 		nullableString(input.Source), nullableString(input.SourceID),
-		nullableString(input.ConversationID), metadataJSON)
+		nullableString(input.ConversationID), metadataJSON, input.HistoryGap)
 	if err != nil {
 		return "", false, fmt.Errorf("save chunk with source: %w", err)
 	}
@@ -398,4 +398,69 @@ func (s *Storage) ListDistinctProjects(ctx context.Context) ([]string, error) {
 	}
 
 	return projects, nil
+}
+
+// GetImportState retrieves the import state for a file.
+// Returns nil, nil if no state exists (new file).
+func (s *Storage) GetImportState(ctx context.Context, filePath string) (*recall.ImportState, error) {
+	var state recall.ImportState
+	err := s.pool.QueryRow(ctx, `
+		SELECT file_path, last_entry_uuid, file_mtime, updated_at
+		FROM recall_import_state
+		WHERE file_path = $1
+	`, filePath).Scan(&state.FilePath, &state.LastEntryUUID, &state.FileMtime, &state.UpdatedAt)
+
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get import state: %w", err)
+	}
+	return &state, nil
+}
+
+// SaveImportState creates or updates the import state for a file.
+func (s *Storage) SaveImportState(ctx context.Context, state *recall.ImportState) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO recall_import_state (file_path, last_entry_uuid, file_mtime, updated_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (file_path) DO UPDATE
+		SET last_entry_uuid = $2, file_mtime = $3, updated_at = NOW()
+	`, state.FilePath, state.LastEntryUUID, state.FileMtime)
+	if err != nil {
+		return fmt.Errorf("save import state: %w", err)
+	}
+	return nil
+}
+
+// DeleteImportState removes the import state for a file.
+func (s *Storage) DeleteImportState(ctx context.Context, filePath string) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM recall_import_state WHERE file_path = $1
+	`, filePath)
+	if err != nil {
+		return fmt.Errorf("delete import state: %w", err)
+	}
+	return nil
+}
+
+// CleanupStaleImportStates removes import states for files not in validPaths.
+func (s *Storage) CleanupStaleImportStates(ctx context.Context, validPaths []string) error {
+	if len(validPaths) == 0 {
+		// If no valid paths, delete all import states
+		_, err := s.pool.Exec(ctx, `DELETE FROM recall_import_state`)
+		if err != nil {
+			return fmt.Errorf("cleanup all import states: %w", err)
+		}
+		return nil
+	}
+
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM recall_import_state
+		WHERE file_path != ALL($1)
+	`, validPaths)
+	if err != nil {
+		return fmt.Errorf("cleanup stale import states: %w", err)
+	}
+	return nil
 }

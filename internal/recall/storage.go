@@ -36,4 +36,17 @@ type Storage interface {
 	// ListDistinctProjects returns all unique project paths (CWD) from stored conversations.
 	// Used to populate the project filter dropdown.
 	ListDistinctProjects(ctx context.Context) ([]string, error)
+
+	// GetImportState retrieves the import state for a file.
+	// Returns nil, nil if no state exists (new file).
+	GetImportState(ctx context.Context, filePath string) (*ImportState, error)
+
+	// SaveImportState creates or updates the import state for a file.
+	SaveImportState(ctx context.Context, state *ImportState) error
+
+	// DeleteImportState removes the import state for a file.
+	DeleteImportState(ctx context.Context, filePath string) error
+
+	// CleanupStaleImportStates removes import states for files not in validPaths.
+	CleanupStaleImportStates(ctx context.Context, validPaths []string) error
 }

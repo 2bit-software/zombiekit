@@ -30,6 +30,7 @@ type ChunkInput struct {
 	SourceID       string
 	ConversationID string
 	Metadata       *Metadata
+	HistoryGap     bool // True if this chunk follows a sync gap (divergence detected)
 }
 
 // SearchResult wraps a chunk with its similarity score.
@@ -47,4 +48,12 @@ type ConversationSummary struct {
 	LastMessage    time.Time `json:"last_message"`
 	Source         string    `json:"source"`  // e.g., "claude"
 	Project        string    `json:"project"` // CWD from metadata
+}
+
+// ImportState tracks per-file import sync position for incremental imports.
+type ImportState struct {
+	FilePath      string    // Absolute path to the JSONL file
+	LastEntryUUID string    // UUID of last successfully imported entry
+	FileMtime     int64     // Unix nanoseconds of file modification time at last import
+	UpdatedAt     time.Time // When this state was last updated
 }
