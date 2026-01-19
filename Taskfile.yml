@@ -5,9 +5,9 @@ dotenv: ['.env']
 tasks:
   default:
     desc: List available tasks
-    silent: true
+    silent: truegs
     cmds:
-      - task --list
+      - task --sort alphanumeric --list
 
   dev:
     desc: Run development tasks (use `task dev -- --list` to see all)
@@ -37,7 +37,7 @@ tasks:
         {{.INSTALL_DIR}}/brains version
 
   up:
-    desc: Start recall stack (PostgreSQL, importer, web GUI)
+    desc: Start ZombieKit stack
     cmds:
       - task --taskfile Taskfile.dev.yml recall:preflight
       - task --taskfile Taskfile.dev.yml build
