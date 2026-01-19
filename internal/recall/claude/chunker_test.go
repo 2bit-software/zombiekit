@@ -200,3 +200,49 @@ func TestChunkMessage_ExclamationMark(t *testing.T) {
 		t.Errorf("first chunk should end at exclamation mark boundary")
 	}
 }
+
+func TestChunkMessage_ParagraphBoundary(t *testing.T) {
+	// Create content with both paragraph and sentence boundaries
+	// Paragraph boundary should be preferred
+	part1 := strings.Repeat("x", MaxChunkSize-200) + ". More text here.\n\n"
+	part2 := "Next paragraph. " + strings.Repeat("y", 300)
+	content := part1 + part2
+
+	chunks := ChunkMessage(content)
+
+	if len(chunks) < 2 {
+		t.Fatalf("expected at least 2 chunks, got %d", len(chunks))
+	}
+
+	// First chunk should end after the paragraph break (trimmed, so no trailing newlines)
+	// The key test: split happened at \n\n, not at the earlier ". "
+	if !strings.HasSuffix(chunks[0], "text here.") {
+		t.Errorf("expected split at paragraph boundary, first chunk ends with: %q",
+			chunks[0][max(0, len(chunks[0])-30):])
+	}
+
+	// Second chunk should start with "Next paragraph"
+	if !strings.HasPrefix(chunks[1], "Next paragraph") {
+		t.Errorf("expected second chunk to start with 'Next paragraph', got: %q",
+			chunks[1][:min(30, len(chunks[1]))])
+	}
+}
+
+func TestChunkMessage_ParagraphPreferredOverSentence(t *testing.T) {
+	// Sentence boundary comes AFTER paragraph boundary - should still prefer paragraph
+	part1 := strings.Repeat("a", MaxChunkSize-300) + "\n\nSome sentence here. "
+	part2 := strings.Repeat("b", 400)
+	content := part1 + part2
+
+	chunks := ChunkMessage(content)
+
+	if len(chunks) < 2 {
+		t.Fatalf("expected at least 2 chunks, got %d", len(chunks))
+	}
+
+	// Should split at \n\n, not at the later ". "
+	// After trimming, first chunk should NOT contain "Some sentence here"
+	if strings.Contains(chunks[0], "Some sentence") {
+		t.Errorf("expected split at paragraph boundary before sentence, but first chunk contains sentence text")
+	}
+}
