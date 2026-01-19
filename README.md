@@ -115,17 +115,21 @@ For contributors or those wanting to use the recall (semantic search) features:
 # Check dependencies and create .env
 task setup
 
-# Start PostgreSQL (required for recall)
-task up
-
-# Run database migrations
-task dev -- db:migrate
-
 # Pull embedding model (required for recall)
 task dev -- ollama:pull
 
-# Start Claude conversation importer
-task recall:watch:claude
+# Start the full stack (PostgreSQL, importer, web GUI)
+task up
+```
+
+Individual components can be run separately via the dev Taskfile:
+
+```bash
+task dev -- db:up        # Start PostgreSQL only
+task dev -- db:migrate   # Run migrations
+task dev -- recall:watch # Start Claude importer only
+task dev -- gui          # Start web GUI only
+task dev -- build        # Build the binary
 ```
 
 Configuration is in `.env` (copied from `.env.example` by `task setup`). Key settings:

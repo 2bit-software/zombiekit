@@ -2,16 +2,6 @@ version: '3'
 
 dotenv: ['.env']
 
-vars:
-  VERSION:
-    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
-  COMMIT:
-    sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
-  BUILD_DATE:
-    sh: date -u +%Y-%m-%dT%H:%M:%SZ
-  VERSION_PKG: github.com/zombiekit/brains/internal/version
-  LDFLAGS: -s -w -X {{.VERSION_PKG}}.version={{.VERSION}} -X {{.VERSION_PKG}}.commit={{.COMMIT}} -X {{.VERSION_PKG}}.buildDate={{.BUILD_DATE}}
-
 tasks:
   default:
     desc: List available tasks
@@ -29,25 +19,13 @@ tasks:
     cmds:
       - task --taskfile Taskfile.dev.yml setup
 
-  build:
-    desc: Build the brains CLI binary
-    cmds:
-      - mkdir -p bin
-      - go build -ldflags "{{.LDFLAGS}}" -o bin/brains ./cmd/brains
-    sources:
-      - "**/*.go"
-      - go.mod
-      - go.sum
-    generates:
-      - bin/brains
-
   install:
-    desc: Build and install brains to GOBIN with bs symlink
-    deps: [build]
+    desc: Install brains CLI to GOBIN with bs symlink
     vars:
       INSTALL_DIR:
         sh: go env GOBIN || echo "$HOME/go/bin"
     cmds:
+      - task --taskfile Taskfile.dev.yml build
       - |
         echo "Installing brains to {{.INSTALL_DIR}}..."
         mkdir -p {{.INSTALL_DIR}}
@@ -72,7 +50,7 @@ tasks:
     desc: Start recall stack (PostgreSQL, importer, web GUI)
     cmds:
       - task --taskfile Taskfile.dev.yml recall:preflight
-      - task: build
+      - task --taskfile Taskfile.dev.yml build
       - task --taskfile Taskfile.dev.yml db:up
       - task --taskfile Taskfile.dev.yml db:migrate
       - |
@@ -99,17 +77,6 @@ tasks:
     desc: Stop all services
     cmds:
       - docker compose down
-
-  gui:
-    desc: Start web GUI only (requires db already running)
-    cmds:
-      - task --taskfile Taskfile.dev.yml recall:preflight
-      - task: build
-      - |
-        echo "Starting web GUI..."
-        echo "  GUI: http://localhost:${WEBGUI_PORT:-9981}"
-        echo ""
-        ./bin/brains gui --port ${WEBGUI_PORT:-9981}
 
   ci:
     desc: Run all CI checks (fmt, vet, lint, test, build)

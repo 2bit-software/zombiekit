@@ -2,6 +2,16 @@ version: '3'
 
 dotenv: ['.env']
 
+vars:
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
+  BUILD_DATE:
+    sh: date -u +%Y-%m-%dT%H:%M:%SZ
+  VERSION_PKG: github.com/zombiekit/brains/internal/version
+  LDFLAGS: -s -w -X {{.VERSION_PKG}}.version={{.VERSION}} -X {{.VERSION_PKG}}.commit={{.COMMIT}} -X {{.VERSION_PKG}}.buildDate={{.BUILD_DATE}}
+
 tasks:
   default:
     desc: List development tasks
@@ -80,6 +90,20 @@ tasks:
       - echo "Installing golangci-lint..."
       - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
+  # === Build ===
+
+  build:
+    desc: Build the brains CLI binary
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags "{{.LDFLAGS}}" -o bin/brains ./cmd/brains
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - bin/brains
+
   # === Quality ===
 
   test:
@@ -98,7 +122,7 @@ tasks:
       - task: vet
       - task: lint
       - task: test
-      - task --taskfile Taskfile.yml build
+      - task: build
 
   fmt:
     desc: Format Go code
@@ -184,7 +208,7 @@ tasks:
     desc: Watch and import Claude conversation history
     cmds:
       - task: recall:preflight
-      - task --taskfile Taskfile.yml build
+      - task: build
       - task: db:up
       - task: db:migrate
       - |
@@ -198,7 +222,7 @@ tasks:
     desc: Import Claude conversation history once (no watch)
     cmds:
       - task: recall:preflight
-      - task --taskfile Taskfile.yml build
+      - task: build
       - task: db:up
       - task: db:migrate
       - |
@@ -219,6 +243,17 @@ tasks:
       - ./bin/brains recall search "memory problems"
 
   # === GUI ===
+
+  gui:
+    desc: Start web GUI (requires db already running)
+    cmds:
+      - task: recall:preflight
+      - task: build
+      - |
+        echo "Starting web GUI..."
+        echo "  GUI: http://localhost:${WEBGUI_PORT:-9981}"
+        echo ""
+        ./bin/brains gui --port ${WEBGUI_PORT:-9981}
 
   gui:dev:
     desc: Start web GUI in development mode with hot-reloading
