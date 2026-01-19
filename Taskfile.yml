@@ -225,6 +225,35 @@ tasks:
         echo ""
         ./bin/brains gui --port ${WEBGUI_PORT:-9981}
 
+  recall:full:
+    desc: Start PostgreSQL, Claude importer (background), and web GUI
+    cmds:
+      - task: recall:preflight
+      - task: build
+      - task: up
+      - task --taskfile Taskfile.dev.yml db:migrate
+      - |
+        echo "Starting full recall stack..."
+        echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
+        echo "  Ollama: ${BRAINS_OLLAMA_URL:-http://localhost:11434}"
+        echo "  GUI: http://localhost:${WEBGUI_PORT:-9981}"
+        echo ""
+
+        # Start Claude importer in background
+        echo "Starting Claude importer in background..."
+        ./bin/brains recall watch claude --verbose &
+        IMPORTER_PID=$!
+
+        # Trap to kill importer on exit
+        trap "echo 'Stopping importer...'; kill $IMPORTER_PID 2>/dev/null" EXIT INT TERM
+
+        # Give importer a moment to start
+        sleep 1
+
+        # Start GUI in foreground
+        echo "Starting web GUI..."
+        ./bin/brains gui --port ${WEBGUI_PORT:-9981}
+
   ci:
     desc: Run all CI checks (fmt, vet, lint, test, build)
     cmds:
