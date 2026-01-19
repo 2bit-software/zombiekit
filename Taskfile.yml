@@ -210,6 +210,21 @@ tasks:
         echo "Importing Claude conversations..."
         ./bin/brains recall watch claude --once --verbose
 
+  gui:
+    desc: Start the web GUI with PostgreSQL backend
+    cmds:
+      - task: recall:preflight
+      - task: build
+      - task: up
+      - task --taskfile Taskfile.dev.yml db:migrate
+      - |
+        echo "Starting web GUI..."
+        echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
+        echo "  Ollama: ${BRAINS_OLLAMA_URL:-http://localhost:11434}"
+        echo "  GUI: http://localhost:${WEBGUI_PORT:-9981}"
+        echo ""
+        ./bin/brains gui --port ${WEBGUI_PORT:-9981}
+
   ci:
     desc: Run all CI checks (fmt, vet, lint, test, build)
     cmds:
