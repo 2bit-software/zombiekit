@@ -50,9 +50,9 @@ tasks:
         echo "  GUI: http://localhost:${WEBGUI_PORT:-9981}"
         echo ""
 
-        # Start Claude importer in background
+        # Start Claude importer in background (no --verbose to avoid interleaved output)
         echo "Starting Claude importer in background..."
-        ./bin/brains recall watch claude --verbose &
+        ./bin/brains recall watch claude &
         IMPORTER_PID=$!
 
         # Trap to kill importer on exit (use SIGINT/SIGTERM for zsh compatibility)
