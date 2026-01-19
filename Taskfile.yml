@@ -152,10 +152,46 @@ tasks:
     cmds:
       - docker compose down
 
+  recall:preflight:
+    desc: Check recall dependencies (docker, ollama)
+    internal: true
+    silent: true
+    cmds:
+      - |
+        # Check Docker is running
+        if ! docker info > /dev/null 2>&1; then
+          echo "ERROR: Docker is not running"
+          echo ""
+          echo "Start Docker Desktop or OrbStack, then try again."
+          exit 1
+        fi
+
+        # Check Ollama is running
+        ollama_url="${BRAINS_OLLAMA_URL:-http://localhost:11434}"
+        if ! curl -s --max-time 2 "$ollama_url/api/tags" > /dev/null 2>&1; then
+          echo "ERROR: Ollama is not running at $ollama_url"
+          echo ""
+          echo "Start Ollama with: ollama serve"
+          echo "Then pull the model: ollama pull nomic-embed-text"
+          exit 1
+        fi
+
+        # Check embedding model is available
+        if ! curl -s "$ollama_url/api/tags" | grep -q "nomic-embed-text"; then
+          echo "WARNING: Embedding model 'nomic-embed-text' not found"
+          echo "Pull it with: ollama pull nomic-embed-text"
+          exit 1
+        fi
+
+        echo "Preflight checks passed."
+
   recall:watch:claude:
     desc: Watch and import Claude Code conversation history
-    deps: [build]
     cmds:
+      - task: recall:preflight
+      - task: build
+      - task: up
+      - task --taskfile Taskfile.dev.yml db:migrate
       - |
         echo "Starting Claude conversation importer..."
         echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
@@ -165,8 +201,11 @@ tasks:
 
   recall:import:claude:
     desc: Import Claude Code conversation history once (no watch)
-    deps: [build]
     cmds:
+      - task: recall:preflight
+      - task: build
+      - task: up
+      - task --taskfile Taskfile.dev.yml db:migrate
       - |
         echo "Importing Claude conversations..."
         ./bin/brains recall watch claude --once --verbose

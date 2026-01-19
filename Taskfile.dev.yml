@@ -44,19 +44,15 @@ tasks:
 
   db:migrate:
     desc: Run all database migrations
+    silent: true
     cmds:
-      - task: db:migrate:memory
-      - task: db:migrate:recall
-
-  db:migrate:memory:
-    desc: Run memory table migration
-    cmds:
-      - docker compose exec -T postgres psql -U brains -d brains -f /dev/stdin < internal/database/migrations/postgres/001_memory_items.sql
-
-  db:migrate:recall:
-    desc: Run recall chunks migration (pgvector)
-    cmds:
-      - docker compose exec -T postgres psql -U brains -d brains -f /dev/stdin < internal/database/migrations/postgres/002_recall_chunks.sql
+      - |
+        echo "Running database migrations..."
+        for f in internal/database/migrations/postgres/*.sql; do
+          echo "  Applying $(basename $f)..."
+          docker compose exec -T postgres psql -U ${POSTGRES_USER:-brains} -d ${POSTGRES_DB:-brains} -f /dev/stdin < "$f" 2>&1 | grep -v "already exists\|NOTICE" || true
+        done
+        echo "Migrations complete."
 
   ollama:pull:
     desc: Pull required embedding model for recall
