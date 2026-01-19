@@ -13,21 +13,30 @@ vars:
 tasks:
   default:
     desc: List available tasks
+    silent: true
     cmds:
       - task --list
+
+  dev:
+    desc: Run development tasks. Use like `task dev -- <args>`
+    cmds:
+      - task --taskfile Taskfile.dev.yml {{.CLI_ARGS}}
 
   init:
     desc: Download dependencies and install development tools
     cmds:
       - go mod download
       - go mod tidy
-      - |
-        if ! command -v golangci-lint &> /dev/null; then
-          echo "Installing golangci-lint..."
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-        else
-          echo "golangci-lint already installed"
-        fi
+      - task: init:golangci-lint
+
+  init:golangci-lint:
+    internal: true
+    desc: Install golangci-lint if not present
+    status:
+      - command -v golangci-lint
+    cmds:
+      - echo "Installing golangci-lint..."
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
   build:
     desc: Build the brains CLI binary
@@ -66,13 +75,9 @@ tasks:
   test:
     desc: Run tests with coverage
     cmds:
-      - go test -v -race -coverprofile=coverage.out ./...
-    sources:
-      - "**/*.go"
-    generates:
-      - coverage.out
+      - task --taskfile Taskfile.dev.yml test
 
-  db:up:
+  up:
     desc: Start PostgreSQL database container
     cmds:
       - docker compose up -d postgres
@@ -88,74 +93,12 @@ tasks:
         echo "Timeout waiting for PostgreSQL"
         exit 1
 
-  db:down:
+  down:
     desc: Stop and remove PostgreSQL container
     cmds:
       - docker compose down
 
-  db:migrate:
-    desc: Run all database migrations
-    cmds:
-      - task: db:migrate:memory
-      - task: db:migrate:recall
-
-  db:migrate:memory:
-    desc: Run memory table migration
-    cmds:
-      - docker compose exec -T postgres psql -U brains -d brains -f /dev/stdin < internal/database/migrations/postgres/001_memory_items.sql
-
-  db:migrate:recall:
-    desc: Run recall chunks migration (pgvector)
-    cmds:
-      - docker compose exec -T postgres psql -U brains -d brains -f /dev/stdin < internal/database/migrations/postgres/002_recall_chunks.sql
-
-  fmt:
-    desc: Format Go code
-    cmds:
-      - go fmt ./...
-
-  vet:
-    desc: Run go vet
-    cmds:
-      - go vet ./...
-
-  lint:
-    desc: Run golangci-lint
-    cmds:
-      - golangci-lint run --config configs/.golangci.yml ./...
-
   ci:
     desc: Run all CI checks (fmt, vet, lint, test, build)
     cmds:
-      - task: fmt
-      - task: vet
-      - task: lint
-      - task: test
-      - task: build
-
-  ollama:pull:
-    desc: Pull required embedding model for recall
-    cmds:
-      - ollama pull nomic-embed-text
-      - echo "Model nomic-embed-text ready for recall embeddings"
-
-  recall:demo:
-    desc: Demo the recall feature (requires db:up and ollama)
-    env:
-      BRAINS_BACKEND: postgres
-      BRAINS_POSTGRES_URL: postgres://brains:brains_dev@localhost:9432/brains
-    cmds:
-      - ./bin/brains recall save "The deployment failed due to memory limits"
-      - ./bin/brains recall save "CSS styling updated for login page"
-      - ./bin/brains recall save "Database connection pool exhausted"
-      - echo ""
-      - echo "=== List all chunks ==="
-      - ./bin/brains recall list
-      - echo ""
-      - echo "=== Search for memory-related issues ==="
-      - ./bin/brains recall search "memory problems"
-
-  webgui:dev:
-    desc: Start WebGUI in development mode with hot-reloading
-    cmds:
-      - docker compose up --build webgui-dev
+      - task --taskfile Taskfile.dev.yml ci

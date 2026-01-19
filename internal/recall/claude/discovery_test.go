@@ -43,10 +43,10 @@ func TestDiscoverHistoryFiles_IgnoresOtherFiles(t *testing.T) {
 
 	// Create various file types
 	testFiles := []string{
-		"session.jsonl",   // should be found
-		"config.json",     // should be ignored
-		"readme.txt",      // should be ignored
-		"data.jsonl.bak",  // should be ignored
+		"session.jsonl",  // should be found
+		"config.json",    // should be ignored
+		"readme.txt",     // should be ignored
+		"data.jsonl.bak", // should be ignored
 	}
 	for _, f := range testFiles {
 		path := filepath.Join(projectsDir, f)

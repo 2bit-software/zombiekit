@@ -99,8 +99,8 @@ func DefaultSQLitePath() string {
 
 // Default Ollama configuration values.
 const (
-	DefaultOllamaURL       = "http://localhost:11434"
-	DefaultEmbeddingModel  = "nomic-embed-text"
+	DefaultOllamaURL      = "http://localhost:11434"
+	DefaultEmbeddingModel = "nomic-embed-text"
 )
 
 // LoadStorageConfigFromEnv loads storage configuration from environment variables.

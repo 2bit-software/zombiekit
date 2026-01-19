@@ -12,8 +12,8 @@ import (
 type ClaudeFrontmatter struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
-	Model       string   `yaml:"model"`   // Claude model (e.g., "opus", "sonnet")
-	Color       string   `yaml:"color"`   // UI color for Claude Code display
+	Model       string   `yaml:"model"` // Claude model (e.g., "opus", "sonnet")
+	Color       string   `yaml:"color"` // UI color for Claude Code display
 	Includes    []string `yaml:"includes"`
 	Inherits    *bool    `yaml:"inherits"` // Pointer to detect unset vs explicit false
 }

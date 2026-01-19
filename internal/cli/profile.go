@@ -369,14 +369,14 @@ func outputListText(entries []profile.ListEntry) error {
 
 func outputShowJSON(result *profile.ShowResult) error {
 	output := map[string]interface{}{
-		"name":         result.Name,
-		"source":       result.SourceStr,
-		"path":         result.Path,
-		"description":  result.Description,
-		"includes":     result.Includes,
-		"inherits":     result.Inherits,
-		"content":      result.Content,
-		"raw_content":  result.RawContent,
+		"name":        result.Name,
+		"source":      result.SourceStr,
+		"path":        result.Path,
+		"description": result.Description,
+		"includes":    result.Includes,
+		"inherits":    result.Inherits,
+		"content":     result.Content,
+		"raw_content": result.RawContent,
 	}
 
 	// Add optional fields only if they have values

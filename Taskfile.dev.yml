@@ -1,0 +1,84 @@
+version: '3'
+
+tasks:
+  default:
+    desc: List development tasks
+    silent: true
+    cmds:
+      - task --taskfile Taskfile.dev.yml --list
+
+  test:
+    desc: Run tests with coverage
+    cmds:
+      - go test -v -race -coverprofile=coverage.out ./...
+    sources:
+      - "**/*.go"
+    generates:
+      - coverage.out
+
+  ci:
+    desc: Run all CI checks (fmt, vet, lint, test, build)
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: test
+      - task --taskfile Taskfile.yml build
+
+  fmt:
+    desc: Format Go code
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run --config configs/.golangci.yml ./...
+
+  db:migrate:
+    desc: Run all database migrations
+    cmds:
+      - task: db:migrate:memory
+      - task: db:migrate:recall
+
+  db:migrate:memory:
+    desc: Run memory table migration
+    cmds:
+      - docker compose exec -T postgres psql -U brains -d brains -f /dev/stdin < internal/database/migrations/postgres/001_memory_items.sql
+
+  db:migrate:recall:
+    desc: Run recall chunks migration (pgvector)
+    cmds:
+      - docker compose exec -T postgres psql -U brains -d brains -f /dev/stdin < internal/database/migrations/postgres/002_recall_chunks.sql
+
+  ollama:pull:
+    desc: Pull required embedding model for recall
+    cmds:
+      - ollama pull nomic-embed-text
+      - echo "Model nomic-embed-text ready for recall embeddings"
+
+  recall:demo:
+    desc: Demo the recall feature (requires db:up and ollama)
+    env:
+      BRAINS_BACKEND: postgres
+      BRAINS_POSTGRES_URL: postgres://brains:brains_dev@localhost:9432/brains
+    cmds:
+      - ./bin/brains recall save "The deployment failed due to memory limits"
+      - ./bin/brains recall save "CSS styling updated for login page"
+      - ./bin/brains recall save "Database connection pool exhausted"
+      - echo ""
+      - echo "=== List all chunks ==="
+      - ./bin/brains recall list
+      - echo ""
+      - echo "=== Search for memory-related issues ==="
+      - ./bin/brains recall search "memory problems"
+
+  webgui:dev:
+    desc: Start WebGUI in development mode with hot-reloading
+    cmds:
+      - docker compose up --build webgui-dev

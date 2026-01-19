@@ -8,9 +8,9 @@ import (
 
 // Global registry for embedded filesystem
 var (
-	globalEmbeddedFS   fs.FS
-	globalEmbeddedMu   sync.RWMutex
-	embeddedDirPrefix  = "profiles" // The directory name within embed.FS
+	globalEmbeddedFS  fs.FS
+	globalEmbeddedMu  sync.RWMutex
+	embeddedDirPrefix = "profiles" // The directory name within embed.FS
 )
 
 // SetEmbeddedFS registers an embedded filesystem containing default profiles.

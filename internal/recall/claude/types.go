@@ -5,11 +5,11 @@ import "time"
 
 // HistoryEntry represents a single entry in a Claude Code history JSONL file.
 type HistoryEntry struct {
-	Type        string          `json:"type"`        // "user", "assistant", "summary", etc.
-	UUID        string          `json:"uuid"`        // Unique message ID
-	ParentUUID  *string         `json:"parentUuid"`  // Parent message for threading
-	SessionID   string          `json:"sessionId"`   // Conversation/session ID
-	Timestamp   time.Time       `json:"timestamp"`   // Message timestamp
+	Type        string          `json:"type"`       // "user", "assistant", "summary", etc.
+	UUID        string          `json:"uuid"`       // Unique message ID
+	ParentUUID  *string         `json:"parentUuid"` // Parent message for threading
+	SessionID   string          `json:"sessionId"`  // Conversation/session ID
+	Timestamp   time.Time       `json:"timestamp"`  // Message timestamp
 	Message     *MessageContent `json:"message,omitempty"`
 	IsMeta      bool            `json:"isMeta"`      // Skip if true
 	IsSidechain bool            `json:"isSidechain"` // Alternate branch, still imported
@@ -20,8 +20,8 @@ type HistoryEntry struct {
 
 // MessageContent wraps the role and content of a message.
 type MessageContent struct {
-	Role    string      `json:"role"`    // "user" or "assistant"
-	Content any `json:"content"` // string OR []ContentBlock
+	Role    string `json:"role"`    // "user" or "assistant"
+	Content any    `json:"content"` // string OR []ContentBlock
 }
 
 // ContentBlock represents a single block within a message.

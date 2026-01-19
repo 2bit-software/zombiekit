@@ -494,7 +494,7 @@ func TestImport_InheritsFieldConversion(t *testing.T) {
 
 	// Create agents with various inherits values
 	testCases := []struct {
-		name         string
+		name           string
 		claudeInherits string
 	}{
 		{"inherits-true", "inherits: true"},

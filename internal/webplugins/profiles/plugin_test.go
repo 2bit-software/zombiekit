@@ -163,9 +163,9 @@ func TestSearchExactMatchBeforePartial(t *testing.T) {
 
 func TestSearchEmptySortOrderDefaultsToRelevance(t *testing.T) {
 	plugin := newTestPlugin(map[string]*profile.Profile{
-		"test":     {Name: "test", Description: "Exact match", Source: profile.SourceLocal},
-		"testing":  {Name: "testing", Description: "Prefix match", Source: profile.SourceLocal},
-		"mytest":   {Name: "mytest", Description: "Contains match", Source: profile.SourceLocal},
+		"test":      {Name: "test", Description: "Exact match", Source: profile.SourceLocal},
+		"testing":   {Name: "testing", Description: "Prefix match", Source: profile.SourceLocal},
+		"mytest":    {Name: "mytest", Description: "Contains match", Source: profile.SourceLocal},
 		"unrelated": {Name: "unrelated", Description: "testing in desc", Source: profile.SourceLocal},
 	})
 
@@ -200,8 +200,8 @@ func TestSearchSortByName(t *testing.T) {
 func TestSearchSortByCreatedDate(t *testing.T) {
 	// Profiles don't have timestamps, so this should fall back to relevance
 	plugin := newTestPlugin(map[string]*profile.Profile{
-		"dev":     {Name: "dev", Description: "Exact match", Source: profile.SourceLocal},
-		"devops":  {Name: "devops", Description: "Prefix match", Source: profile.SourceLocal},
+		"dev":    {Name: "dev", Description: "Exact match", Source: profile.SourceLocal},
+		"devops": {Name: "devops", Description: "Prefix match", Source: profile.SourceLocal},
 	})
 
 	results, err := plugin.Search("dev", 10, search.SortCreatedDate)
@@ -215,8 +215,8 @@ func TestSearchSortByCreatedDate(t *testing.T) {
 func TestSearchSortByUpdatedDate(t *testing.T) {
 	// Profiles don't have timestamps, so this should fall back to relevance
 	plugin := newTestPlugin(map[string]*profile.Profile{
-		"dev":     {Name: "dev", Description: "Exact match", Source: profile.SourceLocal},
-		"devops":  {Name: "devops", Description: "Prefix match", Source: profile.SourceLocal},
+		"dev":    {Name: "dev", Description: "Exact match", Source: profile.SourceLocal},
+		"devops": {Name: "devops", Description: "Prefix match", Source: profile.SourceLocal},
 	})
 
 	results, err := plugin.Search("dev", 10, search.SortUpdatedDate)
@@ -230,8 +230,8 @@ func TestSearchSortByUpdatedDate(t *testing.T) {
 func TestSearchSortByLastUsed(t *testing.T) {
 	// Profiles don't track last used, should fall back to relevance
 	plugin := newTestPlugin(map[string]*profile.Profile{
-		"dev":     {Name: "dev", Description: "Exact match", Source: profile.SourceLocal},
-		"devops":  {Name: "devops", Description: "Prefix match", Source: profile.SourceLocal},
+		"dev":    {Name: "dev", Description: "Exact match", Source: profile.SourceLocal},
+		"devops": {Name: "devops", Description: "Prefix match", Source: profile.SourceLocal},
 	})
 
 	results, err := plugin.Search("dev", 10, search.SortLastUsed)
@@ -244,8 +244,8 @@ func TestSearchSortByLastUsed(t *testing.T) {
 
 func TestSearchInvalidSortOrderFallsBackToRelevance(t *testing.T) {
 	plugin := newTestPlugin(map[string]*profile.Profile{
-		"dev":     {Name: "dev", Description: "Exact match", Source: profile.SourceLocal},
-		"devops":  {Name: "devops", Description: "Prefix match", Source: profile.SourceLocal},
+		"dev":    {Name: "dev", Description: "Exact match", Source: profile.SourceLocal},
+		"devops": {Name: "devops", Description: "Prefix match", Source: profile.SourceLocal},
 	})
 
 	results, err := plugin.Search("dev", 10, "invalid_sort_order")

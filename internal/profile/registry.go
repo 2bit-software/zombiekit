@@ -18,8 +18,8 @@ type Registry struct {
 
 // RegistryEntry represents a single known .brains/ directory.
 type RegistryEntry struct {
-	Path       string    `json:"path"`        // Absolute path to .brains/ directory
-	AddedAt    time.Time `json:"added_at"`    // When this entry was first added
+	Path       string    `json:"path"`         // Absolute path to .brains/ directory
+	AddedAt    time.Time `json:"added_at"`     // When this entry was first added
 	LastSeenAt time.Time `json:"last_seen_at"` // When this entry was last verified
 }
 

@@ -74,18 +74,18 @@ Examples:
 
 // importOutput represents the JSON output format.
 type importOutput struct {
-	Source  string        `json:"source"`
-	Target  string        `json:"target"`
-	DryRun  bool          `json:"dry_run"`
-	Result  importResult  `json:"result"`
+	Source string       `json:"source"`
+	Target string       `json:"target"`
+	DryRun bool         `json:"dry_run"`
+	Result importResult `json:"result"`
 }
 
 type importResult struct {
-	Imported     int                   `json:"imported"`
-	Skipped      int                   `json:"skipped"`
-	Errors       int                   `json:"errors"`
-	ErrorDetails []importer.ItemError  `json:"error_details,omitempty"`
-	DurationMS   int64                 `json:"duration_ms"`
+	Imported     int                  `json:"imported"`
+	Skipped      int                  `json:"skipped"`
+	Errors       int                  `json:"errors"`
+	ErrorDetails []importer.ItemError `json:"error_details,omitempty"`
+	DurationMS   int64                `json:"duration_ms"`
 }
 
 func dbImport(c *cli.Context) error {

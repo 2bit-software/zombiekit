@@ -7,9 +7,9 @@ import (
 
 // Composer handles DAG building, cycle detection, and profile composition.
 type Composer struct {
-	profiles map[string]*Profile      // All available profiles keyed by name
-	resolver *Resolver                // For loading inheritance chains (deprecated)
-	source   ProfileSourceInterface   // For loading inheritance chains
+	profiles map[string]*Profile    // All available profiles keyed by name
+	resolver *Resolver              // For loading inheritance chains (deprecated)
+	source   ProfileSourceInterface // For loading inheritance chains
 }
 
 // NewComposer creates a new Composer with the given profiles.

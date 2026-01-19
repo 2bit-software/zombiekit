@@ -414,4 +414,3 @@ func (s *Server) handleInitiative(ctx context.Context, req mcp.CallToolRequest) 
 
 	return mcp.NewToolResultText(result), nil
 }
-

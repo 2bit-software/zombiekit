@@ -90,7 +90,7 @@ func ExtractContent(entry HistoryEntry) string {
 					if t, ok := m["thinking"].(string); ok {
 						texts = append(texts, t)
 					}
-				// tool_use, tool_result: skip (not searchable prose)
+					// tool_use, tool_result: skip (not searchable prose)
 				}
 			}
 		}

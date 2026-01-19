@@ -144,10 +144,10 @@ func TestChunkSourceID_SingleChunk(t *testing.T) {
 
 func TestChunkSourceID_MultipleChunks(t *testing.T) {
 	testCases := []struct {
-		uuid      string
-		index     int
-		total     int
-		expected  string
+		uuid     string
+		index    int
+		total    int
+		expected string
 	}{
 		{"abc123", 0, 3, "abc123-0"},
 		{"abc123", 1, 3, "abc123-1"},
