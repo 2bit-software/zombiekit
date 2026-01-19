@@ -113,3 +113,40 @@
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
 - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
 - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+
+## Testing Requirements *(mandatory)*
+
+<!--
+  IMPORTANT: This section defines what tests are required for this feature.
+  Every functional requirement (FR) must have at least one associated test.
+
+  Testing Strategy (Integration-First):
+  - Prefer integration tests at module boundaries
+  - Use E2E tests for critical user journeys
+  - Add unit tests only for complex pure functions with many edge cases
+  - Test contracts/behavior, not implementation details
+
+  If this feature requires NO tests (e.g., documentation-only change):
+  - Replace this section with: "Testing Requirements: None - [justification]"
+  - The justification must explain why no tests are needed
+-->
+
+### Test Strategy
+
+[Describe the testing approach for this feature:
+- What types of tests will be written?
+- What test frameworks/tools will be used?
+- Any special testing considerations?]
+
+### FR to Test Mapping
+
+| FR | Test Type | Description |
+|----|-----------|-------------|
+| FR-001 | Integration | [What the test verifies] |
+| FR-002 | E2E | [What the test verifies] |
+| FR-003 | Unit | [What the test verifies - only if complex logic] |
+
+### Edge Case Coverage
+
+- [Edge case 1] → [How it will be tested]
+- [Edge case 2] → [How it will be tested]

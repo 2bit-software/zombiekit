@@ -52,11 +52,21 @@ Execution steps:
       - Unambiguous instructions
       - Appropriate context included
 
+   e. **Test Coverage Audit**
+      - Spec has Testing Requirements section (or explicit "None - [reason]" opt-out)
+      - Every FR in spec has at least one test in Testing Requirements table
+      - Edge cases have corresponding test coverage entries
+      - Severity levels:
+        - CRITICAL: No Testing Requirements section and no valid opt-out
+        - MAJOR: Some FRs missing from test mapping table
+        - MINOR: Edge cases listed but not mapped to tests
+        - INFO: Legacy spec (pre-dates this feature) - warn but don't fail
+
 3. **Issue Classification**
-   - CRITICAL: Blocking, must fix before proceeding
-   - MAJOR: Significant gap, should fix
-   - MINOR: Nice to fix, low impact
-   - INFO: Observation, no action needed
+   - CRITICAL: Blocking, must fix before proceeding (e.g., missing Testing Requirements)
+   - MAJOR: Significant gap, should fix (e.g., FRs without test mappings)
+   - MINOR: Nice to fix, low impact (e.g., edge cases without explicit test coverage)
+   - INFO: Observation, no action needed (e.g., legacy spec warning)
 
 4. **Conflict Detection**
    - If auditors disagree, surface conflict
