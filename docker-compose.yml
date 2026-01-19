@@ -3,15 +3,15 @@ services:
     image: pgvector/pgvector:pg16
     container_name: brains-postgres
     environment:
-      POSTGRES_USER: brains
-      POSTGRES_PASSWORD: brains_dev
-      POSTGRES_DB: brains
+      POSTGRES_USER: ${POSTGRES_USER:-brains}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brains_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-brains}
     ports:
-      - "9432:5432"
+      - "${POSTGRES_PORT:-9432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U brains -d brains"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-brains} -d ${POSTGRES_DB:-brains}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,7 +22,7 @@ services:
       dockerfile: docker/webgui-dev/Dockerfile
     container_name: brains-webgui-dev
     ports:
-      - "9981:9981"
+      - "${WEBGUI_PORT:-9981}:9981"
     volumes:
       - .:/app
       - .data:/app/.data

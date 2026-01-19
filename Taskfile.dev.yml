@@ -1,5 +1,7 @@
 version: '3'
 
+dotenv: ['.env']
+
 tasks:
   default:
     desc: List development tasks
@@ -64,9 +66,6 @@ tasks:
 
   recall:demo:
     desc: Demo the recall feature (requires db:up and ollama)
-    env:
-      BRAINS_BACKEND: postgres
-      BRAINS_POSTGRES_URL: postgres://brains:brains_dev@localhost:9432/brains
     cmds:
       - ./bin/brains recall save "The deployment failed due to memory limits"
       - ./bin/brains recall save "CSS styling updated for login page"
