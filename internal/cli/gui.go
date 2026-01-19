@@ -12,9 +12,12 @@ import (
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/memory/sqlite"
 	"github.com/zombiekit/brains/internal/profile"
+	"github.com/zombiekit/brains/internal/recall"
+	"github.com/zombiekit/brains/internal/recall/postgres"
 	"github.com/zombiekit/brains/internal/web"
 	"github.com/zombiekit/brains/internal/webplugins/memory"
 	"github.com/zombiekit/brains/internal/webplugins/profiles"
+	recallweb "github.com/zombiekit/brains/internal/webplugins/recall"
 )
 
 // newGUICommand creates the gui command for starting the web interface.
@@ -82,8 +85,33 @@ func runGUI(c *cli.Context) error {
 		registry.Register("memory", memoryPlugin)
 	}
 
-	// Load storage config for status display
+	// Load storage config for status display and recall plugin
 	storageConfig := config.LoadStorageConfigFromEnv()
+
+	// Register recall plugin (requires PostgreSQL for semantic search)
+	if storageConfig.Backend == config.BackendPostgres {
+		recallStorage, err := postgres.New(context.Background(), storageConfig)
+		if err != nil {
+			logger.Warn("failed to initialize recall storage, conversations plugin will be unavailable",
+				"error", err,
+			)
+		} else {
+			// Try to create embedder for semantic search (optional)
+			var embedder recall.Embedder
+			if storageConfig.OllamaURL != "" {
+				e, err := recall.NewOllamaEmbedder(storageConfig.OllamaURL, storageConfig.EmbeddingModel)
+				if err != nil {
+					logger.Warn("recall embedder unavailable, search disabled",
+						"error", err,
+					)
+				} else {
+					embedder = e
+				}
+			}
+			recallPlugin := recallweb.NewPlugin(recallStorage, embedder)
+			registry.Register("recall", recallPlugin)
+		}
+	}
 	// Override SQLite path if using default local storage
 	if storageConfig.Backend == config.BackendSQLite && storageConfig.SQLitePath == config.DefaultSQLitePath() {
 		storageConfig.SQLitePath = memoryDBPath

@@ -304,3 +304,98 @@ func nullableString(s string) *string {
 	}
 	return &s
 }
+
+// ListConversations returns conversations ordered by last activity (most recent first).
+func (s *Storage) ListConversations(ctx context.Context, limit, offset int, project string) ([]recall.ConversationSummary, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		WITH first_user_msg AS (
+			SELECT DISTINCT ON (conversation_id)
+				conversation_id,
+				SUBSTRING(content, 1, 100) as title
+			FROM recall_chunks
+			WHERE conversation_id IS NOT NULL
+			  AND metadata->>'role' = 'user'
+			ORDER BY conversation_id, COALESCE((metadata->>'timestamp')::timestamptz, created_at) ASC
+		)
+		SELECT
+			rc.conversation_id,
+			COALESCE(fum.title, '[No title]') as title,
+			COUNT(*) as message_count,
+			MIN(COALESCE((rc.metadata->>'timestamp')::timestamptz, rc.created_at)) as first_message,
+			MAX(COALESCE((rc.metadata->>'timestamp')::timestamptz, rc.created_at)) as last_message,
+			rc.source,
+			COALESCE(MAX(rc.metadata->>'cwd'), '') as project
+		FROM recall_chunks rc
+		LEFT JOIN first_user_msg fum ON rc.conversation_id = fum.conversation_id
+		WHERE rc.conversation_id IS NOT NULL
+		  AND ($3 = '' OR rc.metadata->>'cwd' LIKE $3 || '%')
+		GROUP BY rc.conversation_id, rc.source, fum.title
+		HAVING COUNT(*) > 0
+		ORDER BY last_message DESC
+		LIMIT $1 OFFSET $2
+	`, limit, offset, project)
+	if err != nil {
+		return nil, fmt.Errorf("list conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var summaries []recall.ConversationSummary
+	for rows.Next() {
+		var summary recall.ConversationSummary
+		var source *string
+		if err := rows.Scan(
+			&summary.ConversationID,
+			&summary.Title,
+			&summary.MessageCount,
+			&summary.FirstMessage,
+			&summary.LastMessage,
+			&source,
+			&summary.Project,
+		); err != nil {
+			return nil, fmt.Errorf("scan conversation: %w", err)
+		}
+		if source != nil {
+			summary.Source = *source
+		}
+		summaries = append(summaries, summary)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate conversations: %w", err)
+	}
+
+	return summaries, nil
+}
+
+// ListDistinctProjects returns all unique project paths (CWD) from stored conversations.
+func (s *Storage) ListDistinctProjects(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT metadata->>'cwd' as project
+		FROM recall_chunks
+		WHERE metadata->>'cwd' IS NOT NULL
+		ORDER BY project
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list distinct projects: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []string
+	for rows.Next() {
+		var project string
+		if err := rows.Scan(&project); err != nil {
+			return nil, fmt.Errorf("scan project: %w", err)
+		}
+		projects = append(projects, project)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate projects: %w", err)
+	}
+
+	return projects, nil
+}

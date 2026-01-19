@@ -640,3 +640,303 @@ func TestGetByConversation_IncludesChunkedMessages(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, chunks, 3, "expected all chunks from split message")
 }
+
+// ============================================================
+// Tests for ListConversations and ListDistinctProjects (DEV-70)
+// ============================================================
+
+func TestListConversations_ReturnsConversationSummaries(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Create two conversations
+	convID1 := "conv-list-1"
+	convID2 := "conv-list-2"
+
+	// First conversation with user and assistant messages
+	for i, msg := range []struct {
+		content string
+		role    string
+	}{
+		{"Hello, how can I help?", "user"},
+		{"I can help with coding tasks", "assistant"},
+	} {
+		ts, _ := time.Parse(time.RFC3339, "2024-01-15T10:00:00Z")
+		ts = ts.Add(time.Duration(i) * time.Minute)
+		input := recall.ChunkInput{
+			Content:        msg.content,
+			Source:         "claude",
+			SourceID:       "conv1-msg-" + string(rune('a'+i)),
+			ConversationID: convID1,
+			Metadata: &recall.Metadata{
+				Role:      msg.role,
+				Timestamp: ts,
+				CWD:       "/project/a",
+			},
+		}
+		_, _, err := storage.SaveWithSource(ctx, input, generateTestEmbedding(input.Content))
+		require.NoError(t, err)
+	}
+
+	// Second conversation
+	for i, msg := range []struct {
+		content string
+		role    string
+	}{
+		{"What's the weather?", "user"},
+		{"I cannot check weather", "assistant"},
+		{"Ok thanks", "user"},
+	} {
+		ts, _ := time.Parse(time.RFC3339, "2024-01-15T11:00:00Z")
+		ts = ts.Add(time.Duration(i) * time.Minute)
+		input := recall.ChunkInput{
+			Content:        msg.content,
+			Source:         "claude",
+			SourceID:       "conv2-msg-" + string(rune('a'+i)),
+			ConversationID: convID2,
+			Metadata: &recall.Metadata{
+				Role:      msg.role,
+				Timestamp: ts,
+				CWD:       "/project/b",
+			},
+		}
+		_, _, err := storage.SaveWithSource(ctx, input, generateTestEmbedding(input.Content))
+		require.NoError(t, err)
+	}
+
+	summaries, err := storage.ListConversations(ctx, 10, 0, "")
+	require.NoError(t, err)
+	require.Len(t, summaries, 2)
+
+	// Should be ordered by last message (most recent first)
+	// conv2 has messages at 11:00, 11:01, 11:02 - latest is 11:02
+	// conv1 has messages at 10:00, 10:01 - latest is 10:01
+	assert.Equal(t, convID2, summaries[0].ConversationID)
+	assert.Equal(t, convID1, summaries[1].ConversationID)
+
+	// First summary should have title from first user message
+	assert.Equal(t, "What's the weather?", summaries[0].Title)
+	assert.Equal(t, 3, summaries[0].MessageCount)
+
+	assert.Equal(t, "Hello, how can I help?", summaries[1].Title)
+	assert.Equal(t, 2, summaries[1].MessageCount)
+}
+
+func TestListConversations_FiltersbyProject(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Create conversations in different projects
+	projects := []string{"/project/frontend", "/project/backend", "/other/project"}
+
+	for i, proj := range projects {
+		input := recall.ChunkInput{
+			Content:        "Message in " + proj,
+			Source:         "claude",
+			SourceID:       "proj-msg-" + string(rune('a'+i)),
+			ConversationID: "conv-proj-" + string(rune('a'+i)),
+			Metadata: &recall.Metadata{
+				Role: "user",
+				CWD:  proj,
+			},
+		}
+		_, _, err := storage.SaveWithSource(ctx, input, generateTestEmbedding(input.Content))
+		require.NoError(t, err)
+	}
+
+	// Filter by /project prefix - should match first two
+	summaries, err := storage.ListConversations(ctx, 10, 0, "/project")
+	require.NoError(t, err)
+	assert.Len(t, summaries, 2)
+
+	// Filter by exact path
+	summaries, err = storage.ListConversations(ctx, 10, 0, "/project/frontend")
+	require.NoError(t, err)
+	assert.Len(t, summaries, 1)
+	assert.Contains(t, summaries[0].Project, "/project/frontend")
+}
+
+func TestListConversations_Pagination(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Create 5 conversations
+	for i := range 5 {
+		ts, _ := time.Parse(time.RFC3339, "2024-01-15T10:00:00Z")
+		ts = ts.Add(time.Duration(i) * time.Hour)
+		input := recall.ChunkInput{
+			Content:        "Conversation " + string(rune('A'+i)),
+			Source:         "claude",
+			SourceID:       "page-msg-" + string(rune('a'+i)),
+			ConversationID: "conv-page-" + string(rune('a'+i)),
+			Metadata: &recall.Metadata{
+				Role:      "user",
+				Timestamp: ts,
+			},
+		}
+		_, _, err := storage.SaveWithSource(ctx, input, generateTestEmbedding(input.Content))
+		require.NoError(t, err)
+	}
+
+	// Get first page (limit 2)
+	page1, err := storage.ListConversations(ctx, 2, 0, "")
+	require.NoError(t, err)
+	assert.Len(t, page1, 2)
+	// Most recent first
+	assert.Equal(t, "conv-page-e", page1[0].ConversationID)
+	assert.Equal(t, "conv-page-d", page1[1].ConversationID)
+
+	// Get second page
+	page2, err := storage.ListConversations(ctx, 2, 2, "")
+	require.NoError(t, err)
+	assert.Len(t, page2, 2)
+	assert.Equal(t, "conv-page-c", page2[0].ConversationID)
+	assert.Equal(t, "conv-page-b", page2[1].ConversationID)
+
+	// Get third page (only 1 remaining)
+	page3, err := storage.ListConversations(ctx, 2, 4, "")
+	require.NoError(t, err)
+	assert.Len(t, page3, 1)
+	assert.Equal(t, "conv-page-a", page3[0].ConversationID)
+}
+
+func TestListConversations_Empty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	summaries, err := storage.ListConversations(ctx, 10, 0, "")
+	require.NoError(t, err)
+	assert.Empty(t, summaries)
+}
+
+func TestListConversations_NoTitleFallback(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Create conversation with only assistant message (no user message for title)
+	input := recall.ChunkInput{
+		Content:        "Assistant response without user prompt",
+		Source:         "claude",
+		SourceID:       "no-title-msg",
+		ConversationID: "conv-no-title",
+		Metadata: &recall.Metadata{
+			Role: "assistant",
+		},
+	}
+	_, _, err := storage.SaveWithSource(ctx, input, generateTestEmbedding(input.Content))
+	require.NoError(t, err)
+
+	summaries, err := storage.ListConversations(ctx, 10, 0, "")
+	require.NoError(t, err)
+	require.Len(t, summaries, 1)
+	assert.Equal(t, "[No title]", summaries[0].Title)
+}
+
+func TestListDistinctProjects_ReturnsUniqueProjects(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Create chunks with various CWDs (some duplicates)
+	cwds := []string{"/project/a", "/project/b", "/project/a", "/other", "/project/b"}
+
+	for i, cwd := range cwds {
+		input := recall.ChunkInput{
+			Content:        "Message " + string(rune('a'+i)),
+			Source:         "claude",
+			SourceID:       "dist-proj-" + string(rune('a'+i)),
+			ConversationID: "conv-dist-" + string(rune('a'+i)),
+			Metadata: &recall.Metadata{
+				CWD: cwd,
+			},
+		}
+		_, _, err := storage.SaveWithSource(ctx, input, generateTestEmbedding(input.Content))
+		require.NoError(t, err)
+	}
+
+	projects, err := storage.ListDistinctProjects(ctx)
+	require.NoError(t, err)
+
+	// Should have 3 unique projects, sorted
+	assert.Len(t, projects, 3)
+	assert.Equal(t, "/other", projects[0])
+	assert.Equal(t, "/project/a", projects[1])
+	assert.Equal(t, "/project/b", projects[2])
+}
+
+func TestListDistinctProjects_Empty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	projects, err := storage.ListDistinctProjects(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, projects)
+}
+
+func TestListDistinctProjects_IgnoresNullCWD(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	storage := setupTestStorage(t)
+	ctx := context.Background()
+
+	// Create chunk without CWD
+	input := recall.ChunkInput{
+		Content:        "Message without CWD",
+		Source:         "claude",
+		SourceID:       "no-cwd-msg",
+		ConversationID: "conv-no-cwd",
+		Metadata:       &recall.Metadata{Role: "user"},
+	}
+	_, _, err := storage.SaveWithSource(ctx, input, generateTestEmbedding(input.Content))
+	require.NoError(t, err)
+
+	// Create chunk with CWD
+	input2 := recall.ChunkInput{
+		Content:        "Message with CWD",
+		Source:         "claude",
+		SourceID:       "with-cwd-msg",
+		ConversationID: "conv-with-cwd",
+		Metadata: &recall.Metadata{
+			Role: "user",
+			CWD:  "/project/x",
+		},
+	}
+	_, _, err = storage.SaveWithSource(ctx, input2, generateTestEmbedding(input2.Content))
+	require.NoError(t, err)
+
+	projects, err := storage.ListDistinctProjects(ctx)
+	require.NoError(t, err)
+
+	// Should only have the one with CWD
+	assert.Len(t, projects, 1)
+	assert.Equal(t, "/project/x", projects[0])
+}

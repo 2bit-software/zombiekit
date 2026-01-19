@@ -1,0 +1,86 @@
+<div class="bg-white rounded-lg shadow">
+    <!-- Back link -->
+    <div class="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <a href="/recall"
+           hx-get="/recall"
+           hx-target="#content"
+           hx-push-url="true"
+           class="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
+            <svg class="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to conversations
+        </a>
+    </div>
+
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h1 class="text-xl font-semibold text-gray-900">Search Results</h1>
+        <p class="mt-1 text-sm text-gray-500">Results for "{{.Content.Query}}"</p>
+    </div>
+
+    {{if .Content.Error}}
+    <div class="p-6">
+        <div class="rounded-md bg-yellow-50 p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800">Search unavailable</h3>
+                    <p class="mt-2 text-sm text-yellow-700">{{.Content.Error}}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{else if not .Content.Results}}
+    <div class="p-6 text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No results found</h3>
+        <p class="mt-1 text-sm text-gray-500">No conversations match your search query.</p>
+        <div class="mt-6">
+            <a href="/recall"
+               hx-get="/recall"
+               hx-target="#content"
+               hx-push-url="true"
+               class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                Browse all conversations
+            </a>
+        </div>
+    </div>
+    {{else}}
+    <!-- Results -->
+    <div class="divide-y divide-gray-200">
+        {{range .Content.Results}}
+        <a href="/recall/{{.ConversationID}}"
+           hx-get="/recall/{{.ConversationID}}"
+           hx-target="#content"
+           hx-push-url="true"
+           class="block px-6 py-4 hover:bg-gray-50 transition-colors">
+            <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                    <h2 class="text-sm font-medium text-gray-900">{{.Title}}</h2>
+                    <div class="mt-2 space-y-1">
+                        {{range .Snippets}}
+                        <p class="text-sm text-gray-600 line-clamp-2">...{{.}}...</p>
+                        {{end}}
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500">
+                        {{.LastMessage | formatTime}}
+                    </div>
+                </div>
+                <div class="ml-4 flex-shrink-0">
+                    <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            </div>
+        </a>
+        {{end}}
+    </div>
+    {{end}}
+</div>

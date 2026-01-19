@@ -1,0 +1,82 @@
+<div class="bg-white rounded-lg shadow">
+    <!-- Back link -->
+    <div class="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <a href="/recall"
+           hx-get="/recall"
+           hx-target="#content"
+           hx-push-url="true"
+           class="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
+            <svg class="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to conversations
+        </a>
+    </div>
+
+    {{if .Content.Error}}
+    <div class="p-6">
+        <div class="rounded-md bg-red-50 p-4">
+            <div class="flex">
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error</h3>
+                    <p class="mt-2 text-sm text-red-700">{{.Content.Error}}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{else}}
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h1 class="text-xl font-semibold text-gray-900">{{.Content.Title}}</h1>
+        <div class="mt-1 flex items-center space-x-4 text-sm text-gray-500">
+            <span>{{.Content.MessageCount}} messages</span>
+            {{if .Content.DateRange}}
+            <span>{{.Content.DateRange}}</span>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="divide-y divide-gray-100">
+        {{range .Content.Messages}}
+        <div class="px-6 py-4 {{if and .Metadata (eq .Metadata.Role "assistant")}}bg-gray-50{{end}}">
+            <div class="flex items-start space-x-3">
+                <!-- Role indicator -->
+                <div class="flex-shrink-0">
+                    {{if and .Metadata (eq .Metadata.Role "user")}}
+                    <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    {{else}}
+                    <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-purple-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                        </svg>
+                    </div>
+                    {{end}}
+                </div>
+
+                <div class="flex-1 min-w-0">
+                    <!-- Message header -->
+                    <div class="flex items-center space-x-2 mb-1">
+                        <span class="text-sm font-medium text-gray-900">
+                            {{if and .Metadata .Metadata.Role}}{{.Metadata.Role}}{{else}}unknown{{end}}
+                        </span>
+                        {{if and .Metadata (not .Metadata.Timestamp.IsZero)}}
+                        <span class="text-xs text-gray-500">{{.Metadata.Timestamp | formatTime}}</span>
+                        {{end}}
+                    </div>
+
+                    <!-- Message content -->
+                    <div class="text-sm text-gray-700">
+                        <pre class="whitespace-pre-wrap font-sans">{{.Content}}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>

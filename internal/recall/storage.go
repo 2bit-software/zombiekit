@@ -27,4 +27,13 @@ type Storage interface {
 
 	// Close releases any resources held by the storage.
 	Close() error
+
+	// ListConversations returns conversations ordered by last activity (most recent first).
+	// limit=0 uses implementation default (100), offset supports pagination.
+	// project="" returns all conversations; non-empty filters by CWD prefix.
+	ListConversations(ctx context.Context, limit, offset int, project string) ([]ConversationSummary, error)
+
+	// ListDistinctProjects returns all unique project paths (CWD) from stored conversations.
+	// Used to populate the project filter dropdown.
+	ListDistinctProjects(ctx context.Context) ([]string, error)
 }

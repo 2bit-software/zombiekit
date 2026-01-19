@@ -37,3 +37,14 @@ type SearchResult struct {
 	Chunk      Chunk   `json:"chunk"`
 	Similarity float64 `json:"similarity"` // 0.0 to 1.0, higher = more similar
 }
+
+// ConversationSummary contains aggregated metadata for a conversation.
+type ConversationSummary struct {
+	ConversationID string    `json:"conversation_id"`
+	Title          string    `json:"title"`         // First user message (truncated) or "[No title]"
+	MessageCount   int       `json:"message_count"`
+	FirstMessage   time.Time `json:"first_message"`
+	LastMessage    time.Time `json:"last_message"`
+	Source         string    `json:"source"`  // e.g., "claude"
+	Project        string    `json:"project"` // CWD from metadata
+}
