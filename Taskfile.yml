@@ -55,8 +55,8 @@ tasks:
         ./bin/brains recall watch claude --verbose &
         IMPORTER_PID=$!
 
-        # Trap to kill importer on exit
-        trap "echo 'Stopping importer...'; kill $IMPORTER_PID 2>/dev/null" EXIT INT TERM
+        # Trap to kill importer on exit (use SIGINT/SIGTERM for zsh compatibility)
+        trap 'echo "Stopping importer..."; kill $IMPORTER_PID 2>/dev/null' EXIT SIGINT SIGTERM
 
         sleep 1
 
