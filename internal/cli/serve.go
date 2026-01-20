@@ -4,7 +4,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -69,10 +68,10 @@ func runServe(c *cli.Context) error {
 
 	// Set up logging
 	logLevel := c.String("log-level")
-	logger := logging.SetupLogger(logLevel, false, os.Stderr)
+	logging.InitLogger(logLevel, false, os.Stderr)
 
 	// Load tool configuration from config files
-	toolCfg := config.LoadConfig(logger)
+	toolCfg := config.LoadConfig()
 
 	// Apply CLI flag overrides
 	enabledTools := c.StringSlice("enable-tool")
@@ -80,11 +79,11 @@ func runServe(c *cli.Context) error {
 	toolCfg.ApplyCLIOverrides(enabledTools, disabledTools)
 
 	// Warn about unknown tool names
-	config.WarnUnknownTools(logger, enabledTools)
-	config.WarnUnknownTools(logger, disabledTools)
+	config.WarnUnknownTools(enabledTools)
+	config.WarnUnknownTools(disabledTools)
 
 	// Load storage configuration from files + env vars
-	storageCfg := config.LoadStorageConfig(logger)
+	storageCfg := config.LoadStorageConfig()
 
 	// Override with CLI flags (highest precedence)
 	if c.IsSet("db-type") {
@@ -92,7 +91,7 @@ func runServe(c *cli.Context) error {
 	}
 
 	// Initialize storage with fallback support
-	storage, storageCfg, err := initializeStorage(ctx, storageCfg, logger)
+	storage, storageCfg, err := initializeStorage(ctx, storageCfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
@@ -105,18 +104,18 @@ func runServe(c *cli.Context) error {
 	mode := c.String("mode")
 	port := c.Int("port")
 
-	logger.Info("Starting MCP server",
+	logging.Logger().Info("Starting MCP server",
 		"mode", mode,
 		"port", port,
 	)
 
 	switch mode {
 	case "stdio":
-		return runStdio(server, logger)
+		return runStdio(server)
 	case "sse":
-		return runSSE(server, port, logger)
+		return runSSE(server, port)
 	case "http":
-		return runHTTP(server, port, logger)
+		return runHTTP(server, port)
 	default:
 		return fmt.Errorf("unsupported transport mode: %s", mode)
 	}
@@ -125,22 +124,22 @@ func runServe(c *cli.Context) error {
 // initializeStorage creates the appropriate storage backend based on configuration.
 // If PostgreSQL is configured but unavailable, it falls back to SQLite with a warning.
 // Returns the storage, the (potentially updated) config, and any error.
-func initializeStorage(ctx context.Context, cfg config.StorageConfig, logger *slog.Logger) (memory.Storage, config.StorageConfig, error) {
+func initializeStorage(ctx context.Context, cfg config.StorageConfig) (memory.Storage, config.StorageConfig, error) {
 	switch cfg.Backend {
 	case config.BackendPostgres:
-		storage, err := connectPostgres(ctx, cfg, logger)
+		storage, err := connectPostgres(ctx, cfg)
 		if err != nil {
 			// Fallback to SQLite
-			logger.Warn("PostgreSQL connection failed, falling back to SQLite",
+			logging.Logger().Warn("PostgreSQL connection failed, falling back to SQLite",
 				"error", err.Error(),
 			)
 			cfg.Backend = config.BackendSQLite
-			return initializeSQLite(ctx, cfg, logger)
+			return initializeSQLite(ctx, cfg)
 		}
 		return storage, cfg, nil
 
 	case config.BackendSQLite:
-		return initializeSQLite(ctx, cfg, logger)
+		return initializeSQLite(ctx, cfg)
 
 	default:
 		return nil, cfg, fmt.Errorf("unsupported backend: %s", cfg.Backend)
@@ -148,7 +147,7 @@ func initializeStorage(ctx context.Context, cfg config.StorageConfig, logger *sl
 }
 
 // connectPostgres attempts to connect to PostgreSQL with the configured timeout.
-func connectPostgres(ctx context.Context, cfg config.StorageConfig, logger *slog.Logger) (memory.Storage, error) {
+func connectPostgres(ctx context.Context, cfg config.StorageConfig) (memory.Storage, error) {
 	// Create context with connection timeout
 	connCtx, cancel := context.WithTimeout(ctx, cfg.ConnectionTimeout)
 	defer cancel()
@@ -166,7 +165,7 @@ func connectPostgres(ctx context.Context, cfg config.StorageConfig, logger *slog
 		return nil, fmt.Errorf("failed to initialize postgres storage: %w", err)
 	}
 
-	logger.Info("Storage initialized",
+	logging.Logger().Info("Storage initialized",
 		"backend", "postgres",
 		"host", sanitizePostgresURL(cfg.PostgresURL),
 	)
@@ -179,13 +178,13 @@ func connectPostgres(ctx context.Context, cfg config.StorageConfig, logger *slog
 }
 
 // initializeSQLite creates a SQLite storage backend.
-func initializeSQLite(ctx context.Context, cfg config.StorageConfig, logger *slog.Logger) (memory.Storage, config.StorageConfig, error) {
+func initializeSQLite(ctx context.Context, cfg config.StorageConfig) (memory.Storage, config.StorageConfig, error) {
 	storage, err := sqlite.NewSQLiteStorage(ctx, cfg.SQLitePath)
 	if err != nil {
 		return nil, cfg, fmt.Errorf("failed to initialize SQLite storage: %w", err)
 	}
 
-	logger.Info("Storage initialized",
+	logging.Logger().Info("Storage initialized",
 		"backend", "sqlite",
 		"path", cfg.SQLitePath,
 	)
@@ -217,11 +216,11 @@ func sanitizePostgresURL(connURL string) string {
 	return "(configured)"
 }
 
-func runStdio(s *mcp.Server, logger interface{}) error {
+func runStdio(s *mcp.Server) error {
 	return s.ServeStdio()
 }
 
-func runSSE(s *mcp.Server, port int, logger interface{}) error {
+func runSSE(s *mcp.Server, port int) error {
 	addr := fmt.Sprintf(":%d", port)
 	sseServer := s.ServeSSE(addr)
 
@@ -237,7 +236,7 @@ func runSSE(s *mcp.Server, port int, logger interface{}) error {
 	return sseServer.Start(addr)
 }
 
-func runHTTP(s *mcp.Server, port int, logger interface{}) error {
+func runHTTP(s *mcp.Server, port int) error {
 	addr := fmt.Sprintf(":%d", port)
 
 	// Use SSE server for HTTP mode (it supports both SSE and regular HTTP)

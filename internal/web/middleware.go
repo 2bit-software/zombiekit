@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"runtime/debug"
 	"time"
+
+	"github.com/zombiekit/brains/internal/logging"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code.
@@ -41,7 +43,7 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		s.logger.Info("request",
+		logging.Logger().Info("request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", wrapped.status,
@@ -56,7 +58,7 @@ func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				s.logger.Error("panic recovered",
+				logging.Logger().Error("panic recovered",
 					"error", err,
 					"path", r.URL.Path,
 					"stack", string(debug.Stack()),

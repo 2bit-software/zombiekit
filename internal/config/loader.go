@@ -2,13 +2,13 @@ package config
 
 import (
 	"errors"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/zombiekit/brains/internal/logging"
 )
 
 // LocalConfigPath returns the path to the local configuration file.
@@ -62,13 +62,13 @@ func LoadFile(path string) (*Config, error) {
 // LoadLocalConfig loads configuration from the local config file (.brains/config.toml).
 // Returns nil config if the file does not exist (not an error condition).
 // Logs debug message when config is loaded, warning on parse errors.
-func LoadLocalConfig(logger *slog.Logger) *Config {
+func LoadLocalConfig() *Config {
 	path := LocalConfigPath()
 
 	cfg, err := LoadFile(path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			logger.Warn("failed to load local config",
+			logging.Logger().Warn("failed to load local config",
 				"path", path,
 				"error", err.Error(),
 			)
@@ -76,17 +76,17 @@ func LoadLocalConfig(logger *slog.Logger) *Config {
 		return nil
 	}
 
-	logger.Debug("loaded local config", "path", path)
+	logging.Logger().Debug("loaded local config", "path", path)
 	return cfg
 }
 
 // LoadGlobalConfig loads configuration from the global config file.
 // Returns nil config if the file does not exist (not an error condition).
 // Logs debug message when config is loaded, warning on parse errors.
-func LoadGlobalConfig(logger *slog.Logger) *Config {
+func LoadGlobalConfig() *Config {
 	path, err := GlobalConfigPath()
 	if err != nil {
-		logger.Warn("failed to determine global config path",
+		logging.Logger().Warn("failed to determine global config path",
 			"error", err.Error(),
 		)
 		return nil
@@ -95,7 +95,7 @@ func LoadGlobalConfig(logger *slog.Logger) *Config {
 	cfg, err := LoadFile(path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			logger.Warn("failed to load global config",
+			logging.Logger().Warn("failed to load global config",
 				"path", path,
 				"error", err.Error(),
 			)
@@ -103,23 +103,23 @@ func LoadGlobalConfig(logger *slog.Logger) *Config {
 		return nil
 	}
 
-	logger.Debug("loaded global config", "path", path)
+	logging.Logger().Debug("loaded global config", "path", path)
 	return cfg
 }
 
 // LoadConfig loads and merges configuration from all sources.
 // Precedence order (highest to lowest): CLI flags > local > global > defaults.
 // This function handles global and local; CLI flags should be applied separately.
-func LoadConfig(logger *slog.Logger) *Config {
+func LoadConfig() *Config {
 	cfg := NewDefaultConfig()
 
 	// Load global config first (lowest precedence of file configs)
-	if globalCfg := LoadGlobalConfig(logger); globalCfg != nil {
+	if globalCfg := LoadGlobalConfig(); globalCfg != nil {
 		cfg.Merge(globalCfg)
 	}
 
 	// Load local config second (overrides global)
-	if localCfg := LoadLocalConfig(logger); localCfg != nil {
+	if localCfg := LoadLocalConfig(); localCfg != nil {
 		cfg.Merge(localCfg)
 	}
 
@@ -130,14 +130,14 @@ func LoadConfig(logger *slog.Logger) *Config {
 // Precedence order (highest to lowest): env vars > local file > global file > defaults.
 //
 // Returns a StorageConfig ready for use with the database layer.
-func LoadStorageConfig(logger *slog.Logger) StorageConfig {
+func LoadStorageConfig() StorageConfig {
 	// Start with defaults
 	cfg := NewDefaultStorageConfig()
 
 	// Load and merge from config files (global -> local precedence)
-	if fileCfg := LoadConfig(logger); fileCfg != nil && fileCfg.Storage != nil {
+	if fileCfg := LoadConfig(); fileCfg != nil && fileCfg.Storage != nil {
 		cfg = fileCfg.Storage.ToStorageConfig()
-		logger.Debug("loaded storage config from file",
+		logging.Logger().Debug("loaded storage config from file",
 			"backend", cfg.Backend,
 			"postgres_url_set", cfg.PostgresURL != "",
 		)

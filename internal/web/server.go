@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/zombiekit/brains/internal/logging"
 )
 
 //go:embed static
@@ -42,12 +42,11 @@ type Server struct {
 	registry   *PluginRegistry
 	renderer   *Renderer
 	httpServer *http.Server
-	logger     *slog.Logger
 	startTime  time.Time
 }
 
 // NewServer creates a new web server with the given registry and configuration.
-func NewServer(registry *PluginRegistry, config ServerConfig, logger *slog.Logger) (*Server, error) {
+func NewServer(registry *PluginRegistry, config ServerConfig) (*Server, error) {
 	// Apply defaults for zero values
 	if config.Port == 0 {
 		config.Port = 8080
@@ -72,7 +71,6 @@ func NewServer(registry *PluginRegistry, config ServerConfig, logger *slog.Logge
 		config:    config,
 		registry:  registry,
 		renderer:  renderer,
-		logger:    logger,
 		startTime: time.Now(),
 	}
 
@@ -120,7 +118,7 @@ func (s *Server) setupRouter() {
 func (s *Server) setupStaticHandler(r chi.Router) {
 	subFS, err := fs.Sub(staticFS, "static")
 	if err != nil {
-		s.logger.Error("failed to create static sub-filesystem", "error", err)
+		logging.Logger().Error("failed to create static sub-filesystem", "error", err)
 		return
 	}
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(subFS))))
@@ -146,7 +144,7 @@ func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
 		"Status":  status,
 	}
 	if err := s.renderer.Render(w, r, "home.html", data); err != nil {
-		s.logger.Error("failed to render home page", "error", err)
+		logging.Logger().Error("failed to render home page", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
@@ -155,7 +153,7 @@ func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 	if err := s.renderer.Render(w, r, "404.html", nil); err != nil {
-		s.logger.Error("failed to render 404 page", "error", err)
+		logging.Logger().Error("failed to render 404 page", "error", err)
 		http.Error(w, "Not Found", http.StatusNotFound)
 	}
 }
@@ -181,11 +179,11 @@ func (s *Server) Start(ctx context.Context) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-			s.logger.Error("server shutdown error", "error", err)
+			logging.Logger().Error("server shutdown error", "error", err)
 		}
 	}()
 
-	s.logger.Info("starting web server", "port", s.config.Port)
+	logging.Logger().Info("starting web server", "port", s.config.Port)
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
 	}

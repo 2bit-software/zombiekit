@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 
+	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/search"
 )
 
@@ -57,7 +58,7 @@ func (s *Server) searchPlugins(query string, maxResultsPerPlugin int) SearchResp
 
 		items, err := searchable.Search(query, maxResultsPerPlugin, search.SortRelevance)
 		if err != nil {
-			s.logger.Error("search failed", "plugin", rp.Name(), "error", err)
+			logging.Logger().Error("search failed", "plugin", rp.Name(), "error", err)
 			continue
 		}
 
@@ -96,7 +97,7 @@ func (s *Server) searchHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Render the search results template
 	if err := s.renderer.RenderPartial(w, "search-results.html", response); err != nil {
-		s.logger.Error("failed to render search results", "error", err)
+		logging.Logger().Error("failed to render search results", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }

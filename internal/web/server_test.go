@@ -1,20 +1,22 @@
 package web_test
 
 import (
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/web"
 )
 
 func TestNewServer(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	registry := web.NewPluginRegistry()
+
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
@@ -25,10 +27,12 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	registry := web.NewPluginRegistry()
+
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
@@ -49,10 +53,12 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestHomeEndpoint(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	registry := web.NewPluginRegistry()
+
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
@@ -68,10 +74,12 @@ func TestHomeEndpoint(t *testing.T) {
 }
 
 func TestNotFoundEndpoint(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	registry := web.NewPluginRegistry()
+
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
@@ -87,7 +95,10 @@ func TestNotFoundEndpoint(t *testing.T) {
 }
 
 func TestPluginRegistry(t *testing.T) {
-	registry := web.NewPluginRegistry(nil)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
+
+	registry := web.NewPluginRegistry()
 
 	// Test empty registry
 	if len(registry.All()) != 0 {

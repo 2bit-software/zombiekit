@@ -16,6 +16,9 @@ type ctxKey struct{}
 // logLevel holds the current log level, allowing runtime changes.
 var logLevel = new(slog.LevelVar)
 
+// singleton holds the global logger instance, set by InitLogger.
+var singleton *slog.Logger
+
 // SetupLogger creates a new structured logger with the specified configuration.
 //
 // Parameters:
@@ -55,6 +58,32 @@ func SetupLogger(level string, jsonOutput bool, w io.Writer) *slog.Logger {
 	return slog.New(handler)
 }
 
+// InitLogger initializes the singleton logger with the specified configuration.
+// Panics if called more than once (prevents accidental re-initialization).
+// Returns the logger for backward compatibility during migration.
+func InitLogger(level string, jsonOutput bool, w io.Writer) *slog.Logger {
+	if singleton != nil {
+		panic("logging: InitLogger called more than once")
+	}
+	singleton = SetupLogger(level, jsonOutput, w)
+	return singleton
+}
+
+// Logger returns the singleton logger.
+// Panics if InitLogger was not called (fail-fast for configuration errors).
+func Logger() *slog.Logger {
+	if singleton == nil {
+		panic("logging: Logger() called before InitLogger()")
+	}
+	return singleton
+}
+
+// ResetLogger clears the singleton for testing.
+// Should only be called from tests.
+func ResetLogger() {
+	singleton = nil
+}
+
 // SetLevel changes the log level at runtime.
 func SetLevel(level string) {
 	switch strings.ToLower(level) {
@@ -84,17 +113,17 @@ func FromContext(ctx context.Context) *slog.Logger {
 }
 
 // LogToolCall logs an MCP tool invocation with timing and error information.
-func LogToolCall(logger *slog.Logger, toolName string, start time.Time, err error) {
+func LogToolCall(toolName string, start time.Time, err error) {
 	duration := time.Since(start)
 
 	if err != nil {
-		logger.Error("tool call failed",
+		Logger().Error("tool call failed",
 			slog.String("tool", toolName),
 			slog.Duration("duration", duration),
 			slog.String("error", err.Error()),
 		)
 	} else {
-		logger.Info("tool call completed",
+		Logger().Info("tool call completed",
 			slog.String("tool", toolName),
 			slog.Duration("duration", duration),
 		)
@@ -102,17 +131,17 @@ func LogToolCall(logger *slog.Logger, toolName string, start time.Time, err erro
 }
 
 // LogDBOperation logs a database operation with timing information.
-func LogDBOperation(logger *slog.Logger, op string, start time.Time, err error) {
+func LogDBOperation(op string, start time.Time, err error) {
 	duration := time.Since(start)
 
 	if err != nil {
-		logger.Error("database operation failed",
+		Logger().Error("database operation failed",
 			slog.String("operation", op),
 			slog.Duration("duration", duration),
 			slog.String("error", err.Error()),
 		)
 	} else {
-		logger.Debug("database operation completed",
+		Logger().Debug("database operation completed",
 			slog.String("operation", op),
 			slog.Duration("duration", duration),
 		)

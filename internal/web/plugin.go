@@ -4,13 +4,13 @@ package web
 import (
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/zombiekit/brains/internal/logging"
 )
 
 // pluginNamePattern validates plugin names: lowercase alphanumeric with hyphens.
@@ -83,15 +83,13 @@ type PluginRegistry struct {
 	mu      sync.RWMutex
 	plugins []RegisteredPlugin   // Maintains registration order
 	byName  map[string]WebPlugin // Fast lookup by name
-	logger  *slog.Logger         // Registration logging
 }
 
 // NewPluginRegistry creates a new empty plugin registry.
-func NewPluginRegistry(logger *slog.Logger) *PluginRegistry {
+func NewPluginRegistry() *PluginRegistry {
 	return &PluginRegistry{
 		plugins: make([]RegisteredPlugin, 0),
 		byName:  make(map[string]WebPlugin),
-		logger:  logger,
 	}
 }
 
@@ -119,9 +117,7 @@ func (r *PluginRegistry) Register(name string, plugin WebPlugin) {
 	r.plugins = append(r.plugins, RegisteredPlugin{name: name, plugin: plugin})
 	r.byName[name] = plugin
 
-	if r.logger != nil {
-		r.logger.Info("registered plugin", "name", name, "path", "/"+name)
-	}
+	logging.Logger().Info("registered plugin", "name", name, "path", "/"+name)
 }
 
 // Get retrieves a plugin by its registered name.

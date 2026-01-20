@@ -46,19 +46,19 @@ func newGUICommand() *cli.Command {
 func runGUI(c *cli.Context) error {
 	// Set up logging
 	logLevel := c.String("log-level")
-	logger := logging.SetupLogger(logLevel, false, os.Stderr)
+	logging.InitLogger(logLevel, false, os.Stderr)
 
 	// Create profile service
 	profileService, err := profile.NewService("")
 	if err != nil {
-		logger.Warn("failed to initialize profile service, profiles plugin will show errors",
+		logging.Logger().Warn("failed to initialize profile service, profiles plugin will show errors",
 			"error", err,
 		)
 		// Continue anyway - the plugin will handle the error gracefully
 	}
 
 	// Create plugin registry
-	registry := web.NewPluginRegistry(logger)
+	registry := web.NewPluginRegistry()
 
 	// Register plugins
 	if profileService != nil {
@@ -76,7 +76,7 @@ func runGUI(c *cli.Context) error {
 	memoryDBPath := filepath.Join(dataDir, "memory.db")
 	memoryStorage, err := sqlite.NewSQLiteStorage(context.Background(), memoryDBPath)
 	if err != nil {
-		logger.Warn("failed to initialize memory storage, memory plugin will show errors",
+		logging.Logger().Warn("failed to initialize memory storage, memory plugin will show errors",
 			"error", err,
 		)
 	}
@@ -92,7 +92,7 @@ func runGUI(c *cli.Context) error {
 	if storageConfig.Backend == config.BackendPostgres {
 		recallStorage, err := postgres.New(context.Background(), storageConfig)
 		if err != nil {
-			logger.Warn("failed to initialize recall storage, conversations plugin will be unavailable",
+			logging.Logger().Warn("failed to initialize recall storage, conversations plugin will be unavailable",
 				"error", err,
 			)
 		} else {
@@ -101,7 +101,7 @@ func runGUI(c *cli.Context) error {
 			if storageConfig.OllamaURL != "" {
 				e, err := recall.NewOllamaEmbedder(storageConfig.OllamaURL, storageConfig.EmbeddingModel)
 				if err != nil {
-					logger.Warn("recall embedder unavailable, search disabled",
+					logging.Logger().Warn("recall embedder unavailable, search disabled",
 						"error", err,
 					)
 				} else {
@@ -128,7 +128,7 @@ func runGUI(c *cli.Context) error {
 	}
 
 	// Create server
-	server, err := web.NewServer(registry, serverConfig, logger)
+	server, err := web.NewServer(registry, serverConfig)
 	if err != nil {
 		return err
 	}
@@ -142,11 +142,11 @@ func runGUI(c *cli.Context) error {
 
 	go func() {
 		<-done
-		logger.Info("shutting down web server")
+		logging.Logger().Info("shutting down web server")
 		cancel()
 	}()
 
-	logger.Info("starting web GUI",
+	logging.Logger().Info("starting web GUI",
 		"port", serverConfig.Port,
 		"url", "http://localhost:"+c.String("port"),
 	)

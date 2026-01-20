@@ -1,8 +1,9 @@
 package config
 
 import (
-	"log/slog"
 	"strings"
+
+	"github.com/zombiekit/brains/internal/logging"
 )
 
 // KnownTools is the list of known tool names for validation.
@@ -70,10 +71,10 @@ func IsKnownTool(toolName string) bool {
 }
 
 // WarnUnknownTools logs warnings for any tool names that are not recognized.
-func WarnUnknownTools(logger *slog.Logger, toolNames []string) {
+func WarnUnknownTools(toolNames []string) {
 	for _, name := range toolNames {
 		if !IsKnownTool(name) {
-			logger.Warn("unknown tool name in configuration",
+			logging.Logger().Warn("unknown tool name in configuration",
 				"tool", name,
 				"hint", "check spelling or see available tools with 'brains serve --help'",
 			)

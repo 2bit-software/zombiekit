@@ -1,7 +1,6 @@
 package web_test
 
 import (
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/search"
 	"github.com/zombiekit/brains/internal/web"
 )
@@ -70,10 +70,12 @@ func (p *mockNonSearchablePlugin) MountRoutes(r chi.Router) {
 }
 
 func TestSearchHandler_EmptyQuery(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	registry := web.NewPluginRegistry()
+
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/search?q=", nil)
@@ -86,11 +88,13 @@ func TestSearchHandler_EmptyQuery(t *testing.T) {
 }
 
 func TestSearchHandler_NoSearchablePlugins(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
+
+	registry := web.NewPluginRegistry()
 	registry.Register("nonsearchable", &mockNonSearchablePlugin{name: "nonsearchable"})
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/search?q=test", nil)
@@ -104,8 +108,10 @@ func TestSearchHandler_NoSearchablePlugins(t *testing.T) {
 }
 
 func TestSearchHandler_WithResults(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
+
+	registry := web.NewPluginRegistry()
 	registry.Register("memory", &mockSearchablePlugin{
 		name:  "memory",
 		label: "Memory",
@@ -115,7 +121,7 @@ func TestSearchHandler_WithResults(t *testing.T) {
 		},
 	})
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/search?q=test", nil)
@@ -132,8 +138,10 @@ func TestSearchHandler_WithResults(t *testing.T) {
 }
 
 func TestSearchHandler_MultiplePlugins(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
+
+	registry := web.NewPluginRegistry()
 
 	registry.Register("memory", &mockSearchablePlugin{
 		name:  "memory",
@@ -150,7 +158,7 @@ func TestSearchHandler_MultiplePlugins(t *testing.T) {
 		},
 	})
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/search?q=config", nil)
@@ -168,8 +176,10 @@ func TestSearchHandler_MultiplePlugins(t *testing.T) {
 }
 
 func TestSearchHandler_LimitsToThreeResults(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
+
+	registry := web.NewPluginRegistry()
 
 	registry.Register("memory", &mockSearchablePlugin{
 		name:  "memory",
@@ -183,7 +193,7 @@ func TestSearchHandler_LimitsToThreeResults(t *testing.T) {
 		},
 	})
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/search?q=item", nil)
@@ -202,8 +212,10 @@ func TestSearchHandler_LimitsToThreeResults(t *testing.T) {
 }
 
 func TestSearchHandler_URLPrefixing(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	registry := web.NewPluginRegistry(logger)
+	logging.InitLogger("info", false, os.Stderr)
+	defer logging.ResetLogger()
+
+	registry := web.NewPluginRegistry()
 
 	registry.Register("memory", &mockSearchablePlugin{
 		name:  "memory",
@@ -213,7 +225,7 @@ func TestSearchHandler_URLPrefixing(t *testing.T) {
 		},
 	})
 
-	server, err := web.NewServer(registry, web.DefaultServerConfig(), logger)
+	server, err := web.NewServer(registry, web.DefaultServerConfig())
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/search?q=config", nil)
