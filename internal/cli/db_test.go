@@ -25,9 +25,13 @@ func runDBCmd(t *testing.T, dbPath string, args ...string) (string, error) {
 		},
 	}
 
-	// Set the db-path in env for the command to pick up
+	// Set env vars for test isolation - must override any .env settings
+	os.Setenv("BRAINS_BACKEND", "sqlite")
 	os.Setenv("BRAINS_SQLITE_PATH", dbPath)
-	defer os.Unsetenv("BRAINS_SQLITE_PATH")
+	defer func() {
+		os.Unsetenv("BRAINS_BACKEND")
+		os.Unsetenv("BRAINS_SQLITE_PATH")
+	}()
 
 	allArgs := append([]string{"brains", "db"}, args...)
 	err := app.Run(allArgs)

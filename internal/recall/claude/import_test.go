@@ -112,7 +112,8 @@ func setupTestHarness(t *testing.T) *testHarness {
 			source TEXT,
 			source_id TEXT,
 			conversation_id TEXT,
-			metadata JSONB
+			metadata JSONB,
+			history_gap BOOLEAN NOT NULL DEFAULT FALSE
 		)
 	`)
 	require.NoError(t, err)
