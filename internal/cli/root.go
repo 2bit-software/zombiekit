@@ -32,6 +32,7 @@ func NewApp(info *version.BuildInfo) *cli.App {
 		},
 		Commands: []*cli.Command{
 			newVersionCommand(info),
+			newStartCommand(),
 			newServeCommand(),
 			newGUICommand(),
 			newMemoryCommand(),
