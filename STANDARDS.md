@@ -131,6 +131,129 @@ func TestAdd(t *testing.T) {
 - Extract complex setup/teardown into helper functions
 - Keep test logic simple—if tests are convoluted, the function may need refactoring
 
+### Database Test Isolation
+
+Tests that interact with databases must be fully isolated from the environment. This prevents tests from accidentally connecting to production or development databases when environment variables are set (e.g., via `.env` files loaded by task runners).
+
+**Environment Variable Override Pattern**
+
+Always set ALL relevant backend configuration, not just the path:
+
+```go
+func runDBCmd(t *testing.T, dbPath string, args ...string) (string, error) {
+    t.Helper()
+
+    // Set env vars for test isolation - must override any .env settings
+    os.Setenv("BRAINS_BACKEND", "sqlite")
+    os.Setenv("BRAINS_SQLITE_PATH", dbPath)
+    defer func() {
+        os.Unsetenv("BRAINS_BACKEND")
+        os.Unsetenv("BRAINS_SQLITE_PATH")
+    }()
+
+    // ... run command
+}
+```
+
+The bug: Setting only `BRAINS_SQLITE_PATH` without `BRAINS_BACKEND=sqlite` causes tests to connect to whatever backend is configured in the environment (often postgres from `.env`), ignoring the temp SQLite path entirely.
+
+**SQLite for CLI/Unit Tests**
+
+Use `t.TempDir()` for temporary SQLite databases in CLI and unit tests:
+
+```go
+func setupMemoryTest(t *testing.T) (*sqlite.SQLiteStorage, string) {
+    t.Helper()
+
+    tmpDir := t.TempDir()
+    dbPath := filepath.Join(tmpDir, "test.db")
+
+    storage, err := sqlite.NewSQLiteStorage(context.Background(), dbPath)
+    require.NoError(t, err)
+
+    t.Cleanup(func() {
+        storage.Close()
+    })
+
+    return storage, dbPath
+}
+```
+
+**Testcontainers for Integration Tests**
+
+Use testcontainers-go for integration tests that need real PostgreSQL (e.g., pgvector operations):
+
+```go
+func setupTestHarness(t *testing.T) *testHarness {
+    t.Helper()
+
+    if testing.Short() {
+        t.Skip("skipping integration test in short mode")
+    }
+
+    ctx := context.Background()
+
+    container, err := tcpostgres.Run(ctx,
+        "pgvector/pgvector:pg16",
+        tcpostgres.WithDatabase("test"),
+        tcpostgres.WithUsername("test"),
+        tcpostgres.WithPassword("test"),
+        testcontainers.WithWaitStrategy(
+            wait.ForLog("database system is ready to accept connections").
+                WithOccurrence(2).
+                WithStartupTimeout(60*time.Second),
+        ),
+    )
+    require.NoError(t, err)
+
+    t.Cleanup(func() {
+        if err := container.Terminate(ctx); err != nil {
+            t.Logf("failed to terminate container: %v", err)
+        }
+    })
+
+    // ... setup pool and schema
+}
+```
+
+**Schema Synchronization**
+
+Test schemas must exactly match production schemas. When adding columns to production, update test schemas too:
+
+```go
+// Test schema must include ALL columns from production
+_, err = pool.Exec(ctx, `
+    CREATE TABLE IF NOT EXISTS recall_chunks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        content TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        embedding vector(768),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        source TEXT,
+        source_id TEXT,
+        conversation_id TEXT,
+        metadata JSONB,
+        history_gap BOOLEAN NOT NULL DEFAULT FALSE  -- Don't forget new columns!
+    )
+`)
+```
+
+**Test Harness Pattern**
+
+For complex integration tests, create a harness struct that encapsulates dependencies:
+
+```go
+type testHarness struct {
+    storage  *postgres.Storage
+    embedder *mockEmbedder
+    tmpDir   string
+}
+
+func (h *testHarness) importFile(ctx context.Context, filePath string) (newCount, skipCount int, err error) {
+    // ... test helper logic
+}
+```
+
 ---
 
 ## Project Structure
