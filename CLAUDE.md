@@ -3,6 +3,8 @@
 You are an expert interactive coding assistant for software engineering tasks.
 Proficient in computer science and software engineering.
 
+**Go Standards**: See [STANDARDS.md](./STANDARDS.md) for Go-specific coding conventions, naming, error handling, testing patterns, and project structure.
+
 ## Communication Style
 
 **Be a peer engineer, not a cheerleader:**
@@ -181,6 +183,74 @@ When reasoning through problems, apply these principles:
 - Mimic existing code style, naming conventions, typing
 - Never assume a non-standard library is available
 - Never expose or log secrets and keys
+
+## Logging Guidelines
+
+This service uses a **singleton logger pattern**. Understanding when to use it is critical.
+
+### Standard Code (CLI, Web, Config)
+
+Use the singleton logger via `logging.Logger()`:
+
+```go
+import "github.com/zombiekit/brains/internal/logging"
+
+// Any code outside MCP tools
+logging.Logger().Info("message", slog.String("key", "value"))
+logging.Logger().Debug("debug info")
+logging.Logger().Warn("warning")
+logging.Logger().Error("error", slog.String("err", err.Error()))
+```
+
+The singleton is initialized once at entrypoints (`serve.go`, `gui.go`) before any goroutines spawn.
+
+### MCP Tools (CRITICAL)
+
+**MCP tools MUST NOT use `logging.Logger()` or write to stdout.**
+
+Why: The MCP protocol uses stdout for JSON-RPC communication. Any writes to stdout corrupt the protocol stream and break the MCP connection.
+
+**Correct approach for MCP tools:**
+
+1. **Return errors via MCP response** - Preferred. Errors become tool results visible to the LLM.
+2. **If logging is required** - Use dependency-injected logger writing to **stderr only**:
+
+```go
+// MCP tool struct with DI logger
+type Tool struct {
+    logger *slog.Logger  // Must write to stderr, not stdout
+}
+
+func NewTool(logger *slog.Logger) *Tool {
+    return &Tool{logger: logger}
+}
+```
+
+3. **Never do this in MCP tools:**
+```go
+// WRONG - corrupts MCP protocol
+logging.Logger().Info("...")     // Writes to stderr, but accesses singleton
+fmt.Println("...")               // Writes to stdout, breaks MCP
+log.Println("...")               // Writes to stderr via default logger (risky)
+```
+
+### Helper Functions
+
+`LogToolCall()` and `LogDBOperation()` in the logging package use the singleton internally. Only call these from non-MCP code.
+
+### Test Code
+
+Always reset the singleton in tests:
+
+```go
+func TestFoo(t *testing.T) {
+    defer logging.ResetLogger()
+    logging.InitLogger("debug", false, nil)
+    // ... test code
+}
+```
+
+Do not use `t.Parallel()` in tests that touch the singleton.
 
 ## Critical Reminders
 
