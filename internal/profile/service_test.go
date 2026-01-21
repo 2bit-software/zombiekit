@@ -167,3 +167,68 @@ Global content.
 		assert.Contains(t, err.Error(), "empty")
 	})
 }
+
+func TestProfileService_Compose(t *testing.T) {
+	t.Run("composes profiles by name", func(t *testing.T) {
+		tempDir := t.TempDir()
+		profileDir := filepath.Join(tempDir, ".brains", "profiles")
+		require.NoError(t, os.MkdirAll(profileDir, 0o755))
+
+		content := `---
+name: test
+description: Test profile
+---
+
+Test profile content.
+`
+		require.NoError(t, os.WriteFile(filepath.Join(profileDir, "test.md"), []byte(content), 0o644))
+
+		svc, err := profile.NewService(tempDir)
+		require.NoError(t, err)
+
+		result, err := svc.Compose([]string{"test"})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content, "Test profile content")
+	})
+
+	t.Run("composes multiple profiles", func(t *testing.T) {
+		tempDir := t.TempDir()
+		profileDir := filepath.Join(tempDir, ".brains", "profiles")
+		require.NoError(t, os.MkdirAll(profileDir, 0o755))
+
+		content1 := `---
+name: first
+---
+
+First profile content.
+`
+		content2 := `---
+name: second
+---
+
+Second profile content.
+`
+		require.NoError(t, os.WriteFile(filepath.Join(profileDir, "first.md"), []byte(content1), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(profileDir, "second.md"), []byte(content2), 0o644))
+
+		svc, err := profile.NewService(tempDir)
+		require.NoError(t, err)
+
+		result, err := svc.Compose([]string{"first", "second"})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content, "First profile content")
+		assert.Contains(t, result.Content, "Second profile content")
+	})
+
+	t.Run("returns error for non-existent profile", func(t *testing.T) {
+		tempDir := t.TempDir()
+		profileDir := filepath.Join(tempDir, ".brains", "profiles")
+		require.NoError(t, os.MkdirAll(profileDir, 0o755))
+
+		svc, err := profile.NewService(tempDir)
+		require.NoError(t, err)
+
+		_, err = svc.Compose([]string{"nonexistent"})
+		require.Error(t, err)
+	})
+}

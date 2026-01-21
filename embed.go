@@ -26,3 +26,9 @@ var EmbeddedTemplates embed.FS
 //
 //go:embed templates/steps/*
 var EmbeddedSteps embed.FS
+
+// EmbeddedWorkflows contains the default workflow definitions embedded at build time.
+// These workflows serve as entry points for starting work (e.g., "new" workflow).
+//
+//go:embed workflows/*
+var EmbeddedWorkflows embed.FS

@@ -15,6 +15,7 @@ import (
 	profiletool "github.com/zombiekit/brains/internal/mcp/tools/profile"
 	steptool "github.com/zombiekit/brains/internal/mcp/tools/step"
 	"github.com/zombiekit/brains/internal/mcp/tools/stickymemory"
+	workflowtool "github.com/zombiekit/brains/internal/mcp/tools/workflow"
 	"github.com/zombiekit/brains/internal/mcp/tools/zombiekit"
 	"github.com/zombiekit/brains/internal/memory"
 )
@@ -27,6 +28,7 @@ type Server struct {
 	codeReasoning  *codereasoning.Tool
 	sessionManager *codereasoning.SessionManager
 	profileTool    *profiletool.Tool
+	workflowTool   *workflowtool.Tool
 	zombiekitTool  *zombiekit.Tool
 	stepTool       *steptool.Tool
 	initiativeTool *initiativetool.Tool
@@ -50,6 +52,7 @@ func NewServer(storage memory.Storage, cfg *config.Config) *Server {
 	stickyMemoryTool := stickymemory.NewTool(storage)
 	codeReasoningTool := codereasoning.NewTool(sessionManager)
 	profTool := profiletool.NewTool()
+	wfTool := workflowtool.NewTool()
 	zombiekitTool := zombiekit.NewTool()
 	stepToolInst := steptool.NewTool()
 	initiativeToolInst := initiativetool.NewTool()
@@ -61,6 +64,7 @@ func NewServer(storage memory.Storage, cfg *config.Config) *Server {
 		codeReasoning:  codeReasoningTool,
 		sessionManager: sessionManager,
 		profileTool:    profTool,
+		workflowTool:   wfTool,
 		zombiekitTool:  zombiekitTool,
 		stepTool:       stepToolInst,
 		initiativeTool: initiativeToolInst,
@@ -138,6 +142,9 @@ func (s *Server) registerTools() {
 
 	// Register profile tools
 	s.registerProfileTools()
+
+	// Register workflow tool
+	s.registerWorkflowTool()
 
 	// Register feature tool
 	if s.config.IsToolEnabled("feature") {
@@ -408,6 +415,41 @@ func (s *Server) handleInitiative(ctx context.Context, req mcp.CallToolRequest) 
 	}
 
 	result, err := s.initiativeTool.Execute(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// registerWorkflowTool registers the workflow-compose MCP tool.
+func (s *Server) registerWorkflowTool() {
+	if !s.config.IsToolEnabled("workflow-compose") {
+		return
+	}
+
+	wfDef := s.workflowTool.Definition()
+	wfMCPTool := mcp.NewTool(wfDef.Name,
+		mcp.WithDescription(wfDef.Description),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Workflow name to load"),
+		),
+		mcp.WithString("working_directory",
+			mcp.Description("Working directory for resolution"),
+		),
+	)
+	s.mcpServer.AddTool(wfMCPTool, s.handleWorkflow)
+}
+
+// handleWorkflow handles workflow-compose tool calls.
+func (s *Server) handleWorkflow(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]interface{})
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	result, err := s.workflowTool.HandleCompose(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

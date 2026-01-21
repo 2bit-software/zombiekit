@@ -58,7 +58,7 @@ func TestInitCommand_SkipExisting(t *testing.T) {
 	require.NoError(t, err)
 
 	// Modify a file to verify it's not overwritten
-	testFile := filepath.Join(tmpDir, ".claude", "commands", "brains.feature.md")
+	testFile := filepath.Join(tmpDir, ".claude", "commands", "brains.new.md")
 	originalContent := []byte("ORIGINAL CONTENT")
 	err = os.WriteFile(testFile, originalContent, 0o644)
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestInitCommand_ForceOverwrite(t *testing.T) {
 	require.NoError(t, err)
 
 	// Modify a file
-	testFile := filepath.Join(tmpDir, ".claude", "commands", "brains.feature.md")
+	testFile := filepath.Join(tmpDir, ".claude", "commands", "brains.new.md")
 	originalContent := []byte("ORIGINAL CONTENT")
 	err = os.WriteFile(testFile, originalContent, 0o644)
 	require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestInitCommand_DirectoryAlreadyExists(t *testing.T) {
 	// Verify files were copied again
 	entries, err = os.ReadDir(commandsDir)
 	require.NoError(t, err)
-	assert.Equal(t, 16, len(entries), "should have 16 command files")
+	assert.Equal(t, 14, len(entries), "should have 14 command files")
 }
 
 func TestInitCommand_FileCount(t *testing.T) {
@@ -143,7 +143,7 @@ func TestInitCommand_FileCount(t *testing.T) {
 	commandsDir := filepath.Join(tmpDir, ".claude", "commands")
 	entries, err := os.ReadDir(commandsDir)
 	require.NoError(t, err)
-	assert.Equal(t, 16, len(entries), "should have 16 command files")
+	assert.Equal(t, 14, len(entries), "should have 14 command files")
 
 	// Count template files (should be 7)
 	templatesDir := filepath.Join(tmpDir, ".brains", "templates")
@@ -160,7 +160,7 @@ func TestInitCommand_SpecificFiles(t *testing.T) {
 
 	// Verify specific command files exist
 	expectedCommands := []string{
-		"brains.feature.md",
+		"brains.new.md",
 		"brains.plan.md",
 		"brains.tasks.md",
 		"brains.init.md",
@@ -189,7 +189,7 @@ func TestInitCommand_FileContentsNotEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify a command file has content
-	cmdPath := filepath.Join(tmpDir, ".claude", "commands", "brains.feature.md")
+	cmdPath := filepath.Join(tmpDir, ".claude", "commands", "brains.new.md")
 	content, err := os.ReadFile(cmdPath)
 	require.NoError(t, err)
 	assert.Greater(t, len(content), 0, "command file should have content")

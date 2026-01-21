@@ -12,7 +12,7 @@ import (
 )
 
 // Helper to set up embedded profiles for testing
-func setupEmbeddedFS(t *testing.T) func() {
+func setupEmbeddedFS(_ *testing.T) func() {
 	originalFS := profile.GetEmbeddedFS()
 
 	mockFS := fstest.MapFS{
@@ -41,6 +41,7 @@ MCP test content for tools.
 		profile.SetEmbeddedFS(originalFS)
 	}
 }
+
 
 // T025: Unit test for MCP profile-compose with embedded profile
 func TestMCPTool_ComposeWithEmbedded(t *testing.T) {
@@ -213,3 +214,4 @@ Handler test content.
 		assert.Contains(t, result, "PROFILE_EXISTS")
 	})
 }
+

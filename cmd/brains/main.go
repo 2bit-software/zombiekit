@@ -10,11 +10,15 @@ import (
 	"github.com/zombiekit/brains/internal/profile"
 	"github.com/zombiekit/brains/internal/step"
 	"github.com/zombiekit/brains/internal/version"
+	"github.com/zombiekit/brains/internal/workflow"
 )
 
 func init() {
 	// Register embedded profiles so they're available as fallbacks
 	profile.SetEmbeddedFS(zombiekit.EmbeddedProfiles)
+
+	// Register embedded workflows so they're available as fallbacks
+	workflow.SetEmbeddedFS(zombiekit.EmbeddedWorkflows)
 
 	// Register embedded steps (strip "templates/" prefix so paths become "steps/*.md")
 	// EmbeddedSteps embeds templates/steps/* -> files at templates/steps/feature.md
