@@ -1,34 +1,56 @@
 // Package zombiekit provides embedded assets for the brains CLI.
 package zombiekit
 
-import "embed"
+import (
+	"embed"
+	"io/fs"
+)
 
-// EmbeddedProfiles contains the default profiles embedded at build time.
-// These profiles serve as fallbacks when no local/global profiles exist.
-//
-//go:embed profiles/*
-var EmbeddedProfiles embed.FS
+//go:embed embed/profiles/*
+var embeddedProfiles embed.FS
 
-// EmbeddedCommands contains Claude Code command files (skills) embedded at build time.
-// These are copied to .claude/commands/ during `brains init`.
-//
-//go:embed integrations/claude/commands/*
-var EmbeddedCommands embed.FS
+//go:embed embed/integrations/claude/commands/*
+var embeddedCommands embed.FS
 
-// EmbeddedTemplates contains specification templates embedded at build time.
-// These are copied to .brains/templates/ during `brains init`.
-//
-//go:embed templates/templates/*
-var EmbeddedTemplates embed.FS
+//go:embed embed/templates/*
+var embeddedTemplates embed.FS
 
-// EmbeddedSteps contains the default step definitions embedded at build time.
-// These steps serve as fallbacks when no local/global step definitions exist.
-//
-//go:embed templates/steps/*
-var EmbeddedSteps embed.FS
+//go:embed embed/steps/*
+var embeddedSteps embed.FS
 
-// EmbeddedWorkflows contains the default workflow definitions embedded at build time.
-// These workflows serve as entry points for starting work (e.g., "new" workflow).
-//
-//go:embed workflows/*
-var EmbeddedWorkflows embed.FS
+//go:embed embed/workflows/*
+var embeddedWorkflows embed.FS
+
+// Exported filesystems with embed/ prefix stripped via fs.Sub.
+// Consumers see the same paths they expect (e.g., "profiles/*", "steps/*").
+var (
+	EmbeddedProfiles  fs.FS
+	EmbeddedCommands  fs.FS
+	EmbeddedTemplates fs.FS
+	EmbeddedSteps     fs.FS
+	EmbeddedWorkflows fs.FS
+)
+
+func init() {
+	var err error
+	EmbeddedProfiles, err = fs.Sub(embeddedProfiles, "embed")
+	if err != nil {
+		panic("embed: profiles: " + err.Error())
+	}
+	EmbeddedCommands, err = fs.Sub(embeddedCommands, "embed")
+	if err != nil {
+		panic("embed: commands: " + err.Error())
+	}
+	EmbeddedTemplates, err = fs.Sub(embeddedTemplates, "embed")
+	if err != nil {
+		panic("embed: templates: " + err.Error())
+	}
+	EmbeddedSteps, err = fs.Sub(embeddedSteps, "embed")
+	if err != nil {
+		panic("embed: steps: " + err.Error())
+	}
+	EmbeddedWorkflows, err = fs.Sub(embeddedWorkflows, "embed")
+	if err != nil {
+		panic("embed: workflows: " + err.Error())
+	}
+}

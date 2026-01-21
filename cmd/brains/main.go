@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io/fs"
 	"log"
 	"os"
 
@@ -14,25 +13,11 @@ import (
 )
 
 func init() {
-	// Register embedded profiles so they're available as fallbacks
+	// Register embedded filesystems (embed.go handles prefix stripping via fs.Sub)
 	profile.SetEmbeddedFS(zombiekit.EmbeddedProfiles)
-
-	// Register embedded workflows so they're available as fallbacks
 	workflow.SetEmbeddedFS(zombiekit.EmbeddedWorkflows)
-
-	// Register embedded steps (strip "templates/" prefix so paths become "steps/*.md")
-	// EmbeddedSteps embeds templates/steps/* -> files at templates/steps/feature.md
-	// Step loader expects steps/feature.md
-	if stepsSubFS, err := fs.Sub(zombiekit.EmbeddedSteps, "templates"); err == nil {
-		step.SetEmbeddedFS(stepsSubFS)
-	}
-
-	// Register embedded templates (strip "templates/" prefix so paths become "templates/*.md")
-	// EmbeddedTemplates embeds templates/templates/* -> files at templates/templates/spec-template.md
-	// Initiative tool expects templates/spec-template.md
-	if templatesSubFS, err := fs.Sub(zombiekit.EmbeddedTemplates, "templates"); err == nil {
-		step.SetTemplateFS(templatesSubFS)
-	}
+	step.SetEmbeddedFS(zombiekit.EmbeddedSteps)
+	step.SetTemplateFS(zombiekit.EmbeddedTemplates)
 }
 
 func main() {

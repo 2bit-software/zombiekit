@@ -152,7 +152,7 @@ func initLocal(force bool) error {
 		return fmt.Errorf("embedded commands filesystem is empty - binary may be corrupted, please reinstall")
 	}
 
-	templateEntries, err := fs.ReadDir(zombiekit.EmbeddedTemplates, "templates/templates")
+	templateEntries, err := fs.ReadDir(zombiekit.EmbeddedTemplates, "templates")
 	if err != nil || len(templateEntries) == 0 {
 		return fmt.Errorf("embedded templates filesystem is empty - binary may be corrupted, please reinstall")
 	}
@@ -188,7 +188,7 @@ func initLocal(force bool) error {
 		return err
 	}
 
-	tplResult := copyEmbeddedFiles(zombiekit.EmbeddedTemplates, "templates/templates", templatesDir, force)
+	tplResult := copyEmbeddedFiles(zombiekit.EmbeddedTemplates, "templates", templatesDir, force)
 	totalResult.copied += tplResult.copied
 	totalResult.skipped += tplResult.skipped
 	totalResult.overwritten += tplResult.overwritten
