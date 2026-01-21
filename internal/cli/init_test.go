@@ -130,7 +130,7 @@ func TestInitCommand_DirectoryAlreadyExists(t *testing.T) {
 	// Verify files were copied again
 	entries, err = os.ReadDir(commandsDir)
 	require.NoError(t, err)
-	assert.Equal(t, 14, len(entries), "should have 14 command files")
+	assert.Equal(t, 5, len(entries), "should have 5 command files")
 }
 
 func TestInitCommand_FileCount(t *testing.T) {
@@ -139,11 +139,11 @@ func TestInitCommand_FileCount(t *testing.T) {
 	err := runInitCmd(t, tmpDir)
 	require.NoError(t, err)
 
-	// Count command files (should be 15)
+	// Count command files (should be 5)
 	commandsDir := filepath.Join(tmpDir, ".claude", "commands")
 	entries, err := os.ReadDir(commandsDir)
 	require.NoError(t, err)
-	assert.Equal(t, 14, len(entries), "should have 14 command files")
+	assert.Equal(t, 5, len(entries), "should have 5 command files")
 
 	// Count template files (should be 7)
 	templatesDir := filepath.Join(tmpDir, ".brains", "templates")
@@ -161,9 +161,10 @@ func TestInitCommand_SpecificFiles(t *testing.T) {
 	// Verify specific command files exist
 	expectedCommands := []string{
 		"brains.new.md",
-		"brains.plan.md",
-		"brains.tasks.md",
-		"brains.init.md",
+		"brains.step.md",
+		"brains.next.md",
+		"brains.complete.md",
+		"brains.help.md",
 	}
 	for _, cmd := range expectedCommands {
 		path := filepath.Join(tmpDir, ".claude", "commands", cmd)
