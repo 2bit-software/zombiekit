@@ -437,14 +437,15 @@ Each major stage follows the same pattern:
 
 ## Embedded Assets
 
-Four filesystems embedded at build time:
+All embedded assets live under `embed/` at the project root. Five filesystems are embedded at build time, with `fs.Sub` stripping the `embed/` prefix so consumers see clean paths:
 
 | Asset | Source | Purpose |
 |-------|--------|---------|
-| Profiles | `profiles/` | Default global profiles |
-| Commands | `.claude/commands/` | Claude Code skills |
-| Templates | `templates/` | Artifact templates |
-| Steps | `.brains/steps/` | Step definitions |
+| Profiles | `embed/profiles/` | Default global profiles |
+| Commands | `embed/integrations/claude/commands/` | Claude Code skills |
+| Templates | `embed/templates/` | Artifact templates |
+| Steps | `embed/steps/` | Workflow step definitions |
+| Workflows | `embed/workflows/` | Workflow entry points (e.g., "new") |
 
 ---
 
