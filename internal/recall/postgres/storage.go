@@ -464,3 +464,73 @@ func (s *Storage) CleanupStaleImportStates(ctx context.Context, validPaths []str
 	}
 	return nil
 }
+
+// GetConversationChunks returns chunks for a conversation with pagination.
+// Ordered by timestamp ascending (oldest first), then by ID for determinism.
+func (s *Storage) GetConversationChunks(ctx context.Context, conversationID string, limit, offset int) ([]recall.Chunk, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, content, created_at, source, source_id, conversation_id, metadata
+		FROM recall_chunks
+		WHERE conversation_id = $1
+		ORDER BY (metadata->>'timestamp')::timestamptz ASC NULLS LAST, id ASC
+		LIMIT $2 OFFSET $3
+	`, conversationID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("get conversation chunks: %w", err)
+	}
+	defer rows.Close()
+
+	var chunks []recall.Chunk
+	for rows.Next() {
+		var chunk recall.Chunk
+		var source, sourceID, convID *string
+		var metadataJSON []byte
+
+		if err := rows.Scan(&chunk.ID, &chunk.Content, &chunk.CreatedAt,
+			&source, &sourceID, &convID, &metadataJSON); err != nil {
+			return nil, fmt.Errorf("scan chunk: %w", err)
+		}
+
+		if source != nil {
+			chunk.Source = *source
+		}
+		if sourceID != nil {
+			chunk.SourceID = *sourceID
+		}
+		if convID != nil {
+			chunk.ConversationID = *convID
+		}
+		if len(metadataJSON) > 0 {
+			var meta recall.Metadata
+			if err := json.Unmarshal(metadataJSON, &meta); err == nil {
+				chunk.Metadata = &meta
+			}
+		}
+
+		chunks = append(chunks, chunk)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chunks: %w", err)
+	}
+
+	return chunks, nil
+}
+
+// ConversationExists checks if any chunks exist for the given conversation ID.
+func (s *Storage) ConversationExists(ctx context.Context, conversationID string) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM recall_chunks WHERE conversation_id = $1
+		)
+	`, conversationID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check conversation exists: %w", err)
+	}
+	return exists, nil
+}

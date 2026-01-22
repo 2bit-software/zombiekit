@@ -24,7 +24,7 @@ func setupTestServer(t *testing.T) *Server {
 		storage.Close()
 	})
 
-	return NewServer(storage, nil)
+	return NewServer(storage, nil, nil)
 }
 
 func TestServer_ToolsList_ReturnsBothTools(t *testing.T) {

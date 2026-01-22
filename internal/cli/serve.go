@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v2"
 
 	"github.com/zombiekit/brains/internal/config"
@@ -18,6 +19,8 @@ import (
 	"github.com/zombiekit/brains/internal/memory"
 	"github.com/zombiekit/brains/internal/memory/postgres"
 	"github.com/zombiekit/brains/internal/memory/sqlite"
+	"github.com/zombiekit/brains/internal/recall"
+	recallpostgres "github.com/zombiekit/brains/internal/recall/postgres"
 )
 
 // newServeCommand creates the serve command for starting the MCP server.
@@ -58,12 +61,24 @@ func newServeCommand() *cli.Command {
 				Name:  "disable-tool",
 				Usage: "Disable specific MCP tool (can be repeated)",
 			},
+			&cli.StringFlag{
+				Name:    "env-file",
+				Usage:   "Path to environment file to load",
+				EnvVars: []string{"BRAINS_ENV_FILE"},
+			},
 		},
 		Action: runServe,
 	}
 }
 
 func runServe(c *cli.Context) error {
+	// Load environment file first (before any other config)
+	if envFile := c.String("env-file"); envFile != "" {
+		if err := loadEnvFile(envFile); err != nil {
+			return err
+		}
+	}
+
 	ctx := context.Background()
 
 	// Set up logging
@@ -97,8 +112,22 @@ func runServe(c *cli.Context) error {
 	}
 	defer storage.Close()
 
+	// Initialize recall storage if PostgreSQL is configured
+	var recallStorage recall.Storage
+	if storageCfg.Backend == config.BackendPostgres {
+		rs, err := recallpostgres.New(ctx, storageCfg)
+		if err != nil {
+			logging.Logger().Warn("recall storage unavailable, recall tools will be disabled",
+				"error", err.Error(),
+			)
+		} else {
+			recallStorage = rs
+			defer recallStorage.Close()
+		}
+	}
+
 	// Create MCP server with tool configuration
-	server := mcp.NewServer(storage, toolCfg)
+	server := mcp.NewServer(storage, recallStorage, toolCfg)
 	defer server.Close()
 
 	mode := c.String("mode")
@@ -259,4 +288,25 @@ func runHTTP(s *mcp.Server, port int) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+// loadEnvFile loads environment variables from a file.
+// Uses godotenv.Load which does NOT override existing environment variables.
+func loadEnvFile(path string) error {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("env file not found: %s", path)
+	}
+	if err != nil {
+		return fmt.Errorf("cannot access env file: %w", err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("env file path is a directory: %s", path)
+	}
+
+	if err := godotenv.Load(path); err != nil {
+		return fmt.Errorf("failed to load env file: %w", err)
+	}
+
+	return nil
 }
