@@ -13,17 +13,20 @@ import (
 	"github.com/zombiekit/brains/internal/mcp/tools/codereasoning"
 	initiativetool "github.com/zombiekit/brains/internal/mcp/tools/initiative"
 	profiletool "github.com/zombiekit/brains/internal/mcp/tools/profile"
+	recalltool "github.com/zombiekit/brains/internal/mcp/tools/recall"
 	steptool "github.com/zombiekit/brains/internal/mcp/tools/step"
 	"github.com/zombiekit/brains/internal/mcp/tools/stickymemory"
 	workflowtool "github.com/zombiekit/brains/internal/mcp/tools/workflow"
 	"github.com/zombiekit/brains/internal/mcp/tools/zombiekit"
 	"github.com/zombiekit/brains/internal/memory"
+	"github.com/zombiekit/brains/internal/recall"
 )
 
 // Server is the MCP protocol server that exposes tools.
 type Server struct {
 	mcpServer      *server.MCPServer
 	storage        memory.Storage
+	recallStorage  recall.Storage
 	stickyMemory   *stickymemory.Tool
 	codeReasoning  *codereasoning.Tool
 	sessionManager *codereasoning.SessionManager
@@ -32,12 +35,14 @@ type Server struct {
 	zombiekitTool  *zombiekit.Tool
 	stepTool       *steptool.Tool
 	initiativeTool *initiativetool.Tool
+	recallTool     *recalltool.Tool
 	config         *config.Config
 }
 
 // NewServer creates a new MCP server with the given storage backend and configuration.
 // If cfg is nil, all tools are enabled by default.
-func NewServer(storage memory.Storage, cfg *config.Config) *Server {
+// recallStorage may be nil if recall features are not needed.
+func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config.Config) *Server {
 	if cfg == nil {
 		cfg = config.NewDefaultConfig()
 	}
@@ -57,9 +62,15 @@ func NewServer(storage memory.Storage, cfg *config.Config) *Server {
 	stepToolInst := steptool.NewTool()
 	initiativeToolInst := initiativetool.NewTool()
 
+	var recallToolInst *recalltool.Tool
+	if recallStorage != nil {
+		recallToolInst = recalltool.NewTool(recallStorage)
+	}
+
 	s := &Server{
 		mcpServer:      mcpServer,
 		storage:        storage,
+		recallStorage:  recallStorage,
 		stickyMemory:   stickyMemoryTool,
 		codeReasoning:  codeReasoningTool,
 		sessionManager: sessionManager,
@@ -68,6 +79,7 @@ func NewServer(storage memory.Storage, cfg *config.Config) *Server {
 		zombiekitTool:  zombiekitTool,
 		stepTool:       stepToolInst,
 		initiativeTool: initiativeToolInst,
+		recallTool:     recallToolInst,
 		config:         cfg,
 	}
 
@@ -160,6 +172,9 @@ func (s *Server) registerTools() {
 
 	// Register step tool
 	s.registerStepTool()
+
+	// Register recall tools
+	s.registerRecallTools()
 }
 
 // handleFeature handles feature tool calls.
@@ -450,6 +465,79 @@ func (s *Server) handleWorkflow(ctx context.Context, req mcp.CallToolRequest) (*
 	}
 
 	result, err := s.workflowTool.HandleCompose(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// registerRecallTools registers the recall MCP tools.
+func (s *Server) registerRecallTools() {
+	// Skip if recall storage is not available
+	if s.recallTool == nil {
+		return
+	}
+
+	// Register recall-list-conversations
+	if s.config.IsToolEnabled("recall-list-conversations") {
+		listTool := mcp.NewTool("recall-list-conversations",
+			mcp.WithDescription("List conversation summaries with pagination. Returns conversations ordered by last activity (most recent first)."),
+			mcp.WithNumber("page",
+				mcp.Description("Page number (1-indexed). Defaults to 1."),
+			),
+			mcp.WithNumber("limit",
+				mcp.Description("Items per page. Defaults to 20, maximum 100."),
+			),
+			mcp.WithString("project",
+				mcp.Description("Filter by project path prefix (e.g., '/Users/me/project'). Empty returns all."),
+			),
+		)
+		s.mcpServer.AddTool(listTool, s.handleRecallListConversations)
+	}
+
+	// Register recall-read-conversation
+	if s.config.IsToolEnabled("recall-read-conversation") {
+		readTool := mcp.NewTool("recall-read-conversation",
+			mcp.WithDescription("Read conversation chunks with pagination. Returns chunks in chronological order (oldest first)."),
+			mcp.WithString("conversation_id",
+				mcp.Required(),
+				mcp.Description("Conversation UUID to read"),
+			),
+			mcp.WithNumber("page",
+				mcp.Description("Page number (1-indexed). Defaults to 1."),
+			),
+			mcp.WithNumber("limit",
+				mcp.Description("Items per page. Defaults to 20, maximum 100."),
+			),
+		)
+		s.mcpServer.AddTool(readTool, s.handleRecallReadConversation)
+	}
+}
+
+// handleRecallListConversations handles recall-list-conversations tool calls.
+func (s *Server) handleRecallListConversations(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok {
+		args = make(map[string]any)
+	}
+
+	result, err := s.recallTool.ListConversations(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// handleRecallReadConversation handles recall-read-conversation tool calls.
+func (s *Server) handleRecallReadConversation(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok {
+		args = make(map[string]any)
+	}
+
+	result, err := s.recallTool.ReadConversation(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

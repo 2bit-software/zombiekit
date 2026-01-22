@@ -37,6 +37,14 @@ type Storage interface {
 	// Used to populate the project filter dropdown.
 	ListDistinctProjects(ctx context.Context) ([]string, error)
 
+	// GetConversationChunks returns chunks for a conversation with pagination.
+	// Ordered by timestamp ascending (oldest first), then by ID for determinism.
+	// Returns empty slice if conversation doesn't exist.
+	GetConversationChunks(ctx context.Context, conversationID string, limit, offset int) ([]Chunk, error)
+
+	// ConversationExists checks if any chunks exist for the given conversation ID.
+	ConversationExists(ctx context.Context, conversationID string) (bool, error)
+
 	// GetImportState retrieves the import state for a file.
 	// Returns nil, nil if no state exists (new file).
 	GetImportState(ctx context.Context, filePath string) (*ImportState, error)

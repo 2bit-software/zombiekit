@@ -85,6 +85,23 @@ func (m *mockStorage) CleanupStaleImportStates(ctx context.Context, validPaths [
 	return nil
 }
 
+func (m *mockStorage) GetConversationChunks(ctx context.Context, conversationID string, limit, offset int) ([]recall.Chunk, error) {
+	chunks := m.conversations[conversationID]
+	if offset >= len(chunks) {
+		return []recall.Chunk{}, nil
+	}
+	end := offset + limit
+	if end > len(chunks) {
+		end = len(chunks)
+	}
+	return chunks[offset:end], nil
+}
+
+func (m *mockStorage) ConversationExists(ctx context.Context, conversationID string) (bool, error) {
+	_, exists := m.conversations[conversationID]
+	return exists, nil
+}
+
 func (m *mockStorage) Close() error {
 	return nil
 }
