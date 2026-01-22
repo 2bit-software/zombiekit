@@ -1,0 +1,197 @@
+<div class="bg-white rounded-lg shadow">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <div>
+            <h1 class="text-xl font-semibold text-gray-900">Prompts</h1>
+            <p class="mt-1 text-sm text-gray-500">
+                Manage workflows, profiles, and steps
+            </p>
+        </div>
+        <!-- New Prompt button (disabled for MVP) -->
+        <button disabled
+                class="inline-flex items-center px-4 py-2 bg-gray-300 text-gray-500
+                       text-sm font-medium rounded-md cursor-not-allowed"
+                title="Coming soon">
+            New Prompt
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <form hx-get="/prompts"
+              hx-target="#content"
+              hx-push-url="true"
+              class="flex flex-wrap items-center gap-4">
+
+            <!-- Category tabs -->
+            <div class="flex rounded-md shadow-sm">
+                <button type="submit" name="category" value=""
+                        class="px-4 py-2 text-sm font-medium rounded-l-md border
+                               {{if eq .Content.CategoryFilter ""}}
+                               bg-blue-600 text-white border-blue-600
+                               {{else}}
+                               bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+                               {{end}}">
+                    All
+                </button>
+                <button type="submit" name="category" value="workflow"
+                        class="px-4 py-2 text-sm font-medium border-t border-b
+                               {{if eq .Content.CategoryFilter "workflow"}}
+                               bg-blue-600 text-white border-blue-600
+                               {{else}}
+                               bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+                               {{end}}">
+                    Workflows
+                </button>
+                <button type="submit" name="category" value="profile"
+                        class="px-4 py-2 text-sm font-medium border-t border-b
+                               {{if eq .Content.CategoryFilter "profile"}}
+                               bg-blue-600 text-white border-blue-600
+                               {{else}}
+                               bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+                               {{end}}">
+                    Profiles
+                </button>
+                <button type="submit" name="category" value="step"
+                        class="px-4 py-2 text-sm font-medium rounded-r-md border
+                               {{if eq .Content.CategoryFilter "step"}}
+                               bg-blue-600 text-white border-blue-600
+                               {{else}}
+                               bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+                               {{end}}">
+                    Steps
+                </button>
+            </div>
+
+            <!-- Source filter -->
+            <select name="source"
+                    onchange="this.form.requestSubmit()"
+                    class="px-3 py-2 border border-gray-300 rounded-md text-sm">
+                <option value="" {{if eq .Content.SourceFilter ""}}selected{{end}}>
+                    All Sources
+                </option>
+                <option value="local" {{if eq .Content.SourceFilter "local"}}selected{{end}}>
+                    Local
+                </option>
+                <option value="global" {{if eq .Content.SourceFilter "global"}}selected{{end}}>
+                    Global
+                </option>
+                <option value="embedded" {{if eq .Content.SourceFilter "embedded"}}selected{{end}}>
+                    Embedded
+                </option>
+            </select>
+
+            <!-- Search -->
+            <input type="text"
+                   name="q"
+                   value="{{.Content.Query}}"
+                   placeholder="Search prompts..."
+                   class="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 rounded-md text-sm">
+
+            <!-- Sort -->
+            <select name="sort"
+                    onchange="this.form.requestSubmit()"
+                    class="px-3 py-2 border border-gray-300 rounded-md text-sm">
+                <option value="name" {{if eq .Content.SortField "name"}}selected{{end}}>
+                    Sort by Name
+                </option>
+                <option value="category" {{if eq .Content.SortField "category"}}selected{{end}}>
+                    Sort by Category
+                </option>
+                <option value="source" {{if eq .Content.SortField "source"}}selected{{end}}>
+                    Sort by Source
+                </option>
+            </select>
+
+            <!-- Hidden fields to preserve state -->
+            <input type="hidden" name="order" value="{{.Content.SortOrder}}">
+
+            <button type="submit"
+                    class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200">
+                Search
+            </button>
+        </form>
+    </div>
+
+    {{if .Content.Error}}
+    <div class="p-6">
+        <div class="rounded-md bg-red-50 p-4">
+            <p class="text-sm font-medium text-red-800">{{.Content.Error}}</p>
+        </div>
+    </div>
+    {{else if not .Content.Prompts}}
+    <div class="p-6 text-center py-12">
+        {{if or .Content.Query .Content.CategoryFilter .Content.SourceFilter}}
+        <p class="text-gray-500">No prompts match your filters</p>
+        <a href="/prompts"
+           hx-get="/prompts"
+           hx-target="#content"
+           hx-push-url="true"
+           class="mt-2 inline-block text-blue-600 hover:text-blue-800">
+            Clear filters
+        </a>
+        {{else}}
+        <p class="text-gray-500">No prompts found</p>
+        {{end}}
+    </div>
+    {{else}}
+    <!-- Prompts table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Name
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Category
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Source
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Description
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {{range .Content.Prompts}}
+                <tr class="hover:bg-gray-50 cursor-pointer"
+                    hx-get="/prompts/{{.Category}}/{{.Name}}"
+                    hx-target="#content"
+                    hx-push-url="true">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm font-medium text-gray-900">{{.Name}}</span>
+                        {{if .Shadowed}}
+                        <span class="ml-1 text-xs text-yellow-600" title="Shadowed by higher-precedence source">
+                            (shadowed)
+                        </span>
+                        {{end}}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm text-gray-500">{{.Category.Label}}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{.Source.BadgeColor}}">
+                            {{.Source}}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-gray-500 line-clamp-2">
+                            {{if .Description}}{{.Description}}{{else}}-{{end}}
+                        </span>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Result count -->
+    <div class="px-6 py-3 border-t border-gray-200 bg-gray-50">
+        <p class="text-sm text-gray-500">
+            Showing {{len .Content.Prompts}} prompt{{if ne (len .Content.Prompts) 1}}s{{end}}
+        </p>
+    </div>
+    {{end}}
+</div>

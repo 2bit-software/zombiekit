@@ -14,10 +14,13 @@ import (
 	"github.com/zombiekit/brains/internal/profile"
 	"github.com/zombiekit/brains/internal/recall"
 	"github.com/zombiekit/brains/internal/recall/postgres"
+	"github.com/zombiekit/brains/internal/step"
 	"github.com/zombiekit/brains/internal/web"
 	"github.com/zombiekit/brains/internal/webplugins/memory"
 	"github.com/zombiekit/brains/internal/webplugins/profiles"
+	"github.com/zombiekit/brains/internal/webplugins/prompts"
 	recallweb "github.com/zombiekit/brains/internal/webplugins/recall"
+	"github.com/zombiekit/brains/internal/workflow"
 )
 
 // newGUICommand creates the gui command for starting the web interface.
@@ -65,6 +68,12 @@ func runGUI(c *cli.Context) error {
 		profilesPlugin := profiles.NewPlugin(profileService)
 		registry.Register("profiles", profilesPlugin)
 	}
+
+	// Register prompts plugin (unified view of workflows, profiles, and steps)
+	workflowSvc, _ := workflow.NewService("")
+	stepSvc, _ := step.NewService("")
+	promptsPlugin := prompts.NewPlugin(profileService, stepSvc, workflowSvc)
+	registry.Register("prompts", promptsPlugin)
 
 	// Create memory storage (SQLite default)
 	// Use BRAINS_DATA_DIR if set (for containerized environments), otherwise default to ~/.brains

@@ -1,0 +1,185 @@
+<div class="bg-white rounded-lg shadow">
+    <!-- Back link -->
+    <div class="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <a href="/prompts"
+           hx-get="/prompts"
+           hx-target="#content"
+           hx-push-url="true"
+           class="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
+            ← Back to prompts
+        </a>
+    </div>
+
+    {{if .Content.Error}}
+    <div class="p-6">
+        <div class="rounded-md bg-red-50 p-4">
+            <h3 class="text-sm font-medium text-red-800">Prompt not found</h3>
+            <p class="mt-2 text-sm text-red-700">{{.Content.Error}}</p>
+        </div>
+    </div>
+    {{else}}
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-semibold text-gray-900">{{.Content.Prompt.Name}}</h1>
+                <div class="mt-1 flex items-center space-x-2">
+                    <span class="text-sm text-gray-500">{{.Content.Prompt.Category.Label}}</span>
+                    <span class="text-gray-300">•</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{.Content.Prompt.Source.BadgeColor}}">
+                        {{.Content.Prompt.Source}}
+                    </span>
+                </div>
+            </div>
+            {{if ne .Content.Prompt.Source.String "embedded"}}
+            <!-- Edit/Delete buttons (disabled for MVP) -->
+            <div class="flex items-center space-x-2">
+                <button disabled
+                        class="px-3 py-1.5 text-sm font-medium text-gray-400 bg-gray-100
+                               rounded-md cursor-not-allowed"
+                        title="Coming soon">
+                    Edit
+                </button>
+                <button disabled
+                        class="px-3 py-1.5 text-sm font-medium text-gray-400 bg-gray-100
+                               rounded-md cursor-not-allowed"
+                        title="Coming soon">
+                    Delete
+                </button>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+            {{if .Content.Prompt.Description}}
+            <div class="col-span-2 sm:col-span-4">
+                <dt class="text-xs font-medium text-gray-500 uppercase">Description</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{.Content.Prompt.Description}}</dd>
+            </div>
+            {{end}}
+
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Path</dt>
+                <dd class="mt-1 text-sm text-gray-900 font-mono text-xs truncate"
+                    title="{{.Content.Prompt.Path}}">
+                    {{.Content.Prompt.Path}}
+                </dd>
+            </div>
+
+            {{/* Profile-specific metadata */}}
+            {{if eq .Content.Prompt.Category.String "profile"}}
+            {{if .Content.Prompt.ProfileType}}
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Type</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{.Content.Prompt.ProfileType}}</dd>
+            </div>
+            {{end}}
+            {{if .Content.Prompt.Model}}
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Model</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{.Content.Prompt.Model}}</dd>
+            </div>
+            {{end}}
+            {{if .Content.Prompt.Includes}}
+            <div class="col-span-2">
+                <dt class="text-xs font-medium text-gray-500 uppercase">Includes</dt>
+                <dd class="mt-1 flex flex-wrap gap-1">
+                    {{range .Content.Prompt.Includes}}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                        {{.}}
+                    </span>
+                    {{end}}
+                </dd>
+            </div>
+            {{end}}
+            {{end}}
+
+            {{/* Step-specific metadata */}}
+            {{if eq .Content.Prompt.Category.String "step"}}
+            {{if .Content.Prompt.Profiles}}
+            <div class="col-span-2">
+                <dt class="text-xs font-medium text-gray-500 uppercase">Profiles</dt>
+                <dd class="mt-1 flex flex-wrap gap-1">
+                    {{range .Content.Prompt.Profiles}}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                        {{.}}
+                    </span>
+                    {{end}}
+                </dd>
+            </div>
+            {{end}}
+            {{if .Content.Prompt.Files}}
+            <div class="col-span-2">
+                <dt class="text-xs font-medium text-gray-500 uppercase">Files</dt>
+                <dd class="mt-1 flex flex-wrap gap-1">
+                    {{range .Content.Prompt.Files}}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 font-mono">
+                        {{.}}
+                    </span>
+                    {{end}}
+                </dd>
+            </div>
+            {{end}}
+            {{end}}
+        </dl>
+    </div>
+
+    <!-- Content -->
+    <div class="p-6">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-medium text-gray-900">Content</h3>
+            <button type="button"
+                    onclick="toggleView()"
+                    class="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
+                <span id="toggle-label">View Source</span>
+            </button>
+        </div>
+        <div id="content-display"
+             data-raw="{{.Content.Prompt.Content}}"
+             data-mode="rendered"
+             class="prose prose-sm max-w-none bg-gray-50 rounded-lg p-4 min-h-[200px] overflow-auto">
+            <!-- Rendered by JavaScript -->
+        </div>
+    </div>
+    {{end}}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+function toggleView() {
+    const display = document.getElementById('content-display');
+    const label = document.getElementById('toggle-label');
+    if (!display) return;
+
+    if (display.dataset.mode === 'rendered') {
+        display.textContent = display.dataset.raw;
+        display.dataset.mode = 'source';
+        display.classList.add('font-mono', 'whitespace-pre-wrap', 'text-xs');
+        display.classList.remove('prose', 'prose-sm');
+        label.textContent = 'View Rendered';
+    } else {
+        display.innerHTML = marked.parse(display.dataset.raw || '');
+        display.dataset.mode = 'rendered';
+        display.classList.remove('font-mono', 'whitespace-pre-wrap', 'text-xs');
+        display.classList.add('prose', 'prose-sm');
+        label.textContent = 'View Source';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const display = document.getElementById('content-display');
+    if (display && display.dataset.raw !== undefined) {
+        display.innerHTML = marked.parse(display.dataset.raw || '');
+    }
+});
+
+document.body.addEventListener('htmx:afterSwap', function(e) {
+    const display = document.getElementById('content-display');
+    if (display && display.dataset.mode === 'rendered' && display.dataset.raw !== undefined) {
+        display.innerHTML = marked.parse(display.dataset.raw || '');
+    }
+});
+</script>

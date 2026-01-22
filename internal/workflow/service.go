@@ -185,6 +185,78 @@ func parseWorkflow(content []byte, name, path, source string) (*Workflow, error)
 	}, nil
 }
 
+// List returns all available workflows from all sources.
+// Resolution order: local > global > embedded (higher precedence overwrites).
+func (s *Service) List() ([]*Workflow, error) {
+	workflowMap := make(map[string]*Workflow)
+
+	// Load in reverse precedence order
+	// 3. Embedded (lowest)
+	if GetEmbeddedFS() != nil {
+		s.loadAllFromEmbedded(workflowMap)
+	}
+
+	// 2. Global
+	if s.homeDir != "" {
+		s.loadAllFromDir(filepath.Join(s.homeDir, ".brains", "workflows"), "global", workflowMap)
+	}
+
+	// 1. Local (highest)
+	s.loadAllFromDir(filepath.Join(s.workingDir, ".brains", "workflows"), "local", workflowMap)
+
+	// Convert to slice
+	workflows := make([]*Workflow, 0, len(workflowMap))
+	for _, wf := range workflowMap {
+		workflows = append(workflows, wf)
+	}
+
+	return workflows, nil
+}
+
+func (s *Service) loadAllFromDir(dir, source string, out map[string]*Workflow) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+
+		name := strings.TrimSuffix(entry.Name(), ".md")
+		if wf := s.loadFromDir(dir, name, source); wf != nil {
+			out[name] = wf
+		}
+	}
+}
+
+func (s *Service) loadAllFromEmbedded(out map[string]*Workflow) {
+	globalEmbeddedMu.RLock()
+	fsys := globalEmbeddedFS
+	globalEmbeddedMu.RUnlock()
+
+	if fsys == nil {
+		return
+	}
+
+	entries, err := fs.ReadDir(fsys, "workflows")
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+
+		name := strings.TrimSuffix(entry.Name(), ".md")
+		if wf := s.loadFromEmbedded(name); wf != nil {
+			out[name] = wf
+		}
+	}
+}
+
 // WorkflowNotFoundError is returned when a workflow cannot be found.
 type WorkflowNotFoundError struct {
 	Name string
