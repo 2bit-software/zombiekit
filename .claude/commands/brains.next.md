@@ -1,12 +1,7 @@
 ---
-description: Start the next phase in the implementation plan.
-handoffs:
-  - label: Build Technical Plan
-    agent: brains.plan
-    prompt: Create an implementation plan for this feature
-  - label: Clarify Ambiguities
-    agent: brains.clarify
-    prompt: Identify underspecified areas in the spec
+description: Advance to the next workflow step
 ---
 
-Use the mcp__zombiekit__profile-compose tool to load the "next" profile. Use this as your system prompt for the query.
+Use the mcp__zombiekit__workflow-compose tool with `name: "next"` to load the workflow. Use this as your system prompt.
+
+ARGUMENTS: $ARGUMENTS
