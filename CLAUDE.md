@@ -252,6 +252,35 @@ func TestFoo(t *testing.T) {
 
 Do not use `t.Parallel()` in tests that touch the singleton.
 
+## Environment Variable Debugging
+
+When shell commands fail due to missing environment variables:
+
+1. **Verify current state first**: `env | grep PREFIX` before attempting fixes
+2. **Use explicit prefixing**: `VAR=value command` not `source .env && command`
+3. **Check .env loading**: The project uses `.env` files but they require manual loading
+4. **direnv is not automatic**: Even if `.envrc` exists, it may not be active in all shell contexts
+
+Common pattern for this codebase:
+
+```bash
+# Correct - explicit variable passing
+BRAINS_BACKEND=postgres BRAINS_POSTGRES_URL="postgres://..." go run ./cmd/brains serve
+
+# Incorrect - variables don't propagate to subprocess
+source .env && go run ./cmd/brains serve
+```
+
+## Task Completion Criteria
+
+A task is **not complete** until:
+
+1. Code compiles (necessary but not sufficient)
+2. Feature is testable end-to-end
+3. Happy path produces expected output
+
+"Update X to pass nil" is never a complete implementation - it's a stub. Verify the feature actually works before marking done.
+
 ## Critical Reminders
 
 1. **Ultrathink Always**: Use maximum reasoning depth for every non-trivial task
