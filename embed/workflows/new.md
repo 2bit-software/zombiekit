@@ -47,7 +47,8 @@ Analyze the user's input and determine which workflow type best matches their in
 Once you've determined the type:
 
 1. State your classification and brief rationale
-2. Immediately load the corresponding profile using `mcp__zombiekit__profile-compose` with the detected profile name ("feature", "bug", or "refactor")
+2. Check for Linear ticket reference (see below)
+3. Load the corresponding profile using `mcp__zombiekit__profile-compose` with the detected profile name ("feature", "bug", or "refactor")
 
 Example output:
 
@@ -56,4 +57,41 @@ Detected: **bug**
 Rationale: User reports login is failing, which indicates broken existing functionality.
 ```
 
-Then call `mcp__zombiekit__profile-compose` with the detected profile name and continue with that workflow.
+### Linear Ticket Detection
+
+Before loading the profile, check if the user input references a Linear ticket:
+
+1. **Pattern match**: Look for `[A-Z]+-[0-9]+` pattern (case-insensitive) in user input
+   - Examples: "DEV-101", "proj-42", "TEAM-1234"
+
+2. **If ticket found**:
+   - Extract and uppercase the identifier (e.g., "dev-101" → "DEV-101")
+   - Fetch ticket details via `mcp__linear-server__get_issue` with the identifier
+   - If successful, append metadata to the user input before passing to profile:
+     ```
+     ---
+     LINEAR_TICKET: DEV-101
+     LINEAR_URL: https://linear.app/...
+     LINEAR_TITLE: Ticket title here
+     ```
+   - If fetch fails (404, MCP unavailable): Display brief warning, proceed without metadata
+
+3. **If no ticket found**: Proceed normally without metadata
+
+**Example flow**:
+```
+User input: "work on DEV-101 add commit offer"
+
+1. Classification: feature
+2. Ticket detected: DEV-101
+3. Fetch ticket → success
+4. Pass to profile:
+   "work on DEV-101 add commit offer
+
+   ---
+   LINEAR_TICKET: DEV-101
+   LINEAR_URL: https://linear.app/heinsight/issue/DEV-101/...
+   LINEAR_TITLE: Have the /brains.complete command also offer to write a commit"
+```
+
+Then call `mcp__zombiekit__profile-compose` with the detected profile name and enriched arguments.

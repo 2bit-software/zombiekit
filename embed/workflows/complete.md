@@ -51,11 +51,80 @@ Goal: Properly close out an initiative, archive artifacts, and clear active stat
    {Any closing notes}
    ```
 
-5. **Clear Active State**
+5. **Offer Commit** (if in git repository)
+   - Run `git status --porcelain` via Bash tool
+   - If command fails (not a git repo): Skip to step 6
+   - If output is empty (no changes): Skip to step 6
+   - If output is non-empty (changes detected):
+     a. Parse output to summarize changes:
+        - Count lines with `M` (modified)
+        - Count lines with `A` or `??` (added/untracked)
+        - Count lines with `D` (deleted)
+     b. Display: "Uncommitted changes detected: X modified, Y added, Z deleted"
+     c. Use `AskUserQuestion` tool:
+        ```json
+        {
+          "questions": [{
+            "question": "Would you like to commit your changes before completing?",
+            "header": "Commit",
+            "multiSelect": false,
+            "options": [
+              {"label": "Yes, commit changes", "description": "Stage all and generate commit message"},
+              {"label": "No, skip commit", "description": "Complete without committing"}
+            ]
+          }]
+        }
+        ```
+     d. If "Yes, commit changes":
+        - Run `git add -A` via Bash tool to stage all changes
+        - Use `Skill` tool with `skill: "commit-message"` to generate and execute commit
+        - If commit fails: Display error message, proceed to step 6
+     e. Proceed to step 6
+
+6. **Offer Linear Update** (if source ticket exists)
+   - Read INITIATIVE.md and look for Source section with `**Linear Ticket**: [TICKET-ID]` pattern
+   - If no Source section: Try parsing initiative name for `[A-Z]+-[0-9]+` pattern as fallback
+   - If no ticket found: Skip to step 7
+   - If ticket found:
+     a. Display: "Source ticket found: {TICKET-ID}"
+     b. Use `AskUserQuestion` tool:
+        ```json
+        {
+          "questions": [{
+            "question": "Would you like to update Linear ticket {TICKET-ID}?",
+            "header": "Linear",
+            "multiSelect": false,
+            "options": [
+              {"label": "Yes, update ticket", "description": "Post summary and mark as Done"},
+              {"label": "No, skip update", "description": "Complete without updating ticket"}
+            ]
+          }]
+        }
+        ```
+     c. If "Yes, update ticket":
+        - Generate work summary from the Outcomes section in INITIATIVE.md
+        - Post comment via `mcp__linear-server__create_comment`:
+          ```json
+          {
+            "issueId": "{TICKET-ID}",
+            "body": "## Work Completed\n\n{summary of outcomes}\n\n---\n*Completed via ZombieKit initiative: {initiative-name}*"
+          }
+          ```
+        - Update status via `mcp__linear-server__update_issue`:
+          ```json
+          {
+            "id": "{TICKET-ID}",
+            "state": "Done"
+          }
+          ```
+        - If API fails: Display error message, proceed to step 7
+     d. Proceed to step 7
+
+7. **Clear Active State**
    - Remove or clear `.brains/active.json`
    - Initiative remains in history (never deleted)
 
-6. **Report Completion**
+8. **Report Completion**
    - Initiative name
    - Work items completed vs skipped
    - Total duration

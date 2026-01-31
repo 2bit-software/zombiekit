@@ -31,6 +31,22 @@ Execution steps:
    - If active and `--new` flag: Complete current, create new
    - If active: Add feature to current initiative
 
+1.5. **Add Source Section** (if Linear ticket metadata present)
+   - Check if user input contains `LINEAR_TICKET:` metadata block
+   - If not present: Skip to step 2
+   - If present:
+     a. Extract LINEAR_TICKET, LINEAR_URL, LINEAR_TITLE from metadata
+     b. Read the initiative's INITIATIVE.md file
+     c. Use Edit tool to insert a Source section before "## Description":
+        ```markdown
+        ## Source
+
+        **Linear Ticket**: [LINEAR_TICKET](LINEAR_URL)
+        **Title**: LINEAR_TITLE
+
+        ```
+     d. Proceed to step 2
+
 2. **Separation Process**
    - Extract business requirements (user-visible behavior)
    - Extract technical preferences (implementation hints) -> `technical-requirements-research.md`

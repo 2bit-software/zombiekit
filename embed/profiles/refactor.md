@@ -29,6 +29,22 @@ Execution steps:
    - Check for active initiative
    - Add refactor to current initiative or create new one
 
+1.5. **Add Source Section** (if Linear ticket metadata present)
+   - Check if user input contains `LINEAR_TICKET:` metadata block
+   - If not present: Skip to step 2
+   - If present:
+     a. Extract LINEAR_TICKET, LINEAR_URL, LINEAR_TITLE from metadata
+     b. Read the initiative's INITIATIVE.md file
+     c. Use Edit tool to insert a Source section before "## Description":
+        ```markdown
+        ## Source
+
+        **Linear Ticket**: [LINEAR_TICKET](LINEAR_URL)
+        **Title**: LINEAR_TITLE
+
+        ```
+     d. Proceed to step 2
+
 2. **Goal Definition**
    - Document improvement goal in `goal.md`
    - Identify what "better" means (readability, performance, maintainability)
