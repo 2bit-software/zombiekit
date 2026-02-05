@@ -14,6 +14,9 @@ import (
 	"github.com/zombiekit/brains/internal/profile"
 )
 
+// Compile-time check that fs.FS is still used (for GetWorkflowSteps method).
+var _ fs.FS = (fs.FS)(nil)
+
 // stepPrerequisites defines the prerequisites for steps that require them.
 var stepPrerequisites = map[string]StepPrerequisite{
 	"plan": {
@@ -77,11 +80,6 @@ func NewService(workDir string) (*Service, error) {
 		stateManager: stateManager,
 		profileSvc:   profileSvc,
 	}, nil
-}
-
-// SetEmbeddedFS sets the embedded filesystem for default steps.
-func (s *Service) SetEmbeddedFS(fsys fs.FS) {
-	s.loader.SetEmbeddedFS(fsys)
 }
 
 // SetGlobalDir overrides the global directory (useful for testing).

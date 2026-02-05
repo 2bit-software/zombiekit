@@ -61,14 +61,34 @@ Goal: Read step state from INITIATIVE.md and advance to the next step.
 | implement | pending | - |
 ```
 
+### Explicit Step Navigation
+
+If the argument is a workflow step name, jump directly to that step (forwards or backwards):
+- `next spec` - Jump to spec/analyze step
+- `next plan` - Jump to plan step
+- `next tasks` - Jump to tasks step
+- `next implement` - Jump to implement step
+- `next verify` - Jump to verify step
+
+This allows:
+- **Backwards navigation** - Return to an earlier step to revise work
+- **Skip steps** - Jump ahead when intermediate steps aren't needed
+- **Restart steps** - Re-run a step that was previously completed
+
+When jumping to a step:
+1. Mark any `in_progress` step as `completed` first
+2. Set the target step to `in_progress`
+3. Update timestamps for both changes
+4. Load the appropriate profile
+
 ### Alternate Path Handling
 
-If arguments include an alternate directive:
-- `next audit` - Run audit instead of normal progression
-- `next clarify` - Run clarification instead
-- `next research` - Do more research before proceeding
+For detours that don't affect the main step sequence:
+- `next audit` - Run audit profile
+- `next clarify` - Run clarification profile
+- `next research` - Do more research
 
-These overrides let users take detours without losing their place in the step sequence.
+These overrides run the profile without changing step status.
 
 ### Output Format
 

@@ -16,7 +16,6 @@ func init() {
 	// Register embedded filesystems (embed.go handles prefix stripping via fs.Sub)
 	profile.SetEmbeddedFS(zombiekit.EmbeddedProfiles)
 	workflow.SetEmbeddedFS(zombiekit.EmbeddedWorkflows)
-	step.SetEmbeddedFS(zombiekit.EmbeddedSteps)
 	step.SetTemplateFS(zombiekit.EmbeddedTemplates)
 }
 

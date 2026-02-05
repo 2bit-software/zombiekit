@@ -14,10 +14,8 @@ import (
 	initiativetool "github.com/zombiekit/brains/internal/mcp/tools/initiative"
 	profiletool "github.com/zombiekit/brains/internal/mcp/tools/profile"
 	recalltool "github.com/zombiekit/brains/internal/mcp/tools/recall"
-	steptool "github.com/zombiekit/brains/internal/mcp/tools/step"
 	"github.com/zombiekit/brains/internal/mcp/tools/stickymemory"
 	workflowtool "github.com/zombiekit/brains/internal/mcp/tools/workflow"
-	"github.com/zombiekit/brains/internal/mcp/tools/zombiekit"
 	"github.com/zombiekit/brains/internal/memory"
 	"github.com/zombiekit/brains/internal/recall"
 )
@@ -32,8 +30,6 @@ type Server struct {
 	sessionManager *codereasoning.SessionManager
 	profileTool    *profiletool.Tool
 	workflowTool   *workflowtool.Tool
-	zombiekitTool  *zombiekit.Tool
-	stepTool       *steptool.Tool
 	initiativeTool *initiativetool.Tool
 	recallTool     *recalltool.Tool
 	config         *config.Config
@@ -58,8 +54,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 	codeReasoningTool := codereasoning.NewTool(sessionManager)
 	profTool := profiletool.NewTool()
 	wfTool := workflowtool.NewTool()
-	zombiekitTool := zombiekit.NewTool()
-	stepToolInst := steptool.NewTool()
 	initiativeToolInst := initiativetool.NewTool()
 
 	var recallToolInst *recalltool.Tool
@@ -76,8 +70,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 		sessionManager: sessionManager,
 		profileTool:    profTool,
 		workflowTool:   wfTool,
-		zombiekitTool:  zombiekitTool,
-		stepTool:       stepToolInst,
 		initiativeTool: initiativeToolInst,
 		recallTool:     recallToolInst,
 		config:         cfg,
@@ -158,38 +150,11 @@ func (s *Server) registerTools() {
 	// Register workflow tool
 	s.registerWorkflowTool()
 
-	// Register feature tool
-	if s.config.IsToolEnabled("feature") {
-		featureDef := s.zombiekitTool.Definition()
-		featureTool := mcp.NewTool(featureDef.Name,
-			mcp.WithDescription(featureDef.Description),
-		)
-		s.mcpServer.AddTool(featureTool, s.handleFeature)
-	}
-
 	// Register initiative tool
 	s.registerInitiativeTool()
 
-	// Register step tool
-	s.registerStepTool()
-
 	// Register recall tools
 	s.registerRecallTools()
-}
-
-// handleFeature handles feature tool calls.
-func (s *Server) handleFeature(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
-	if !ok {
-		args = make(map[string]interface{})
-	}
-
-	result, err := s.zombiekitTool.Execute(ctx, args)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(result), nil
 }
 
 // handleStickyMemory handles stickymemory tool calls.
@@ -343,46 +308,6 @@ func (s *Server) handleProfileSave(ctx context.Context, req mcp.CallToolRequest)
 	}
 
 	result, err := s.profileTool.HandleSave(ctx, args)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(result), nil
-}
-
-// registerStepTool registers the step MCP tool.
-// The step tool is only registered if enabled in the configuration.
-func (s *Server) registerStepTool() {
-	if !s.config.IsToolEnabled("step") {
-		return
-	}
-
-	stepDef := s.stepTool.Definition()
-	stepMCPTool := mcp.NewTool(stepDef.Name,
-		mcp.WithDescription(stepDef.Description),
-		mcp.WithString("step",
-			mcp.Required(),
-			mcp.Description("Step name to execute: feature, bug, refactor, plan, tasks, implement, audit, clarify"),
-		),
-		mcp.WithString("dir",
-			mcp.Required(),
-			mcp.Description("Working directory containing the .brains folder"),
-		),
-		mcp.WithString("initiative",
-			mcp.Description("Optional: Override the current active initiative. Path relative to history/ folder (e.g., '675d8a3f-feature-user-auth')"),
-		),
-	)
-	s.mcpServer.AddTool(stepMCPTool, s.handleStep)
-}
-
-// handleStep handles step tool calls.
-func (s *Server) handleStep(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
-	if !ok {
-		return mcp.NewToolResultError("invalid arguments format"), nil
-	}
-
-	result, err := s.stepTool.Execute(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

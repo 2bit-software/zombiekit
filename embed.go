@@ -15,19 +15,15 @@ var embeddedCommands embed.FS
 //go:embed embed/templates/*
 var embeddedTemplates embed.FS
 
-//go:embed embed/steps/*
-var embeddedSteps embed.FS
-
 //go:embed embed/workflows/*
 var embeddedWorkflows embed.FS
 
 // Exported filesystems with embed/ prefix stripped via fs.Sub.
-// Consumers see the same paths they expect (e.g., "profiles/*", "steps/*").
+// Consumers see the same paths they expect (e.g., "profiles/*", "workflows/*").
 var (
 	EmbeddedProfiles  fs.FS
 	EmbeddedCommands  fs.FS
 	EmbeddedTemplates fs.FS
-	EmbeddedSteps     fs.FS
 	EmbeddedWorkflows fs.FS
 )
 
@@ -44,10 +40,6 @@ func init() {
 	EmbeddedTemplates, err = fs.Sub(embeddedTemplates, "embed")
 	if err != nil {
 		panic("embed: templates: " + err.Error())
-	}
-	EmbeddedSteps, err = fs.Sub(embeddedSteps, "embed")
-	if err != nil {
-		panic("embed: steps: " + err.Error())
 	}
 	EmbeddedWorkflows, err = fs.Sub(embeddedWorkflows, "embed")
 	if err != nil {

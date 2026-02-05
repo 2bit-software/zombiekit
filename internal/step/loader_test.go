@@ -1,11 +1,9 @@
 package step
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
-	"testing/fstest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,35 +26,6 @@ func TestNewLoader(t *testing.T) {
 }
 
 func TestLoader_Get(t *testing.T) {
-	t.Run("returns embedded step when no custom exists", func(t *testing.T) {
-		tmpDir := t.TempDir()
-
-		// Create embedded FS with a test step
-		embeddedFS := fstest.MapFS{
-			"steps/specify.md": &fstest.MapFile{
-				Data: []byte(`---
-name: specify
-description: Create specification
-profiles:
-  - research
-files:
-  - "spec.md"
----
-Create the specification.`),
-			},
-		}
-
-		loader := NewLoader(tmpDir)
-		loader.SetEmbeddedFS(embeddedFS)
-
-		step, err := loader.Get("specify")
-		require.NoError(t, err)
-		assert.Equal(t, "specify", step.Name)
-		assert.Equal(t, "Create specification", step.Description)
-		assert.Equal(t, SourceEmbedded, step.Source)
-		assert.Contains(t, step.Directive, "Create the specification")
-	})
-
 	t.Run("returns local step when it exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
@@ -73,19 +42,7 @@ profiles:
 Custom local directive.`
 		require.NoError(t, os.WriteFile(filepath.Join(localStepsDir, "specify.md"), []byte(stepContent), 0644))
 
-		// Also provide embedded fallback
-		embeddedFS := fstest.MapFS{
-			"steps/specify.md": &fstest.MapFile{
-				Data: []byte(`---
-name: specify
-description: Embedded spec
----
-Embedded directive.`),
-			},
-		}
-
 		loader := NewLoader(tmpDir)
-		loader.SetEmbeddedFS(embeddedFS)
 
 		step, err := loader.Get("specify")
 		require.NoError(t, err)
@@ -120,11 +77,11 @@ Global directive.`
 		assert.Equal(t, SourceGlobal, step.Source)
 	})
 
-	t.Run("precedence: local > global > embedded", func(t *testing.T) {
+	t.Run("precedence: local > global", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		globalDir := t.TempDir()
 
-		// Create all three versions
+		// Create both local and global versions
 		localStepsDir := filepath.Join(tmpDir, ".brains", "steps")
 		require.NoError(t, os.MkdirAll(localStepsDir, 0755))
 		require.NoError(t, os.WriteFile(filepath.Join(localStepsDir, "test.md"), []byte(`---
@@ -141,19 +98,8 @@ description: Global version
 ---
 Global`), 0644))
 
-		embeddedFS := fstest.MapFS{
-			"steps/test.md": &fstest.MapFile{
-				Data: []byte(`---
-name: test
-description: Embedded version
----
-Embedded`),
-			},
-		}
-
 		loader := NewLoader(tmpDir)
 		loader.SetGlobalDir(globalDir)
-		loader.SetEmbeddedFS(embeddedFS)
 
 		step, err := loader.Get("test")
 		require.NoError(t, err)
@@ -192,19 +138,8 @@ name: global-only
 ---
 Global only step`), 0644))
 
-		// Create embedded step
-		embeddedFS := fstest.MapFS{
-			"steps/embedded-only.md": &fstest.MapFile{
-				Data: []byte(`---
-name: embedded-only
----
-Embedded only step`),
-			},
-		}
-
 		loader := NewLoader(tmpDir)
 		loader.SetGlobalDir(globalDir)
-		loader.SetEmbeddedFS(embeddedFS)
 
 		steps, err := loader.List()
 		require.NoError(t, err)
@@ -216,13 +151,13 @@ Embedded only step`),
 
 		assert.True(t, names["local-only"], "should include local step")
 		assert.True(t, names["global-only"], "should include global step")
-		assert.True(t, names["embedded-only"], "should include embedded step")
 	})
 
 	t.Run("deduplicates steps by name with precedence", func(t *testing.T) {
 		tmpDir := t.TempDir()
+		globalDir := t.TempDir()
 
-		// Create local step that shadows embedded
+		// Create local step that shadows global
 		localStepsDir := filepath.Join(tmpDir, ".brains", "steps")
 		require.NoError(t, os.MkdirAll(localStepsDir, 0755))
 		require.NoError(t, os.WriteFile(filepath.Join(localStepsDir, "specify.md"), []byte(`---
@@ -231,18 +166,16 @@ description: Local override
 ---
 Local directive`), 0644))
 
-		embeddedFS := fstest.MapFS{
-			"steps/specify.md": &fstest.MapFile{
-				Data: []byte(`---
+		globalStepsDir := filepath.Join(globalDir, "steps")
+		require.NoError(t, os.MkdirAll(globalStepsDir, 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(globalStepsDir, "specify.md"), []byte(`---
 name: specify
-description: Embedded default
+description: Global default
 ---
-Embedded directive`),
-			},
-		}
+Global directive`), 0644))
 
 		loader := NewLoader(tmpDir)
-		loader.SetEmbeddedFS(embeddedFS)
+		loader.SetGlobalDir(globalDir)
 
 		steps, err := loader.List()
 		require.NoError(t, err)
@@ -257,26 +190,6 @@ Embedded directive`),
 			}
 		}
 		assert.Equal(t, 1, specifyCount)
-	})
-}
-
-func TestLoader_EmbeddedFS(t *testing.T) {
-	t.Run("SetEmbeddedFS and HasEmbeddedSteps", func(t *testing.T) {
-		loader := NewLoader("")
-
-		assert.False(t, loader.HasEmbeddedSteps())
-
-		embeddedFS := fstest.MapFS{
-			"steps/test.md": &fstest.MapFile{
-				Data: []byte(`---
-name: test
----
-Test`),
-			},
-		}
-		loader.SetEmbeddedFS(embeddedFS)
-
-		assert.True(t, loader.HasEmbeddedSteps())
 	})
 }
 
@@ -328,7 +241,7 @@ Directive text`)
 
 Multiple lines are fine.`)
 
-		step, err := ParseStep(content, "plain", "/path/to/plain.md", SourceEmbedded)
+		step, err := ParseStep(content, "plain", "/path/to/plain.md", SourceLocal)
 		require.NoError(t, err)
 
 		assert.Equal(t, "plain", step.Name)
@@ -345,15 +258,4 @@ Directive`)
 		_, err := ParseStep(content, "test", "/path/to/test.md", SourceLocal)
 		assert.Error(t, err)
 	})
-}
-
-// Helper to create an in-memory embedded FS for testing
-func createTestEmbeddedFS(steps map[string]string) fs.FS {
-	mapFS := make(fstest.MapFS)
-	for name, content := range steps {
-		mapFS["steps/"+name+".md"] = &fstest.MapFile{
-			Data: []byte(content),
-		}
-	}
-	return mapFS
 }

@@ -199,7 +199,6 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 	if err != nil {
 		return "", fmt.Errorf("creating step service: %w", err)
 	}
-	stepSvc.SetEmbeddedFS(t.embeddedFS)
 
 	workflowSteps, err := stepSvc.GetWorkflowSteps(initType)
 	if err != nil {
