@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package zombiekit.brains.llm.v1;
+
+// LLMService - Contract defined, implementation deferred to followup ticket
+service LLMService {
+  rpc Complete(CompleteRequest) returns (CompleteResponse);
+  rpc CompleteStream(CompleteStreamRequest) returns (stream CompleteStreamResponse);
+}
+
+// Enums
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_SYSTEM = 1;
+  ROLE_USER = 2;
+  ROLE_ASSISTANT = 3;
+}
+
+enum FinishReason {
+  FINISH_REASON_UNSPECIFIED = 0;
+  FINISH_REASON_STOP = 1;
+  FINISH_REASON_LENGTH = 2;
+  FINISH_REASON_CONTENT_FILTER = 3;
+}
+
+// Messages
+message Message {
+  Role role = 1;
+  string content = 2;
+}
+
+message Usage {
+  int32 prompt_tokens = 1;
+  int32 completion_tokens = 2;
+  int32 total_tokens = 3;
+}
+
+message CompleteRequest {
+  string request_id = 1;
+  string model = 2;
+  repeated Message messages = 3;
+  int32 max_tokens = 4;
+  float temperature = 5;
+}
+
+message CompleteResponse {
+  string content = 1;
+  FinishReason finish_reason = 2;
+  Usage usage = 3;
+}
+
+message CompleteStreamRequest {
+  string request_id = 1;
+  string model = 2;
+  repeated Message messages = 3;
+  int32 max_tokens = 4;
+  float temperature = 5;
+}
+
+message CompleteStreamResponse {
+  string delta_content = 1;
+  FinishReason finish_reason = 2; // Set on final chunk
+  Usage usage = 3; // Set on final chunk
+}

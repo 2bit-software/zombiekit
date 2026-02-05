@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package zombiekit.brains.common.v1;
+
+// Pagination request fields (embed in list requests)
+message PageRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+// Pagination response fields (embed in list responses)
+message PageResponse {
+  string next_page_token = 1;
+  int32 total_count = 2;
+}
+
+// Audit issue from spec/code audits
+message AuditIssue {
+  Severity severity = 1;
+  string message = 2;
+  string file_path = 3;
+  int32 line_number = 4;
+  string suggestion = 5;
+
+  enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+    SEVERITY_CRITICAL = 1;
+    SEVERITY_MAJOR = 2;
+    SEVERITY_MINOR = 3;
+  }
+}
+
+// Complexity analysis result
+message ComplexityResult {
+  int32 score = 1;
+  repeated ComplexityFactor factors = 2;
+  string recommendation = 3;
+}
+
+message ComplexityFactor {
+  string name = 1;
+  int32 value = 2;
+  float weight = 3;
+}

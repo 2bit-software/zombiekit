@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package zombiekit.brains.search.v1;
+
+import "google/protobuf/timestamp.proto";
+import "zombiekit/brains/common/v1/common.proto";
+
+service SearchService {
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc GetConversation(GetConversationRequest) returns (GetConversationResponse);
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+}
+
+// Messages
+message Conversation {
+  string id = 1;
+  string project = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+  string summary = 5;
+  int32 total_chunks = 6;
+
+  reserved 10 to 19;
+  reserved "tenant_id", "organization_id";
+}
+
+message ConversationChunk {
+  string id = 1;
+  string conversation_id = 2;
+  string content = 3;
+  google.protobuf.Timestamp created_at = 4;
+  int32 sequence = 5;
+
+  reserved 10 to 19;
+  reserved "tenant_id", "organization_id";
+}
+
+message SearchResult {
+  ConversationChunk chunk = 1;
+  float score = 2;
+}
+
+// RPCs
+message SearchRequest {
+  string request_id = 1;
+  string query = 2;
+  int32 limit = 3;
+  string project_filter = 4;
+}
+
+message SearchResponse {
+  repeated SearchResult results = 1;
+}
+
+message GetConversationRequest {
+  string request_id = 1;
+  string conversation_id = 2;
+  zombiekit.brains.common.v1.PageRequest pagination = 3;
+}
+
+message GetConversationResponse {
+  Conversation conversation = 1;
+  repeated ConversationChunk chunks = 2;
+  zombiekit.brains.common.v1.PageResponse pagination = 3;
+}
+
+message ListConversationsRequest {
+  string request_id = 1;
+  zombiekit.brains.common.v1.PageRequest pagination = 2;
+  string project_filter = 3;
+}
+
+message ListConversationsResponse {
+  repeated Conversation conversations = 1;
+  zombiekit.brains.common.v1.PageResponse pagination = 2;
+}

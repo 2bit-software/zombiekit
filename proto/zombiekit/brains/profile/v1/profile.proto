@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package zombiekit.brains.profile.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service ProfileService {
+  // MVP RPCs
+  rpc ComposeProfile(ComposeProfileRequest) returns (ComposeProfileResponse);
+  rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse);
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
+  rpc SaveProfile(SaveProfileRequest) returns (SaveProfileResponse);
+
+  // Followup: Streaming (contract defined, implementation deferred)
+  rpc SubscribeProfileUpdates(SubscribeProfileUpdatesRequest) returns (stream SubscribeProfileUpdatesResponse);
+}
+
+// Enums
+enum ProfileLocation {
+  PROFILE_LOCATION_UNSPECIFIED = 0;
+  PROFILE_LOCATION_LOCAL = 1;
+  PROFILE_LOCATION_GLOBAL = 2;
+}
+
+enum ProfileEventType {
+  PROFILE_EVENT_TYPE_UNSPECIFIED = 0;
+  PROFILE_EVENT_TYPE_CREATED = 1;
+  PROFILE_EVENT_TYPE_UPDATED = 2;
+  PROFILE_EVENT_TYPE_DELETED = 3;
+}
+
+// Messages
+message Profile {
+  string name = 1;
+  string content = 2;
+  repeated string domains = 3;
+  repeated string dependencies = 4;
+  ProfileLocation location = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+
+  reserved 10 to 19;
+  reserved "tenant_id", "organization_id";
+}
+
+// MVP RPCs
+message ComposeProfileRequest {
+  string request_id = 1;
+  repeated string profile_names = 2;
+  string working_directory = 3;
+}
+
+message ComposeProfileResponse {
+  string composed_content = 1;
+  repeated string resolved_profiles = 2;
+}
+
+message ListProfilesRequest {
+  string request_id = 1;
+  string working_directory = 2;
+}
+
+message ListProfilesResponse {
+  repeated Profile profiles = 1;
+}
+
+message GetProfileRequest {
+  string request_id = 1;
+  string name = 2;
+  string working_directory = 3;
+}
+
+message GetProfileResponse {
+  Profile profile = 1;
+}
+
+message SaveProfileRequest {
+  string request_id = 1;
+  string name = 2;
+  string content = 3;
+  ProfileLocation location = 4;
+  bool overwrite = 5;
+  string working_directory = 6;
+}
+
+message SaveProfileResponse {
+  Profile profile = 1;
+}
+
+// Streaming (Followup)
+message SubscribeProfileUpdatesRequest {
+  string request_id = 1;
+}
+
+message SubscribeProfileUpdatesResponse {
+  ProfileEventType event_type = 1;
+  string profile_name = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  Profile profile = 4; // Included for CREATED/UPDATED events
+}

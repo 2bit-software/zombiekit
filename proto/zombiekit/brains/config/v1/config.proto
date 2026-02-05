@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package zombiekit.brains.config.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service ConfigService {
+  // MVP RPCs
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc UpdateConfig(UpdateConfigRequest) returns (UpdateConfigResponse);
+
+  // Followup: Streaming (contract defined, implementation deferred)
+  rpc SubscribeConfigUpdates(SubscribeConfigUpdatesRequest) returns (stream SubscribeConfigUpdatesResponse);
+}
+
+// Enums
+enum ConfigEventType {
+  CONFIG_EVENT_TYPE_UNSPECIFIED = 0;
+  CONFIG_EVENT_TYPE_UPDATED = 1;
+}
+
+// Messages
+message Config {
+  string key = 1;
+  string value = 2;
+  google.protobuf.Timestamp updated_at = 3;
+
+  reserved 10 to 19;
+  reserved "tenant_id", "organization_id";
+}
+
+// RPCs
+message GetConfigRequest {
+  string request_id = 1;
+  repeated string keys = 2; // If empty, returns all config
+}
+
+message GetConfigResponse {
+  repeated Config entries = 1;
+}
+
+message UpdateConfigRequest {
+  string request_id = 1;
+  repeated Config entries = 2;
+}
+
+message UpdateConfigResponse {
+  repeated Config entries = 1;
+}
+
+// Streaming (Followup)
+message SubscribeConfigUpdatesRequest {
+  string request_id = 1;
+}
+
+message SubscribeConfigUpdatesResponse {
+  ConfigEventType event_type = 1;
+  string key = 2;
+  string value = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}

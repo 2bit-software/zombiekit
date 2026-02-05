@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package zombiekit.brains.workflow.v1;
+
+import "google/protobuf/timestamp.proto";
+import "zombiekit/brains/common/v1/common.proto";
+
+service WorkflowService {
+  rpc CreateInitiative(CreateInitiativeRequest) returns (CreateInitiativeResponse);
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc UpdateStep(UpdateStepRequest) returns (UpdateStepResponse);
+  rpc CompleteInitiative(CompleteInitiativeRequest) returns (CompleteInitiativeResponse);
+  rpc ListInitiatives(ListInitiativesRequest) returns (ListInitiativesResponse);
+}
+
+// Enums
+enum InitiativeType {
+  INITIATIVE_TYPE_UNSPECIFIED = 0;
+  INITIATIVE_TYPE_FEATURE = 1;
+  INITIATIVE_TYPE_BUG = 2;
+  INITIATIVE_TYPE_REFACTOR = 3;
+}
+
+enum InitiativeStatus {
+  INITIATIVE_STATUS_UNSPECIFIED = 0;
+  INITIATIVE_STATUS_IN_PROGRESS = 1;
+  INITIATIVE_STATUS_COMPLETED = 2;
+}
+
+enum StepStatus {
+  STEP_STATUS_UNSPECIFIED = 0;
+  STEP_STATUS_PENDING = 1;
+  STEP_STATUS_IN_PROGRESS = 2;
+  STEP_STATUS_COMPLETED = 3;
+  STEP_STATUS_SKIPPED = 4;
+}
+
+// Messages
+message Initiative {
+  string id = 1;
+  string name = 2;
+  InitiativeType type = 3;
+  InitiativeStatus status = 4;
+  repeated WorkflowStep steps = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  string description = 8;
+  string branch_name = 9;
+
+  reserved 10 to 19;
+  reserved "tenant_id", "organization_id";
+}
+
+message WorkflowStep {
+  string name = 1;
+  StepStatus status = 2;
+  google.protobuf.Timestamp updated_at = 3;
+
+  reserved 10 to 19;
+  reserved "tenant_id", "organization_id";
+}
+
+// RPCs
+message CreateInitiativeRequest {
+  string request_id = 1;
+  string name = 2;
+  InitiativeType type = 3;
+  string description = 4;
+}
+
+message CreateInitiativeResponse {
+  Initiative initiative = 1;
+}
+
+message GetStatusRequest {
+  string request_id = 1;
+  string initiative_id = 2; // If empty, returns active initiative
+}
+
+message GetStatusResponse {
+  Initiative initiative = 1;
+}
+
+message UpdateStepRequest {
+  string request_id = 1;
+  string initiative_id = 2;
+  string step_name = 3;
+  StepStatus status = 4;
+}
+
+message UpdateStepResponse {
+  Initiative initiative = 1;
+}
+
+message CompleteInitiativeRequest {
+  string request_id = 1;
+  string initiative_id = 2;
+}
+
+message CompleteInitiativeResponse {
+  Initiative initiative = 1;
+}
+
+message ListInitiativesRequest {
+  string request_id = 1;
+  zombiekit.brains.common.v1.PageRequest pagination = 2;
+  InitiativeStatus status_filter = 3;
+}
+
+message ListInitiativesResponse {
+  repeated Initiative initiatives = 1;
+  zombiekit.brains.common.v1.PageResponse pagination = 2;
+}

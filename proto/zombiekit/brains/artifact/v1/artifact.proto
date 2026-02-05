@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package zombiekit.brains.artifact.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service ArtifactService {
+  rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+  rpc SaveArtifact(SaveArtifactRequest) returns (SaveArtifactResponse);
+  rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
+}
+
+// Messages
+message Artifact {
+  string initiative_id = 1;
+  string path = 2;
+  bytes content = 3; // bytes for binary compatibility
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  string content_type = 6;
+  int64 size_bytes = 7;
+
+  reserved 10 to 19;
+  reserved "tenant_id", "organization_id";
+}
+
+// RPCs
+message GetArtifactRequest {
+  string request_id = 1;
+  string initiative_id = 2;
+  string path = 3;
+}
+
+message GetArtifactResponse {
+  Artifact artifact = 1;
+}
+
+message SaveArtifactRequest {
+  string request_id = 1;
+  string initiative_id = 2;
+  string path = 3;
+  bytes content = 4;
+  string content_type = 5;
+}
+
+message SaveArtifactResponse {
+  Artifact artifact = 1;
+}
+
+message ListArtifactsRequest {
+  string request_id = 1;
+  string initiative_id = 2;
+  string path_prefix = 3;
+}
+
+message ListArtifactsResponse {
+  repeated Artifact artifacts = 1;
+}
