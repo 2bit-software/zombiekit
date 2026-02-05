@@ -17,8 +17,6 @@ type CreateResponse struct {
 	Action         string `json:"action"`
 	InitiativeID   string `json:"initiative_id"`
 	InitiativePath string `json:"initiative_path"`
-	CycleID        string `json:"cycle_id"`
-	CyclePath      string `json:"cycle_path"`
 	Branch         string `json:"branch"`
 	Type           string `json:"type"`
 	Name           string `json:"name"`
@@ -36,7 +34,6 @@ type StatusResponse struct {
 	InitiativeID   string   `json:"initiative_id,omitempty"`
 	InitiativeType string   `json:"initiative_type,omitempty"`
 	CurrentStep    string   `json:"current_step,omitempty"`
-	CycleID        string   `json:"cycle_id,omitempty"`
 	AvailableDocs  []string `json:"available_docs,omitempty"`
 	SuggestedNext  string   `json:"suggested_next,omitempty"`
 	HistoryPath    string   `json:"history_path,omitempty"`

@@ -76,8 +76,6 @@ type StepResponse struct {
 	ComposedPrompt string `json:"composed_prompt"`
 	// InitiativeFolder is the absolute path to the initiative folder.
 	InitiativeFolder string `json:"initiative_folder,omitempty"`
-	// CycleFolder is the absolute path to the active cycle folder.
-	CycleFolder string `json:"cycle_folder,omitempty"`
 	// WorkflowPhases describes the phases in a multi-phase workflow step.
 	WorkflowPhases []Phase `json:"workflow_phases,omitempty"`
 	// NextTask contains info about the next incomplete task (for implement step).

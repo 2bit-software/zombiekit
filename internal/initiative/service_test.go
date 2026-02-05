@@ -381,7 +381,7 @@ func TestService_Status(t *testing.T) {
 		assert.NotEmpty(t, status.HistoryPath)
 	})
 
-	t.Run("parses cycle info from INITIATIVE.md", func(t *testing.T) {
+	t.Run("parses step info from INITIATIVE.md", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
 
@@ -400,9 +400,7 @@ func TestService_Status(t *testing.T) {
 **Created**: 2026-01-31T10:00:00-08:00
 **ID**: abc12345-feature-test
 
-## Cycles
-
-### 1. feat/test (active)
+## Steps
 
 | Step | Status | Updated |
 |------|--------|---------|
@@ -426,7 +424,6 @@ Test initiative.
 		assert.Equal(t, "abc12345-feature-test", status.InitiativeID)
 		assert.Equal(t, "plan", status.CurrentStep)
 		assert.Equal(t, "in_progress", status.StepStatus)
-		assert.Equal(t, 1, status.CurrentCycle)
 		assert.Equal(t, 1, status.StepsCompleted) // spec is completed
 		assert.Equal(t, 4, status.StepsTotal)
 	})
@@ -450,9 +447,7 @@ Test initiative.
 **Created**: 2026-01-31T10:00:00-08:00
 **ID**: def67890-feature-test
 
-## Cycles
-
-### 1. feat/test (active)
+## Steps
 
 | Step | Status | Updated |
 |------|--------|---------|
@@ -497,9 +492,7 @@ Test initiative.
 **Created**: 2026-01-31T10:00:00-08:00
 **ID**: ghi11111-feature-done
 
-## Cycles
-
-### 1. feat/done (active)
+## Steps
 
 | Step | Status | Updated |
 |------|--------|---------|

@@ -45,7 +45,7 @@ func NewService(workDir string) (*Service, error) {
 
 // Create creates a new initiative with the given type and name.
 // Returns the created initiative and sets it as the active initiative.
-// If steps is provided, the INITIATIVE.md will include a Cycles section with a step table.
+// If steps is provided, the INITIATIVE.md will include a Steps section with a step table.
 func (s *Service) Create(initType InitiativeType, name string, steps []WorkflowStep) (*Initiative, error) {
 	// Validate type
 	if !initType.IsValid() {
@@ -247,8 +247,6 @@ type StatusResult struct {
 	InitiativeType string   `json:"initiative_type,omitempty"`
 	CurrentStep    string   `json:"current_step,omitempty"`
 	StepStatus     string   `json:"step_status,omitempty"`
-	CycleID        string   `json:"cycle_id,omitempty"`
-	CurrentCycle   int      `json:"current_cycle,omitempty"`
 	StepsCompleted int      `json:"steps_completed,omitempty"`
 	StepsTotal     int      `json:"steps_total,omitempty"`
 	AvailableDocs  []string `json:"available_docs,omitempty"`
@@ -282,47 +280,39 @@ func (s *Service) Status() (*StatusResult, error) {
 		}, nil
 	}
 
-	// Parse INITIATIVE.md for cycle/step state
+	// Parse INITIATIVE.md for step state
 	mdPath := filepath.Join(init.Path, InitiativeMDFile)
 	parsed, err := ParseInitiativeMD(mdPath)
 
-	// Variables for cycle/step info
-	var currentStep, stepStatus, cycleID string
-	var currentCycle, stepsCompleted, stepsTotal int
+	// Variables for step info
+	var currentStep, stepStatus string
+	var stepsCompleted, stepsTotal int
 
 	if err == nil && parsed != nil {
-		// Get active cycle info
-		if cycle := parsed.ActiveCycle(); cycle != nil {
-			currentCycle = cycle.Number
-			cycleID = fmt.Sprintf("%d-%s-%s", cycle.Number, cycle.Type, cycle.Name)
-			stepsTotal = len(cycle.Steps)
+		stepsTotal = len(parsed.Steps)
 
-			// Count completed steps and find current step
-			for _, step := range cycle.Steps {
-				if step.Status == StepCompleted || step.Status == StepSkipped {
-					stepsCompleted++
-				}
-				if step.Status == StepInProgress {
-					currentStep = step.Name
-					stepStatus = string(step.Status)
-				}
+		// Count completed steps and find current step
+		for _, step := range parsed.Steps {
+			if step.Status == StepCompleted || step.Status == StepSkipped {
+				stepsCompleted++
 			}
+			if step.Status == StepInProgress {
+				currentStep = step.Name
+				stepStatus = string(step.Status)
+			}
+		}
 
-			// If no in-progress step, check if there's a next pending step
-			if currentStep == "" {
-				if next := parsed.NextStep(); next != nil {
-					currentStep = next.Name
-					stepStatus = string(next.Status)
-				}
+		// If no in-progress step, check if there's a next pending step
+		if currentStep == "" {
+			if next := parsed.NextStep(); next != nil {
+				currentStep = next.Name
+				stepStatus = string(next.Status)
 			}
 		}
 	}
 
-	// Use initiative path for doc discovery
-	cyclePath := init.Path
-
 	// Find available docs in initiative folder
-	availableDocs := s.findAvailableDocs(cyclePath)
+	availableDocs := s.findAvailableDocs(init.Path)
 
 	// Determine suggested next step based on current step or available artifacts
 	suggestedNext := s.determineSuggestedNext(availableDocs, currentStep)
@@ -347,8 +337,6 @@ func (s *Service) Status() (*StatusResult, error) {
 		InitiativeType: string(init.Type),
 		CurrentStep:    currentStep,
 		StepStatus:     stepStatus,
-		CycleID:        cycleID,
-		CurrentCycle:   currentCycle,
 		StepsCompleted: stepsCompleted,
 		StepsTotal:     stepsTotal,
 		AvailableDocs:  availableDocs,
@@ -359,20 +347,20 @@ func (s *Service) Status() (*StatusResult, error) {
 	}, nil
 }
 
-// findAvailableDocs scans the cycle folder for known artifact files.
-func (s *Service) findAvailableDocs(cyclePath string) []string {
+// findAvailableDocs scans the initiative folder for known artifact files.
+func (s *Service) findAvailableDocs(initiativePath string) []string {
 	knownDocs := []string{"spec.md", "research.md", "plan.md", "tasks.md", "data-model.md", "quickstart.md"}
 	var available []string
 
 	for _, doc := range knownDocs {
-		docPath := filepath.Join(cyclePath, doc)
+		docPath := filepath.Join(initiativePath, doc)
 		if _, err := os.Stat(docPath); err == nil {
 			available = append(available, doc)
 		}
 	}
 
 	// Check for contracts directory
-	contractsDir := filepath.Join(cyclePath, "contracts")
+	contractsDir := filepath.Join(initiativePath, "contracts")
 	if info, err := os.Stat(contractsDir); err == nil && info.IsDir() {
 		available = append(available, "contracts/")
 	}
@@ -423,7 +411,7 @@ type WorkflowStep struct {
 }
 
 // createInitiativeMD creates the INITIATIVE.md file for an initiative.
-// If steps is provided, a Cycles section with a step table is included.
+// If steps is provided, a Steps section with a step table is included.
 func (s *Service) createInitiativeMD(init *Initiative, steps []WorkflowStep) error {
 	var builder strings.Builder
 
@@ -434,23 +422,9 @@ func (s *Service) createInitiativeMD(init *Initiative, steps []WorkflowStep) err
 	builder.WriteString(fmt.Sprintf("**Created**: %s\n", init.CreatedAt.Format("2006-01-02")))
 	builder.WriteString(fmt.Sprintf("**ID**: %s\n\n", init.ID))
 
-	// Cycles section (if steps provided)
+	// Steps section (if steps provided)
 	if len(steps) > 0 {
-		builder.WriteString("## Cycles\n\n")
-
-		// Determine cycle type from initiative type
-		cycleType := "feat"
-		switch init.Type {
-		case TypeFeature:
-			cycleType = "feat"
-		case TypeBug:
-			cycleType = "fix"
-		case TypeRefactor:
-			cycleType = "ref"
-		}
-
-		// Create first cycle header
-		builder.WriteString(fmt.Sprintf("### 1. %s/%s (active)\n\n", cycleType, init.Name))
+		builder.WriteString("## Steps\n\n")
 
 		// Create step table
 		builder.WriteString("| Step | Status | Updated |\n")

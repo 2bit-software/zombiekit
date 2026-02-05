@@ -109,7 +109,6 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 
 	// Get the initiative context - ALL steps require an active initiative
 	var historyFolder string
-	var cyclePath string
 
 	// Check for initiative override
 	if opts != nil && opts.Initiative != "" {
@@ -121,7 +120,6 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 				Hint:    "Check the initiative path or use 'initiative create' to create a new one",
 			}
 		}
-		cyclePath = historyFolder
 	} else {
 		// Load active initiative from state
 		state, err := s.stateManager.Load()
@@ -138,17 +136,15 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 		}
 
 		historyFolder = filepath.Join(s.workDir, state.Initiative)
-		// NOTE: Cycle tracking will be read from INITIATIVE.md in T019-T020
-		cyclePath = historyFolder
 	}
 
 	// Check prerequisites for steps that require them
-	if err := s.checkPrerequisite(stepName, cyclePath); err != nil {
+	if err := s.checkPrerequisite(stepName, historyFolder); err != nil {
 		return nil, err
 	}
 
 	// Resolve file patterns to actual files
-	filesToRead := s.resolveFiles(step.Files, cyclePath)
+	filesToRead := s.resolveFiles(step.Files, historyFolder)
 
 	// Compose profiles
 	composedPrompt := ""
@@ -164,7 +160,6 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 		Directive:        step.Directive,
 		HistoryFolder:    historyFolder,
 		InitiativeFolder: historyFolder,
-		CycleFolder:      cyclePath,
 		FilesToRead:      filesToRead,
 		ComposedPrompt:   composedPrompt,
 		Prerequisites:    PrerequisiteInfo{Met: true},
@@ -177,7 +172,7 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 
 	// For implement step, find the next incomplete task
 	if stepName == "implement" {
-		nextTask := s.findNextTask(cyclePath)
+		nextTask := s.findNextTask(historyFolder)
 		resp.NextTask = nextTask
 		if nextTask == nil {
 			resp.Directive = "All tasks complete! Run 'initiative complete' to finish."
@@ -298,28 +293,22 @@ func (s *Service) UpdateState(stepName string, initiativeID string) error {
 		return nil // Can't parse, skip update
 	}
 
-	// Find active cycle
-	cycle := parsed.ActiveCycle()
-	if cycle == nil {
-		return nil // No active cycle
-	}
-
 	// Update step status: mark current in-progress as completed, new step as in-progress
 	now := time.Now().Format("2006-01-02 15:04")
 
 	// First, complete any in-progress step
-	for i := range cycle.Steps {
-		if cycle.Steps[i].Status == initiative.StepInProgress {
-			cycle.Steps[i].Status = initiative.StepCompleted
-			cycle.Steps[i].Updated = now
+	for i := range parsed.Steps {
+		if parsed.Steps[i].Status == initiative.StepInProgress {
+			parsed.Steps[i].Status = initiative.StepCompleted
+			parsed.Steps[i].Updated = now
 		}
 	}
 
 	// Then mark the new step as in-progress
-	for i := range cycle.Steps {
-		if cycle.Steps[i].Name == stepName {
-			cycle.Steps[i].Status = initiative.StepInProgress
-			cycle.Steps[i].Updated = now
+	for i := range parsed.Steps {
+		if parsed.Steps[i].Name == stepName {
+			parsed.Steps[i].Status = initiative.StepInProgress
+			parsed.Steps[i].Updated = now
 			break
 		}
 	}
@@ -329,8 +318,8 @@ func (s *Service) UpdateState(stepName string, initiativeID string) error {
 }
 
 // findNextTask parses tasks.md and finds the first unchecked task.
-func (s *Service) findNextTask(cyclePath string) *TaskInfo {
-	tasksPath := filepath.Join(cyclePath, "tasks.md")
+func (s *Service) findNextTask(initiativePath string) *TaskInfo {
+	tasksPath := filepath.Join(initiativePath, "tasks.md")
 	content, err := os.ReadFile(tasksPath)
 	if err != nil {
 		return nil
@@ -379,13 +368,13 @@ func (s *Service) findNextTask(cyclePath string) *TaskInfo {
 // checkPrerequisite validates that a step's prerequisite is met.
 // Returns nil if the prerequisite is met or the step has no prerequisite.
 // Returns a StepError with code PREREQUISITE_NOT_MET if not met.
-func (s *Service) checkPrerequisite(stepName string, cyclePath string) error {
+func (s *Service) checkPrerequisite(stepName string, initiativePath string) error {
 	prereq, exists := stepPrerequisites[stepName]
 	if !exists {
 		return nil // No prerequisite for this step
 	}
 
-	artifactPath := filepath.Join(cyclePath, prereq.RequiredArtifact)
+	artifactPath := filepath.Join(initiativePath, prereq.RequiredArtifact)
 
 	// Check if artifact exists
 	if _, err := os.Stat(artifactPath); os.IsNotExist(err) {

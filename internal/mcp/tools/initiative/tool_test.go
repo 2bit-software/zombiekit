@@ -152,7 +152,7 @@ func TestHandleCreate_Idempotent(t *testing.T) {
 	assert.NotEmpty(t, resp1.InitiativeID)
 
 	// Write custom content to spec.md
-	specPath := filepath.Join(resp1.CyclePath, "spec.md")
+	specPath := filepath.Join(resp1.InitiativePath, "spec.md")
 	customContent := []byte("# My Custom Spec\n\nThis is my custom content that should be preserved.")
 	require.NoError(t, os.WriteFile(specPath, customContent, 0644))
 

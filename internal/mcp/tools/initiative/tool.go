@@ -156,10 +156,8 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 
 	if existing != nil {
 		// Idempotent case: return existing initiative
-		cyclePath, cycleID := t.findFirstCycle(existing.Path)
-
 		// Still run template copy (safe - skips existing files with content)
-		skipped, copied, err := t.copyTemplatesToCycle(dir, cyclePath)
+		skipped, copied, err := t.copyTemplatesToInitiative(dir, existing.Path)
 		if err != nil {
 			return "", fmt.Errorf("copying templates: %w", err)
 		}
@@ -168,8 +166,6 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 			Action:         "create",
 			InitiativeID:   existing.ID,
 			InitiativePath: existing.Path,
-			CycleID:        cycleID,
-			CyclePath:      cyclePath,
 			Branch:         existing.ID,
 			Type:           initType,
 			Name:           name,
@@ -228,15 +224,8 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 		return "", err
 	}
 
-	// Create cycle within initiative
-	cycleType := mapInitTypeToCycleType(internalInit.InitiativeType(initType))
-	cycle, err := initSvc.CreateCycle(initiative.Path, cycleType, name)
-	if err != nil {
-		return "", fmt.Errorf("creating cycle: %w", err)
-	}
-
-	// Copy templates to cycle folder
-	skipped, copied, err := t.copyTemplatesToCycle(dir, cycle.Path)
+	// Copy templates to initiative folder
+	skipped, copied, err := t.copyTemplatesToInitiative(dir, initiative.Path)
 	if err != nil {
 		return "", fmt.Errorf("copying templates: %w", err)
 	}
@@ -256,8 +245,6 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 		Action:         "create",
 		InitiativeID:   initiative.ID,
 		InitiativePath: initiative.Path,
-		CycleID:        cycle.ID,
-		CyclePath:      cycle.Path,
 		Branch:         branchName,
 		Type:           initType,
 		Name:           name,
@@ -288,7 +275,6 @@ func (t *Tool) handleStatus(ctx context.Context, dir string) (string, error) {
 		InitiativeID:   status.InitiativeID,
 		InitiativeType: status.InitiativeType,
 		CurrentStep:    status.CurrentStep,
-		CycleID:        status.CycleID,
 		AvailableDocs:  status.AvailableDocs,
 		SuggestedNext:  status.SuggestedNext,
 		HistoryPath:    status.HistoryPath,
@@ -373,32 +359,6 @@ func (t *Tool) handleList(ctx context.Context, dir string) (string, error) {
 	return marshalResponse(resp)
 }
 
-// findFirstCycle finds the first cycle folder in an initiative directory.
-// Returns the full path and cycle ID. If no cycle is found, returns the initiative path.
-// Cycles are identified by the presence of spec.md or research.md files.
-func (t *Tool) findFirstCycle(initiativePath string) (cyclePath, cycleID string) {
-	entries, err := os.ReadDir(initiativePath)
-	if err != nil {
-		return initiativePath, "" // Fall back to initiative path
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() && entry.Name() != "." && entry.Name() != ".." {
-			// Check if it looks like a cycle folder (contains spec.md or research.md)
-			candidatePath := filepath.Join(initiativePath, entry.Name())
-			if _, err := os.Stat(filepath.Join(candidatePath, "spec.md")); err == nil {
-				return candidatePath, entry.Name()
-			}
-			if _, err := os.Stat(filepath.Join(candidatePath, "research.md")); err == nil {
-				return candidatePath, entry.Name()
-			}
-		}
-	}
-
-	// No cycle found, use initiative path
-	return initiativePath, ""
-}
-
 // copyTemplateIfNotExists copies template content to destination if destination doesn't exist
 // or is empty/whitespace-only. Returns whether the file was copied.
 // This enables idempotent template copying - existing content is preserved.
@@ -426,9 +386,9 @@ func copyTemplateIfNotExists(templateContent []byte, destPath string) (copied bo
 	return true, nil
 }
 
-// copyTemplatesToCycle copies spec and research templates to the cycle folder.
+// copyTemplatesToInitiative copies spec and research templates to the initiative folder.
 // Returns lists of skipped and copied file names for idempotency reporting.
-func (t *Tool) copyTemplatesToCycle(workDir, cyclePath string) (skipped, copied []string, err error) {
+func (t *Tool) copyTemplatesToInitiative(workDir, initiativePath string) (skipped, copied []string, err error) {
 	embFS := t.embeddedFS
 	if embFS == nil {
 		embFS = step.GetTemplateFS()
@@ -460,7 +420,7 @@ func (t *Tool) copyTemplatesToCycle(workDir, cyclePath string) (skipped, copied 
 			return nil, nil, fmt.Errorf("reading template %s: %w", tmpl.src, err)
 		}
 
-		destPath := filepath.Join(cyclePath, tmpl.dest)
+		destPath := filepath.Join(initiativePath, tmpl.dest)
 		wasCopied, copyErr := copyTemplateIfNotExists(content, destPath)
 		if copyErr != nil {
 			return nil, nil, fmt.Errorf("copying template %s: %w", tmpl.dest, copyErr)
@@ -474,20 +434,6 @@ func (t *Tool) copyTemplatesToCycle(workDir, cyclePath string) (skipped, copied 
 	}
 
 	return skipped, copied, nil
-}
-
-// mapInitTypeToCycleType converts an initiative type to a cycle type.
-func mapInitTypeToCycleType(t internalInit.InitiativeType) internalInit.CycleType {
-	switch t {
-	case internalInit.TypeFeature:
-		return internalInit.CycleFeat
-	case internalInit.TypeRefactor:
-		return internalInit.CycleRef
-	case internalInit.TypeBug:
-		return internalInit.CycleFix
-	default:
-		return internalInit.CycleFeat
-	}
 }
 
 // marshalResponse marshals a response to JSON.
