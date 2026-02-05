@@ -1,6 +1,6 @@
 ---
-name: eat
-description: Execute implementation tasks one-by-one (BRAAAAINS!)
+name: implement
+description: Execute implementation tasks one-by-one
 profiles: []
 files:
   - "spec.md"
@@ -10,7 +10,7 @@ files:
   - "contracts/**/*.md"
 type: step
 ---
-# Task Execution Workflow (BRAAAAINS!)
+# Task Execution Workflow
 
 ## Context
 
@@ -20,7 +20,8 @@ You are executing implementation tasks from tasks.md. Work through tasks one at 
 
 - Execute the current task completely before moving to the next
 - Follow TDD: write tests first, then implementation
-- Mark tasks complete in tasks.md as you finish them
+- **Track progress using Claude's built-in task tools** (TaskCreate, TaskUpdate, TaskList)
+- **Keep tasks.md in sync**: Mark tasks complete in the markdown file as you finish them
 - Respect dependencies and parallel markers
 - Report blockers immediately
 
@@ -76,7 +77,7 @@ The `next_task` field contains:
 
 ## Workflow
 
-### Step 1: Load Context
+### Step 1: Load Context and Initialize Task Tracking
 
 Read and understand:
 1. **spec.md**: What we're building
@@ -84,6 +85,16 @@ Read and understand:
 3. **tasks.md**: All tasks and their status
 4. **data-model.md**: Entities and relationships (if exists)
 5. **contracts/**: API contracts and test requirements (if exists)
+
+**Initialize task tracking**: After reading tasks.md, create corresponding tasks using `TaskCreate` for each incomplete task. This allows progress tracking in the UI while you work. Example:
+
+```
+TaskCreate(
+  subject: "T005 Implement user authentication endpoint",
+  description: "From tasks.md Phase 2",
+  activeForm: "Implementing user authentication"
+)
+```
 
 ### Step 2: Execute Current Task
 
@@ -107,7 +118,21 @@ ELSE IF task is a validation task (contains "run", "build", "lint"):
 
 ### Step 3: Mark Task Complete
 
-Update tasks.md:
+**IMPORTANT: You must do BOTH of these:**
+
+#### A. Update Claude's Task Tracking
+
+Use the built-in task tools to track your work:
+
+```
+TaskUpdate(taskId: "current-task-id", status: "completed")
+```
+
+This keeps your internal task list accurate and shows progress in the UI.
+
+#### B. Update tasks.md File
+
+Edit tasks.md to mark the task complete:
 
 ```markdown
 # Before
@@ -117,10 +142,12 @@ Update tasks.md:
 - [x] T005 Implement user authentication endpoint
 ```
 
+**Why both?** The task tools track your session work. The tasks.md file is the persistent record that survives across sessions and is visible to the user reviewing the initiative history.
+
 ### Step 4: Request Next Task
 
 After completing the current task:
-1. Call the `step` MCP tool again with `step: "eat"`
+1. Call the `step` MCP tool again with `step: "implement"`
 2. The tool will provide the next incomplete task
 3. Repeat until `next_task` is null
 
@@ -163,7 +190,9 @@ Update `tasks.md` as you complete tasks:
 
 - [ ] Current task executed completely
 - [ ] Tests pass (for implementation tasks)
-- [ ] Task marked complete in tasks.md
+- [ ] Task marked complete in BOTH:
+  - [ ] Claude task tools (TaskUpdate with status: completed)
+  - [ ] tasks.md file (checkbox changed from `[ ]` to `[x]`)
 - [ ] No regressions in existing tests
 - [ ] Dependencies respected
 
@@ -173,12 +202,15 @@ Update `tasks.md` as you complete tasks:
 
 1. **One Task at a Time**: Complete current task before requesting next
 2. **TDD Always**: Tests first, implementation second
-3. **Mark Immediately**: Update tasks.md as soon as task completes
-4. **Respect Dependencies**: Don't skip ahead even if you could
-5. **Report Blockers**: If stuck, report and request guidance
-6. **Follow Existing Patterns**: Match codebase conventions
-7. **Small Commits**: Commit after each task or logical group
-8. **No Feature Creep**: Implement exactly what the task describes
+3. **Dual Tracking Required**:
+   - Use `TaskCreate`/`TaskUpdate` for session tracking (built-in tools)
+   - Update `tasks.md` file to keep persistent record in sync
+4. **Mark Immediately**: Update both task tools AND tasks.md as soon as task completes
+5. **Respect Dependencies**: Don't skip ahead even if you could
+6. **Report Blockers**: If stuck, report and request guidance
+7. **Follow Existing Patterns**: Match codebase conventions
+8. **Small Commits**: Commit after each task or logical group
+9. **No Feature Creep**: Implement exactly what the task describes
 
 ---
 

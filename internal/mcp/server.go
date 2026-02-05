@@ -362,7 +362,7 @@ func (s *Server) registerStepTool() {
 		mcp.WithDescription(stepDef.Description),
 		mcp.WithString("step",
 			mcp.Required(),
-			mcp.Description("Step name to execute: feature, bug, refactor, plan, tasks, eat, audit, clarify"),
+			mcp.Description("Step name to execute: feature, bug, refactor, plan, tasks, implement, audit, clarify"),
 		),
 		mcp.WithString("dir",
 			mcp.Required(),

@@ -37,13 +37,13 @@ func TestService_Create(t *testing.T) {
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 
-		init, err := svc.Create(TypeFeature, "user-auth")
+		init, err := svc.Create(TypeFeature, "user-auth", nil)
 		require.NoError(t, err)
 
 		// Check initiative properties
 		assert.Equal(t, TypeFeature, init.Type)
 		assert.Equal(t, "user-auth", init.Name)
-		assert.Equal(t, StatusActive, init.Status)
+		assert.Equal(t, StatusInProgress, init.Status)
 		assert.NotEmpty(t, init.ID)
 		assert.Contains(t, init.ID, "feature")
 		assert.Contains(t, init.ID, "user-auth")
@@ -71,7 +71,7 @@ func TestService_Create(t *testing.T) {
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 
-		init, err := svc.Create(TypeBug, "login-crash")
+		init, err := svc.Create(TypeBug, "login-crash", nil)
 		require.NoError(t, err)
 
 		// Check state was updated (pointer only - no type/name/status stored in state)
@@ -88,7 +88,7 @@ func TestService_Create(t *testing.T) {
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 
-		_, err = svc.Create(TypeRefactor, "extract-service")
+		_, err = svc.Create(TypeRefactor, "extract-service", nil)
 		require.NoError(t, err)
 
 		// Check history folder was created
@@ -105,7 +105,7 @@ func TestService_Create(t *testing.T) {
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 
-		_, err = svc.Create(InitiativeType("invalid"), "test")
+		_, err = svc.Create(InitiativeType("invalid"), "test", nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "INVALID_TYPE")
 	})
@@ -118,11 +118,11 @@ func TestService_Create(t *testing.T) {
 		require.NoError(t, err)
 
 		// Empty name
-		_, err = svc.Create(TypeFeature, "")
+		_, err = svc.Create(TypeFeature, "", nil)
 		assert.Error(t, err)
 
 		// Name that normalizes to empty (only special chars)
-		_, err = svc.Create(TypeFeature, "!!!")
+		_, err = svc.Create(TypeFeature, "!!!", nil)
 		assert.Error(t, err)
 	})
 }
@@ -174,7 +174,7 @@ func TestService_GetActive(t *testing.T) {
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 
-		created, err := svc.Create(TypeFeature, "test-feature")
+		created, err := svc.Create(TypeFeature, "test-feature", nil)
 		require.NoError(t, err)
 
 		active, err := svc.GetActive()
@@ -245,7 +245,7 @@ func TestService_Complete(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create an initiative
-		_, err = svc.Create(TypeFeature, "test-feature")
+		_, err = svc.Create(TypeFeature, "test-feature", nil)
 		require.NoError(t, err)
 
 		// Complete it
@@ -348,6 +348,184 @@ func TestValidateName(t *testing.T) {
 	}
 }
 
+func TestService_Status(t *testing.T) {
+	t.Run("returns inactive when no active initiative", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		status, err := svc.Status()
+		require.NoError(t, err)
+		assert.False(t, status.Active)
+		assert.Equal(t, "initiative create", status.SuggestedNext)
+	})
+
+	t.Run("returns basic info for active initiative", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		// Create an initiative
+		init, err := svc.Create(TypeFeature, "test-feature", nil)
+		require.NoError(t, err)
+
+		status, err := svc.Status()
+		require.NoError(t, err)
+		assert.True(t, status.Active)
+		assert.Equal(t, init.ID, status.InitiativeID)
+		assert.Equal(t, "feature", status.InitiativeType)
+		assert.NotEmpty(t, status.HistoryPath)
+	})
+
+	t.Run("parses cycle info from INITIATIVE.md", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		// Create initiative folder manually with proper INITIATIVE.md
+		historyDir := filepath.Join(tmpDir, "history")
+		initDir := filepath.Join(historyDir, "abc12345-feature-test")
+		require.NoError(t, os.MkdirAll(initDir, 0755))
+
+		initiativeMD := `# Initiative: test
+
+**Type**: feature
+**Status**: in_progress
+**Created**: 2026-01-31T10:00:00-08:00
+**ID**: abc12345-feature-test
+
+## Cycles
+
+### 1. feat/test (active)
+
+| Step | Status | Updated |
+|------|--------|---------|
+| spec | completed | 2026-01-31 10:30 |
+| plan | in_progress | 2026-01-31 11:00 |
+| tasks | pending | - |
+| implement | pending | - |
+
+## Description
+
+Test initiative.
+`
+		require.NoError(t, os.WriteFile(filepath.Join(initDir, "INITIATIVE.md"), []byte(initiativeMD), 0644))
+
+		// Set as active
+		require.NoError(t, svc.SetActive("abc12345-feature-test"))
+
+		status, err := svc.Status()
+		require.NoError(t, err)
+		assert.True(t, status.Active)
+		assert.Equal(t, "abc12345-feature-test", status.InitiativeID)
+		assert.Equal(t, "plan", status.CurrentStep)
+		assert.Equal(t, "in_progress", status.StepStatus)
+		assert.Equal(t, 1, status.CurrentCycle)
+		assert.Equal(t, 1, status.StepsCompleted) // spec is completed
+		assert.Equal(t, 4, status.StepsTotal)
+	})
+
+	t.Run("finds next pending step when no in-progress step", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		// Create initiative folder with no in-progress step
+		historyDir := filepath.Join(tmpDir, "history")
+		initDir := filepath.Join(historyDir, "def67890-feature-test")
+		require.NoError(t, os.MkdirAll(initDir, 0755))
+
+		initiativeMD := `# Initiative: test
+
+**Type**: feature
+**Status**: in_progress
+**Created**: 2026-01-31T10:00:00-08:00
+**ID**: def67890-feature-test
+
+## Cycles
+
+### 1. feat/test (active)
+
+| Step | Status | Updated |
+|------|--------|---------|
+| spec | completed | 2026-01-31 10:30 |
+| plan | completed | 2026-01-31 11:00 |
+| tasks | pending | - |
+| implement | pending | - |
+
+## Description
+
+Test initiative.
+`
+		require.NoError(t, os.WriteFile(filepath.Join(initDir, "INITIATIVE.md"), []byte(initiativeMD), 0644))
+
+		// Set as active
+		require.NoError(t, svc.SetActive("def67890-feature-test"))
+
+		status, err := svc.Status()
+		require.NoError(t, err)
+		assert.True(t, status.Active)
+		assert.Equal(t, "tasks", status.CurrentStep) // Next pending step
+		assert.Equal(t, "pending", status.StepStatus)
+		assert.Equal(t, 2, status.StepsCompleted) // spec and plan completed
+	})
+
+	t.Run("handles all steps completed", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+		svc, err := NewService(tmpDir)
+		require.NoError(t, err)
+
+		// Create initiative folder with all steps completed
+		historyDir := filepath.Join(tmpDir, "history")
+		initDir := filepath.Join(historyDir, "ghi11111-feature-done")
+		require.NoError(t, os.MkdirAll(initDir, 0755))
+
+		initiativeMD := `# Initiative: done
+
+**Type**: feature
+**Status**: in_progress
+**Created**: 2026-01-31T10:00:00-08:00
+**ID**: ghi11111-feature-done
+
+## Cycles
+
+### 1. feat/done (active)
+
+| Step | Status | Updated |
+|------|--------|---------|
+| spec | completed | 2026-01-31 10:30 |
+| plan | skipped | 2026-01-31 10:35 |
+| tasks | completed | 2026-01-31 11:00 |
+| implement | completed | 2026-01-31 14:00 |
+
+## Description
+
+Done initiative.
+`
+		require.NoError(t, os.WriteFile(filepath.Join(initDir, "INITIATIVE.md"), []byte(initiativeMD), 0644))
+
+		// Set as active
+		require.NoError(t, svc.SetActive("ghi11111-feature-done"))
+
+		status, err := svc.Status()
+		require.NoError(t, err)
+		assert.True(t, status.Active)
+		assert.Empty(t, status.CurrentStep) // No pending steps
+		assert.Equal(t, 4, status.StepsCompleted)
+		assert.Equal(t, 4, status.StepsTotal)
+	})
+}
+
 func TestService_FindActiveByNameAndType(t *testing.T) {
 	t.Run("returns nil when no active initiative", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -369,7 +547,7 @@ func TestService_FindActiveByNameAndType(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create an initiative with name "foo"
-		_, err = svc.Create(TypeFeature, "foo")
+		_, err = svc.Create(TypeFeature, "foo", nil)
 		require.NoError(t, err)
 
 		// Look for "bar" - should not find it
@@ -386,7 +564,7 @@ func TestService_FindActiveByNameAndType(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a feature initiative
-		_, err = svc.Create(TypeFeature, "test")
+		_, err = svc.Create(TypeFeature, "test", nil)
 		require.NoError(t, err)
 
 		// Look for bug type - should not find it
@@ -403,7 +581,7 @@ func TestService_FindActiveByNameAndType(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create an initiative
-		created, err := svc.Create(TypeFeature, "my-feature")
+		created, err := svc.Create(TypeFeature, "my-feature", nil)
 		require.NoError(t, err)
 
 		// Look for same name+type - should find it
@@ -423,7 +601,7 @@ func TestService_FindActiveByNameAndType(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create an initiative with normalized name "user-auth"
-		created, err := svc.Create(TypeFeature, "user-auth")
+		created, err := svc.Create(TypeFeature, "user-auth", nil)
 		require.NoError(t, err)
 
 		// Look with non-normalized name - should still find it

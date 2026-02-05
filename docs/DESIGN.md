@@ -408,7 +408,7 @@ Each major stage follows the same pattern:
 | `/brains.refactor` | Refactoring specification |
 | `/brains.plan` | Implementation planning |
 | `/brains.tasks` | Task breakdown |
-| `/brains.eat` | Execute implementation |
+| `/brains.implement` | Execute implementation |
 | `/brains.research` | Standalone research |
 | `/brains.audit` | Alignment check |
 | `/brains.clarify` | Surface ambiguities |

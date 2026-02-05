@@ -212,7 +212,7 @@ Focus:
 - Edge cases identified
 - No implementation details leaked
 
-### Implementation Audit (after eat step)
+### Implementation Audit (after implement step)
 
 Focus:
 - Requirement coverage

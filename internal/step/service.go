@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/adrg/frontmatter"
+	zombiekit "github.com/zombiekit/brains"
 	"github.com/zombiekit/brains/internal/initiative"
 	"github.com/zombiekit/brains/internal/profile"
 )
@@ -26,7 +28,7 @@ var stepPrerequisites = map[string]StepPrerequisite{
 		Hint:             "Run plan first and approve the plan",
 		BlockingStep:     "plan",
 	},
-	"eat": {
+	"implement": {
 		RequiredArtifact: "tasks.md",
 		RequiredStatus:   "", // No status check, just existence
 		Hint:             "Run tasks first to generate the task list",
@@ -138,12 +140,8 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 		}
 
 		historyFolder = filepath.Join(s.workDir, state.Initiative)
-		// Use cycle path if available, otherwise fall back to initiative folder
-		if state.Cycle != "" {
-			cyclePath = filepath.Join(s.workDir, state.Cycle)
-		} else {
-			cyclePath = historyFolder
-		}
+		// NOTE: Cycle tracking will be read from INITIATIVE.md in T019-T020
+		cyclePath = historyFolder
 	}
 
 	// Check prerequisites for steps that require them
@@ -179,8 +177,8 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 		resp.WorkflowPhases = buildWorkflowPhases()
 	}
 
-	// For eat step, find the next incomplete task
-	if stepName == "eat" {
+	// For implement step, find the next incomplete task
+	if stepName == "implement" {
 		nextTask := s.findNextTask(cyclePath)
 		resp.NextTask = nextTask
 		if nextTask == nil {
@@ -241,15 +239,95 @@ func (s *Service) WorkDir() string {
 	return s.workDir
 }
 
-// UpdateState updates the initiative state after step execution.
-func (s *Service) UpdateState(stepName string, initiativeID string) error {
-	state, err := s.stateManager.Load()
-	if err != nil {
-		return err
+// GetWorkflowSteps returns the default steps for a workflow type.
+// It parses the workflow profile frontmatter to extract the step sequence.
+func (s *Service) GetWorkflowSteps(workflowType string) ([]WorkflowStep, error) {
+	// Map workflow types to profile names
+	profileName := workflowType
+	switch workflowType {
+	case "feature", "bug", "refactor":
+		// These are the valid workflow types
+	default:
+		return nil, fmt.Errorf("unknown workflow type: %s", workflowType)
 	}
 
-	state.CurrentStep = stepName
-	return s.stateManager.Save(state)
+	// Try to load the profile content
+	var content []byte
+	var err error
+
+	// Check local profiles first
+	localPath := filepath.Join(s.workDir, ".brains", "profiles", profileName+".md")
+	content, err = os.ReadFile(localPath)
+	if err != nil {
+		// Try global profiles
+		homeDir, _ := os.UserHomeDir()
+		globalPath := filepath.Join(homeDir, ".brains", "profiles", profileName+".md")
+		content, err = os.ReadFile(globalPath)
+		if err != nil {
+			// Fall back to embedded profiles
+			content, err = fs.ReadFile(zombiekit.EmbeddedProfiles, "profiles/"+profileName+".md")
+			if err != nil {
+				return nil, fmt.Errorf("profile not found: %s", profileName)
+			}
+		}
+	}
+
+	// Parse the frontmatter
+	var meta WorkflowMeta
+	_, err = frontmatter.Parse(strings.NewReader(string(content)), &meta)
+	if err != nil {
+		return nil, fmt.Errorf("parsing profile frontmatter: %w", err)
+	}
+
+	return meta.Steps, nil
+}
+
+// UpdateState updates the step status in INITIATIVE.md after step execution.
+// It marks the previous in-progress step as completed and the new step as in-progress.
+func (s *Service) UpdateState(stepName string, initiativeID string) error {
+	// Load active initiative state
+	state, err := s.stateManager.Load()
+	if err != nil || state.IsEmpty() {
+		return nil // No active initiative, nothing to update
+	}
+
+	// Parse INITIATIVE.md
+	initiativePath := filepath.Join(s.workDir, state.Initiative)
+	mdPath := filepath.Join(initiativePath, "INITIATIVE.md")
+
+	parsed, err := initiative.ParseInitiativeMD(mdPath)
+	if err != nil {
+		return nil // Can't parse, skip update
+	}
+
+	// Find active cycle
+	cycle := parsed.ActiveCycle()
+	if cycle == nil {
+		return nil // No active cycle
+	}
+
+	// Update step status: mark current in-progress as completed, new step as in-progress
+	now := time.Now().Format("2006-01-02 15:04")
+
+	// First, complete any in-progress step
+	for i := range cycle.Steps {
+		if cycle.Steps[i].Status == initiative.StepInProgress {
+			cycle.Steps[i].Status = initiative.StepCompleted
+			cycle.Steps[i].Updated = now
+		}
+	}
+
+	// Then mark the new step as in-progress
+	for i := range cycle.Steps {
+		if cycle.Steps[i].Name == stepName {
+			cycle.Steps[i].Status = initiative.StepInProgress
+			cycle.Steps[i].Updated = now
+			break
+		}
+	}
+
+	// Write back to INITIATIVE.md
+	return parsed.WriteTo(mdPath)
 }
 
 // findNextTask parses tasks.md and finds the first unchecked task.

@@ -19,7 +19,7 @@ func TestService_CreateCycle(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create an initiative first
-		init, err := svc.Create(TypeFeature, "test-feature")
+		init, err := svc.Create(TypeFeature, "test-feature", nil)
 		require.NoError(t, err)
 
 		// Create a cycle within the initiative
@@ -52,7 +52,7 @@ func TestService_CreateCycle(t *testing.T) {
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 
-		init, err := svc.Create(TypeFeature, "test")
+		init, err := svc.Create(TypeFeature, "test", nil)
 		require.NoError(t, err)
 
 		_, err = svc.CreateCycle(init.Path, CycleType("invalid"), "test")
@@ -67,7 +67,7 @@ func TestService_CreateCycle(t *testing.T) {
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 
-		init, err := svc.Create(TypeFeature, "test")
+		init, err := svc.Create(TypeFeature, "test", nil)
 		require.NoError(t, err)
 
 		_, err = svc.CreateCycle(init.Path, CycleFeat, "")
@@ -81,7 +81,7 @@ func TestService_CreateCycle(t *testing.T) {
 		svc, err := NewService(tmpDir)
 		require.NoError(t, err)
 
-		init, err := svc.Create(TypeFeature, "test")
+		init, err := svc.Create(TypeFeature, "test", nil)
 		require.NoError(t, err)
 
 		cycle1, err := svc.CreateCycle(init.Path, CycleFeat, "first")

@@ -14,7 +14,7 @@ type: step
 
 ## Context
 
-You are generating a detailed task breakdown from an approved implementation plan. Tasks guide the eat (implementation) step with specific, actionable work items organized by dependency order.
+You are generating a detailed task breakdown from an approved implementation plan. Tasks guide the implement step with specific, actionable work items organized by dependency order.
 
 ### Your Responsibilities
 

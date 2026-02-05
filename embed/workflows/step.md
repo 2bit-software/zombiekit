@@ -66,7 +66,6 @@ Goal: Jump to a specific step in the current work item's workflow, loading the a
 | Step | Profile | Description |
 |------|---------|-------------|
 | `research` | `research` | Standalone research |
-| `eat` | `eat` | Consume and digest information |
 | `update` | `update` | Modify existing artifacts |
 | `revise` | `revise` | Re-enter workflow cycle |
 

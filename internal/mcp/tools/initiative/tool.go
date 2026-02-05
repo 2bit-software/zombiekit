@@ -194,8 +194,30 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 		}
 	}
 
+	// Load workflow steps for the initiative type
+	stepSvc, err := step.NewService(dir)
+	if err != nil {
+		return "", fmt.Errorf("creating step service: %w", err)
+	}
+	stepSvc.SetEmbeddedFS(t.embeddedFS)
+
+	workflowSteps, err := stepSvc.GetWorkflowSteps(initType)
+	if err != nil {
+		// Non-fatal: proceed without steps if workflow not found
+		workflowSteps = nil
+	}
+
+	// Convert step.WorkflowStep to initiative.WorkflowStep
+	var initSteps []internalInit.WorkflowStep
+	for _, ws := range workflowSteps {
+		initSteps = append(initSteps, internalInit.WorkflowStep{
+			Name:    ws.Name,
+			Profile: ws.Profile,
+		})
+	}
+
 	// Create the initiative
-	initiative, err := initSvc.Create(internalInit.InitiativeType(initType), name)
+	initiative, err := initSvc.Create(internalInit.InitiativeType(initType), name, initSteps)
 	if err != nil {
 		if initErr, ok := err.(*internalInit.InitiativeError); ok {
 			return "", &ToolError{

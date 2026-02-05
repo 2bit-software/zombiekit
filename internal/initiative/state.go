@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
-	"time"
 )
 
 // StateManager manages the persistent state of the active initiative.
@@ -91,9 +90,6 @@ func (m *FileStateManager) Save(state *InitiativeState) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating state directory: %w", err)
 	}
-
-	// Update last activity time
-	state.LastActivity = time.Now()
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {

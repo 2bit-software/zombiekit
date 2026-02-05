@@ -2,6 +2,15 @@
 name: feature
 description: Create a new feature specification using the ZombieKit workflow. Orchestrates research, creation, audit, and highlight phases.
 type: skill
+steps:
+  - name: spec
+    profile: feature
+  - name: plan
+    profile: plan
+  - name: tasks
+    profile: tasks
+  - name: implement
+    profile: implement
 handoffs:
   - label: Build Technical Plan
     skill: brains.plan

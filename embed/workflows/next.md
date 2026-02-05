@@ -1,6 +1,6 @@
 ---
 name: next
-description: Advance to the next workflow step based on current state
+description: Advance to the next workflow step based on INITIATIVE.md state
 ---
 
 ## User Input
@@ -13,68 +13,53 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Next Step Workflow
 
-Goal: Determine and advance to the next logical step in the workflow.
+Goal: Read step state from INITIATIVE.md and advance to the next step.
 
 ### Execution Steps
 
 1. **Load Active State**
-   - Read `.brains/active.json`
+   - Read `.brains/active.json` to get initiative path
    - If no active initiative: Report error and suggest `/brains.new`
 
-2. **Determine Current Phase**
-   - Check artifacts in current work item directory
-   - Identify most recent completed phase
-   - Determine work item type (feature, bug, refactor)
+2. **Parse INITIATIVE.md**
+   - Read `{initiative_path}/INITIATIVE.md`
+   - Find the active cycle (status = "active")
+   - Parse the step table to find current and next step
 
-3. **Calculate Next Step**
-   - Based on current phase and work item type
-   - See progression tables below
+3. **Determine Action**
+   - If current step is `in_progress`: Mark as `completed`, advance next `pending` to `in_progress`
+   - If all steps are `completed`/`skipped`: Suggest `/brains.complete`
+   - If no `in_progress` step: Start the first `pending` step
 
-4. **Load Next Profile**
-   - Use `mcp__zombiekit__profile-compose` to load the next profile
-   - Pass through any arguments
+4. **Update INITIATIVE.md**
+   - Update the step table with new status and timestamp
+   - Use atomic write (temp file + rename)
 
-### Workflow Progressions
+5. **Load Next Profile**
+   - Use `mcp__zombiekit__profile-compose` with the step's profile
+   - Pass through any user arguments
 
-**Feature Workflow**
+### Step Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Not yet started |
+| `in_progress` | Currently active (only one at a time) |
+| `completed` | Successfully finished |
+| `skipped` | Intentionally bypassed |
+
+### INITIATIVE.md Cycle Format
+
+```markdown
+### 1. feat/feature-name (active)
+
+| Step | Status | Updated |
+|------|--------|---------|
+| spec | completed | 2026-01-31 10:30 |
+| plan | in_progress | 2026-01-31 11:00 |
+| tasks | pending | - |
+| implement | pending | - |
 ```
-[start] -> spec -> plan -> tasks -> implement -> [complete]
-```
-
-| Current State | Next Step | Profile |
-|---------------|-----------|---------|
-| No artifacts | spec | `feature` |
-| `business-spec.md` exists | plan | `plan` |
-| `implementation-plan.md` exists | tasks | `tasks` |
-| `tasks.md` exists | implement | `implement` |
-| All tasks complete | complete | suggest `/brains.complete` |
-
-**Bug Workflow**
-```
-[start] -> report -> investigate -> fix-plan -> implement -> [complete]
-```
-
-| Current State | Next Step | Profile |
-|---------------|-----------|---------|
-| No artifacts | report | `bug` |
-| `report.md` exists | investigate | `bug` (investigation phase) |
-| `investigation.md` exists | fix-plan | `plan` |
-| `fix-plan.md` exists | implement | `implement` |
-| Fix verified | complete | suggest `/brains.complete` |
-
-**Refactor Workflow**
-```
-[start] -> goal -> analysis -> plan -> tasks -> implement -> [complete]
-```
-
-| Current State | Next Step | Profile |
-|---------------|-----------|---------|
-| No artifacts | goal | `refactor` |
-| `goal.md` exists | analysis | `refactor` (analysis phase) |
-| `dependency-analysis.md` exists | plan | `plan` |
-| `refactor-plan.md` exists | tasks | `tasks` |
-| `tasks.md` exists | implement | `implement` |
-| All tasks complete | complete | suggest `/brains.complete` |
 
 ### Alternate Path Handling
 
@@ -83,34 +68,58 @@ If arguments include an alternate directive:
 - `next clarify` - Run clarification instead
 - `next research` - Do more research before proceeding
 
-These overrides let users take detours without losing their place.
+These overrides let users take detours without losing their place in the step sequence.
 
 ### Output Format
 
 ```markdown
 ## Current Status
-Work item: {type}/{name}
-Current phase: {phase}
-Artifacts: {list of existing artifacts}
+Initiative: {initiative-id}
+Cycle: {cycle-number}. {type}/{name}
+Current step: {step-name} ({status})
+Progress: {completed}/{total} steps
 
 ## Next Step
-Advancing to: **{next-phase}**
+Advancing to: **{next-step-name}**
 
 Loading {profile} profile...
 ```
 
+### Complete-or-Advance Logic
+
+```
+if current_step.status == "in_progress":
+    current_step.status = "completed"
+    current_step.updated = now()
+
+next_step = find_first_pending_step()
+if next_step:
+    next_step.status = "in_progress"
+    next_step.updated = now()
+    load_profile(next_step.profile)
+else:
+    suggest("/brains.complete")
+```
+
 ### Error Conditions
 
-**No active work item:**
+**No active initiative:**
 ```
-No active work item found.
+No active initiative found.
 
 Use `/brains.new <description>` to start a new initiative.
 ```
 
-**Already complete:**
+**No active cycle:**
 ```
-All phases complete for {work-item}.
+Initiative exists but has no active cycle.
+
+This may indicate the initiative needs to be restarted or is in an inconsistent state.
+```
+
+**All steps complete:**
+```
+All steps complete for {initiative-name}.
 
 Options:
 - `/brains.complete` - Mark initiative done

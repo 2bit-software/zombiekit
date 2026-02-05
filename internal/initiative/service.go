@@ -45,7 +45,8 @@ func NewService(workDir string) (*Service, error) {
 
 // Create creates a new initiative with the given type and name.
 // Returns the created initiative and sets it as the active initiative.
-func (s *Service) Create(initType InitiativeType, name string) (*Initiative, error) {
+// If steps is provided, the INITIATIVE.md will include a Cycles section with a step table.
+func (s *Service) Create(initType InitiativeType, name string, steps []WorkflowStep) (*Initiative, error) {
 	// Validate type
 	if !initType.IsValid() {
 		return nil, &InitiativeError{
@@ -82,21 +83,21 @@ func (s *Service) Create(initType InitiativeType, name string) (*Initiative, err
 		Type:      initType,
 		Name:      normalizedName,
 		Path:      initiativePath,
-		Status:    StatusActive,
+		Status:    StatusInProgress,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
 
 	// Create INITIATIVE.md
-	if err := s.createInitiativeMD(initiative); err != nil {
+	if err := s.createInitiativeMD(initiative, steps); err != nil {
 		return nil, fmt.Errorf("creating INITIATIVE.md: %w", err)
 	}
 
 	// Set as active initiative (pointer only, no status)
 	state := &InitiativeState{
-		Initiative:   filepath.Join(HistoryDir, id),
-		Started:      now,
-		LastActivity: now,
+		Initiative: filepath.Join(HistoryDir, id),
+		Started:    now,
+		Status:     StatusInProgress,
 	}
 	if err := s.stateManager.Save(state); err != nil {
 		return nil, fmt.Errorf("saving state: %w", err)
@@ -212,9 +213,9 @@ func (s *Service) SetActive(initiativeID string) error {
 
 	// Update state (pointer only, no status)
 	state := &InitiativeState{
-		Initiative:   filepath.Join(HistoryDir, initiativeID),
-		Started:      time.Now(),
-		LastActivity: time.Now(),
+		Initiative: filepath.Join(HistoryDir, initiativeID),
+		Started:    time.Now(),
+		Status:     StatusInProgress,
 	}
 
 	return s.stateManager.Save(state)
@@ -245,7 +246,11 @@ type StatusResult struct {
 	InitiativeID   string   `json:"initiative_id,omitempty"`
 	InitiativeType string   `json:"initiative_type,omitempty"`
 	CurrentStep    string   `json:"current_step,omitempty"`
+	StepStatus     string   `json:"step_status,omitempty"`
 	CycleID        string   `json:"cycle_id,omitempty"`
+	CurrentCycle   int      `json:"current_cycle,omitempty"`
+	StepsCompleted int      `json:"steps_completed,omitempty"`
+	StepsTotal     int      `json:"steps_total,omitempty"`
 	AvailableDocs  []string `json:"available_docs,omitempty"`
 	SuggestedNext  string   `json:"suggested_next,omitempty"`
 	HistoryPath    string   `json:"history_path,omitempty"`
@@ -277,21 +282,50 @@ func (s *Service) Status() (*StatusResult, error) {
 		}, nil
 	}
 
-	// Determine cycle path
-	cyclePath := ""
-	cycleID := ""
-	if state.Cycle != "" {
-		cyclePath = filepath.Join(s.workDir, state.Cycle)
-		cycleID = filepath.Base(state.Cycle)
-	} else {
-		cyclePath = init.Path
+	// Parse INITIATIVE.md for cycle/step state
+	mdPath := filepath.Join(init.Path, InitiativeMDFile)
+	parsed, err := ParseInitiativeMD(mdPath)
+
+	// Variables for cycle/step info
+	var currentStep, stepStatus, cycleID string
+	var currentCycle, stepsCompleted, stepsTotal int
+
+	if err == nil && parsed != nil {
+		// Get active cycle info
+		if cycle := parsed.ActiveCycle(); cycle != nil {
+			currentCycle = cycle.Number
+			cycleID = fmt.Sprintf("%d-%s-%s", cycle.Number, cycle.Type, cycle.Name)
+			stepsTotal = len(cycle.Steps)
+
+			// Count completed steps and find current step
+			for _, step := range cycle.Steps {
+				if step.Status == StepCompleted || step.Status == StepSkipped {
+					stepsCompleted++
+				}
+				if step.Status == StepInProgress {
+					currentStep = step.Name
+					stepStatus = string(step.Status)
+				}
+			}
+
+			// If no in-progress step, check if there's a next pending step
+			if currentStep == "" {
+				if next := parsed.NextStep(); next != nil {
+					currentStep = next.Name
+					stepStatus = string(next.Status)
+				}
+			}
+		}
 	}
 
-	// Find available docs in cycle folder
+	// Use initiative path for doc discovery
+	cyclePath := init.Path
+
+	// Find available docs in initiative folder
 	availableDocs := s.findAvailableDocs(cyclePath)
 
-	// Determine suggested next step based on available artifacts
-	suggestedNext := s.determineSuggestedNext(availableDocs, state.CurrentStep)
+	// Determine suggested next step based on current step or available artifacts
+	suggestedNext := s.determineSuggestedNext(availableDocs, currentStep)
 
 	// Build relative paths for client use
 	historyPath := state.Initiative // Already relative (e.g., "history/695c116e-feature-go-project-setup")
@@ -299,25 +333,24 @@ func (s *Service) Status() (*StatusResult, error) {
 
 	// Build list of relative file paths to read
 	var files []string
-	// Determine relative cycle path
-	relativeCyclePath := state.Cycle
-	if relativeCyclePath == "" {
-		relativeCyclePath = state.Initiative
-	}
 	for _, doc := range availableDocs {
 		if strings.HasSuffix(doc, "/") {
 			// Directory, skip
 			continue
 		}
-		files = append(files, filepath.Join(relativeCyclePath, doc))
+		files = append(files, filepath.Join(state.Initiative, doc))
 	}
 
 	return &StatusResult{
 		Active:         true,
 		InitiativeID:   init.ID,
 		InitiativeType: string(init.Type),
-		CurrentStep:    state.CurrentStep,
+		CurrentStep:    currentStep,
+		StepStatus:     stepStatus,
 		CycleID:        cycleID,
+		CurrentCycle:   currentCycle,
+		StepsCompleted: stepsCompleted,
+		StepsTotal:     stepsTotal,
 		AvailableDocs:  availableDocs,
 		SuggestedNext:  suggestedNext,
 		HistoryPath:    historyPath,
@@ -373,8 +406,8 @@ func (s *Service) determineSuggestedNext(availableDocs []string, currentStep str
 		return "tasks"
 	}
 
-	// If tasks exist, suggest eat
-	return "eat"
+	// If tasks exist, suggest implement
+	return "implement"
 }
 
 // generateID generates a unique initiative ID in format: {hex-timestamp}-{type}-{name}
@@ -383,30 +416,71 @@ func (s *Service) generateID(initType InitiativeType, name string) string {
 	return fmt.Sprintf("%s-%s-%s", timestamp, initType, name)
 }
 
+// WorkflowStep represents a step in a workflow (used for initiative creation).
+type WorkflowStep struct {
+	Name    string
+	Profile string
+}
+
 // createInitiativeMD creates the INITIATIVE.md file for an initiative.
-func (s *Service) createInitiativeMD(init *Initiative) error {
-	content := fmt.Sprintf(`# Initiative: %s
+// If steps is provided, a Cycles section with a step table is included.
+func (s *Service) createInitiativeMD(init *Initiative, steps []WorkflowStep) error {
+	var builder strings.Builder
 
-**Type**: %s
-**Status**: %s
-**Created**: %s
-**ID**: %s
+	// Header section
+	builder.WriteString(fmt.Sprintf("# Initiative: %s\n\n", init.Name))
+	builder.WriteString(fmt.Sprintf("**Type**: %s\n", init.Type))
+	builder.WriteString(fmt.Sprintf("**Status**: %s\n", init.Status))
+	builder.WriteString(fmt.Sprintf("**Created**: %s\n", init.CreatedAt.Format("2006-01-02")))
+	builder.WriteString(fmt.Sprintf("**ID**: %s\n\n", init.ID))
 
-## Description
+	// Cycles section (if steps provided)
+	if len(steps) > 0 {
+		builder.WriteString("## Cycles\n\n")
 
-<!-- Add a description of this initiative -->
+		// Determine cycle type from initiative type
+		cycleType := "feat"
+		switch init.Type {
+		case TypeFeature:
+			cycleType = "feat"
+		case TypeBug:
+			cycleType = "fix"
+		case TypeRefactor:
+			cycleType = "ref"
+		}
 
-## Goals
+		// Create first cycle header
+		builder.WriteString(fmt.Sprintf("### 1. %s/%s (active)\n\n", cycleType, init.Name))
 
-<!-- Define the goals for this initiative -->
+		// Create step table
+		builder.WriteString("| Step | Status | Updated |\n")
+		builder.WriteString("|------|--------|--------|\n")
+		for i, step := range steps {
+			status := "pending"
+			updated := "-"
+			if i == 0 {
+				status = "in_progress"
+				updated = time.Now().Format("2006-01-02 15:04")
+			}
+			builder.WriteString(fmt.Sprintf("| %s | %s | %s |\n", step.Name, status, updated))
+		}
+		builder.WriteString("\n")
+	}
 
-## Progress
+	// Description section
+	builder.WriteString("## Description\n\n")
+	builder.WriteString("<!-- Add a description of this initiative -->\n\n")
 
-<!-- Track progress here -->
-`, init.Name, init.Type, init.Status, init.CreatedAt.Format(time.RFC3339), init.ID)
+	// Goals section
+	builder.WriteString("## Goals\n\n")
+	builder.WriteString("<!-- Define the goals for this initiative -->\n\n")
+
+	// Progress section
+	builder.WriteString("## Progress\n\n")
+	builder.WriteString("<!-- Track progress here -->\n")
 
 	mdPath := filepath.Join(init.Path, InitiativeMDFile)
-	return os.WriteFile(mdPath, []byte(content), 0644)
+	return os.WriteFile(mdPath, []byte(builder.String()), 0644)
 }
 
 // parseInitiativeFromFolder parses an Initiative from a folder name.
@@ -438,7 +512,7 @@ func (s *Service) parseInitiativeFromFolder(folderName, path string) *Initiative
 		Type:      initType,
 		Name:      parts[2],
 		Path:      path,
-		Status:    StatusActive, // Default to active
+		Status:    StatusInProgress, // Default to active
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
 	}

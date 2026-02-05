@@ -2,6 +2,13 @@
 name: bug
 description: Create a bug investigation and fix specification. Determines if issue is a spec gap or implementation error.
 type: skill
+steps:
+  - name: investigate
+    profile: bug
+  - name: fix
+    profile: implement
+  - name: verify
+    profile: audit
 handoffs:
   - label: Build Fix Plan
     skill: brains.plan

@@ -42,16 +42,16 @@ func (t InitiativeType) String() string {
 type InitiativeStatus string
 
 const (
-	// StatusActive represents an active initiative.
-	StatusActive InitiativeStatus = "active"
-	// StatusCompleted represents a completed initiative.
-	StatusCompleted InitiativeStatus = "completed"
+	// StatusInProgress represents an in-progress initiative.
+	StatusInProgress InitiativeStatus = "in_progress"
+	// StatusComplete represents a completed initiative.
+	StatusComplete InitiativeStatus = "complete"
 )
 
 // IsValid returns true if the initiative status is valid.
 func (s InitiativeStatus) IsValid() bool {
 	switch s {
-	case StatusActive, StatusCompleted:
+	case StatusInProgress, StatusComplete:
 		return true
 	default:
 		return false
@@ -83,19 +83,15 @@ type Initiative struct {
 
 // InitiativeState tracks the currently active initiative for a project.
 // Stored in .brains/active.json.
-// NOTE: This is a pointer-only structure. Status is NOT stored here;
-// it should be read from INITIATIVE.md frontmatter.
+// NOTE: This is a minimal pointer structure. Step/phase state is tracked
+// in INITIATIVE.md, not here.
 type InitiativeState struct {
 	// Initiative is the relative path to active initiative (from project root).
 	Initiative string `json:"initiative,omitempty"`
-	// Cycle is the relative path to active cycle within the initiative.
-	Cycle string `json:"cycle,omitempty"`
 	// Started is when this initiative became active.
 	Started time.Time `json:"started,omitempty"`
-	// LastActivity is the last step execution time.
-	LastActivity time.Time `json:"last_activity,omitempty"`
-	// CurrentStep is the last executed step.
-	CurrentStep string `json:"current_step,omitempty"`
+	// Status is the initiative status (in_progress, complete).
+	Status InitiativeStatus `json:"status,omitempty"`
 }
 
 // IsEmpty returns true if there is no active initiative.

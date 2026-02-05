@@ -2,6 +2,15 @@
 name: refactor
 description: Create a refactoring specification. Restructures code without changing behavior.
 type: skill
+steps:
+  - name: analyze
+    profile: refactor
+  - name: plan
+    profile: plan
+  - name: implement
+    profile: implement
+  - name: verify
+    profile: audit
 handoffs:
   - label: Build Refactor Plan
     skill: brains.plan

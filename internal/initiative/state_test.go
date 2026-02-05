@@ -83,8 +83,8 @@ func TestFileStateManager_Load(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, state.IsEmpty())
 		assert.Equal(t, "history/675d8a3f-feature-user-auth", state.Initiative)
-		assert.Equal(t, "history/675d8a3f-feature-user-auth/675d8a40-feat-user-auth", state.Cycle)
-		assert.Equal(t, "specify", state.CurrentStep)
+		// NOTE: Cycle and CurrentStep are no longer stored in active.json
+		// They are now tracked in INITIATIVE.md
 	})
 
 	t.Run("returns error for invalid JSON", func(t *testing.T) {
@@ -109,10 +109,9 @@ func TestFileStateManager_Save(t *testing.T) {
 		require.NoError(t, err)
 
 		state := &InitiativeState{
-			Initiative:  "history/675d8a3f-feature-user-auth",
-			Cycle:       "history/675d8a3f-feature-user-auth/675d8a40-feat-user-auth",
-			Started:     time.Now(),
-			CurrentStep: "specify",
+			Initiative: "history/675d8a3f-feature-user-auth",
+			Started:    time.Now(),
+			Status:     StatusInProgress,
 		}
 
 		err = mgr.Save(state)
@@ -126,19 +125,18 @@ func TestFileStateManager_Save(t *testing.T) {
 		loaded, err := mgr.Load()
 		require.NoError(t, err)
 		assert.Equal(t, state.Initiative, loaded.Initiative)
-		assert.Equal(t, state.Cycle, loaded.Cycle)
-		assert.Equal(t, state.CurrentStep, loaded.CurrentStep)
+		assert.Equal(t, state.Status, loaded.Status)
 	})
 
-	t.Run("updates last_activity on save", func(t *testing.T) {
+	t.Run("preserves status on save", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		mgr, err := NewStateManager(tmpDir)
 		require.NoError(t, err)
 
-		oldTime := time.Now().Add(-1 * time.Hour)
 		state := &InitiativeState{
-			Initiative:   "history/test",
-			LastActivity: oldTime,
+			Initiative: "history/test",
+			Started:    time.Now(),
+			Status:     StatusComplete,
 		}
 
 		err = mgr.Save(state)
@@ -146,7 +144,7 @@ func TestFileStateManager_Save(t *testing.T) {
 
 		loaded, err := mgr.Load()
 		require.NoError(t, err)
-		assert.True(t, loaded.LastActivity.After(oldTime))
+		assert.Equal(t, StatusComplete, loaded.Status)
 	})
 
 	t.Run("overwrites existing state", func(t *testing.T) {

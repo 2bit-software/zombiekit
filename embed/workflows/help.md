@@ -130,6 +130,5 @@ Based on current state:
 - `audit` - Cross-check artifact alignment
 - `clarify` - Identify ambiguities
 - `research` - Standalone research
-- `eat` - Consume information
 - `update` - Modify existing artifacts
 - `revise` - Re-enter workflow cycle

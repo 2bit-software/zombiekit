@@ -51,17 +51,16 @@ func TestTool_Execute(t *testing.T) {
 		brainsDir := filepath.Join(tmpDir, ".brains")
 		require.NoError(t, os.MkdirAll(brainsDir, 0755))
 
-		// Create history folder with cycle
+		// Create history folder with spec.md directly (no cycle subfolder)
 		historyDir := filepath.Join(tmpDir, "history", "test-feature")
-		cycleDir := filepath.Join(historyDir, "cycle-001")
-		require.NoError(t, os.MkdirAll(cycleDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(cycleDir, "spec.md"), []byte(`---
+		require.NoError(t, os.MkdirAll(historyDir, 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(historyDir, "spec.md"), []byte(`---
 status: approved
 ---
 # Spec`), 0644))
 
-		// Set active initiative
-		activeJSON := `{"initiative": "history/test-feature", "cycle": "history/test-feature/cycle-001", "status": "active"}`
+		// Set active initiative (no cycle field)
+		activeJSON := `{"initiative": "history/test-feature", "status": "in_progress"}`
 		require.NoError(t, os.WriteFile(filepath.Join(brainsDir, "active.json"), []byte(activeJSON), 0644))
 
 		embeddedFS := fstest.MapFS{

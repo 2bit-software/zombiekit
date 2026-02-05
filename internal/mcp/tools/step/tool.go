@@ -44,7 +44,7 @@ func (t *Tool) Definition() ToolDefinition {
 			"properties": map[string]interface{}{
 				"step": map[string]interface{}{
 					"type":        "string",
-					"description": "Step name to execute: feature, bug, refactor, plan, tasks, eat, audit, clarify",
+					"description": "Step name to execute: feature, bug, refactor, plan, tasks, implement, audit, clarify",
 				},
 				"dir": map[string]interface{}{
 					"type":        "string",

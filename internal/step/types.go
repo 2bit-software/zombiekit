@@ -80,7 +80,7 @@ type StepResponse struct {
 	CycleFolder string `json:"cycle_folder,omitempty"`
 	// WorkflowPhases describes the phases in a multi-phase workflow step.
 	WorkflowPhases []Phase `json:"workflow_phases,omitempty"`
-	// NextTask contains info about the next incomplete task (for eat step).
+	// NextTask contains info about the next incomplete task (for implement step).
 	NextTask *TaskInfo `json:"next_task,omitempty"`
 	// Prerequisites contains prerequisite status info.
 	Prerequisites PrerequisiteInfo `json:"prerequisites,omitempty"`
@@ -131,4 +131,23 @@ type StepPrerequisite struct {
 	Hint string
 	// BlockingStep is the name of the step that produces the required artifact.
 	BlockingStep string
+}
+
+// WorkflowStep represents a step in a workflow's default step sequence.
+// Parsed from workflow profile frontmatter.
+type WorkflowStep struct {
+	// Name is the step identifier (e.g., "spec", "plan").
+	Name string `yaml:"name"`
+	// Profile is the profile to load for this step.
+	Profile string `yaml:"profile"`
+}
+
+// WorkflowMeta contains workflow metadata parsed from profile frontmatter.
+type WorkflowMeta struct {
+	// Name is the workflow name (e.g., "feature", "bug", "refactor").
+	Name string `yaml:"name"`
+	// Description is a human-readable description.
+	Description string `yaml:"description,omitempty"`
+	// Steps is the default step sequence for this workflow.
+	Steps []WorkflowStep `yaml:"steps,omitempty"`
 }
