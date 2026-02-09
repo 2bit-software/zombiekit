@@ -18,6 +18,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
 	github.com/urfave/cli/v2 v2.27.7
+	golang.org/x/net v0.46.0
 	golang.org/x/sync v0.17.0
 	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1

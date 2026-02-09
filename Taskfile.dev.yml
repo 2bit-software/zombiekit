@@ -140,6 +140,18 @@ tasks:
     generates:
       - bin/brains
 
+  build:server:
+    desc: Build the zk-server binary
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags "{{.LDFLAGS}}" -o bin/zk-server ./cmd/zk-server
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - bin/zk-server
+
   # === Proto ===
 
   proto:
@@ -317,6 +329,46 @@ tasks:
       - echo ""
       - echo "=== Search for memory-related issues ==="
       - ./bin/brains recall search "memory problems"
+
+  # === Server ===
+
+  server:
+    desc: Start the central ZK server
+    cmds:
+      - task: recall:preflight
+      - task: build:server
+      - task: db:up
+      - task: db:migrate
+      - |
+        echo "Starting ZK server..."
+        echo "  Listen: ${ZK_LISTEN:-:8443}"
+        echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
+        echo "  Ollama: ${BRAINS_OLLAMA_URL:-http://localhost:11434}"
+        echo ""
+        ./bin/zk-server \
+          --listen "${ZK_LISTEN:-:8443}" \
+          --postgres-url "${BRAINS_POSTGRES_URL}" \
+          --ollama-url "${BRAINS_OLLAMA_URL:-http://localhost:11434}" \
+          --migrate
+
+  server:notls:
+    desc: Start the central ZK server without TLS (for local dev)
+    cmds:
+      - task: recall:preflight
+      - task: build:server
+      - task: db:up
+      - task: db:migrate
+      - |
+        echo "Starting ZK server (no TLS)..."
+        echo "  Listen: ${ZK_LISTEN:-:8080}"
+        echo "  PostgreSQL: localhost:${POSTGRES_PORT:-9432}"
+        echo "  Ollama: ${BRAINS_OLLAMA_URL:-http://localhost:11434}"
+        echo ""
+        ./bin/zk-server \
+          --listen "${ZK_LISTEN:-:8080}" \
+          --postgres-url "${BRAINS_POSTGRES_URL}" \
+          --ollama-url "${BRAINS_OLLAMA_URL:-http://localhost:11434}" \
+          --migrate
 
   # === GUI ===
 
