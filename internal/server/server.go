@@ -188,7 +188,11 @@ func (s *Server) registerServices(mux *http.ServeMux, opts ...connect.HandlerOpt
 	path, handler = workflowv1connect.NewWorkflowServiceHandler(handlers.NewWorkflowService(initStorage), opts...)
 	mux.Handle(path, handler)
 
-	path, handler = searchv1connect.NewSearchServiceHandler(handlers.NewSearchService(s.recallStore, s.embedder), opts...)
+	var embedder handlers.Embedder
+	if s.embedder != nil {
+		embedder = s.embedder
+	}
+	path, handler = searchv1connect.NewSearchServiceHandler(handlers.NewSearchService(s.recallStore, embedder), opts...)
 	mux.Handle(path, handler)
 
 	var cfgStorage storage.ConfigStorage

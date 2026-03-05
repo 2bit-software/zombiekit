@@ -73,6 +73,20 @@
 ## T011 - LLMService
 - Status: Deferred (returns CodeUnimplemented per proto comment)
 
+## T012 - Integration Tests
+- Status: Complete
+- Completed: 2026-03-04
+- Files:
+  - `internal/server/server_test.go` - Full integration test suite
+- 30 tests covering all services:
+  - Health endpoint
+  - ProfileService: save, get, overwrite protection, overwrite allowed, list, not found, compose, validation
+  - WorkflowService: create, get status, update step, step not found, list, list with filter, complete, get not found, validation
+  - ArtifactService: save+get, default content type, list, list with prefix, not found, validation, overwrite
+  - ConfigService: set+get, get all, update existing
+  - SearchService: search unavailable (no embedder), list conversations (empty)
+- Bug fix: Fixed nil interface pitfall in `server.go` where nil `*OllamaEmbedderAdapter` was passed as non-nil `Embedder` interface
+
 ## Summary
 All acceptance criteria from DEV-111 met:
 - [x] Server starts, accepts gRPC connections with TLS (TLS optional, configurable)
@@ -80,3 +94,4 @@ All acceptance criteria from DEV-111 met:
 - [x] Initiative CRUD operations work through gRPC (WorkflowService)
 - [ ] LLM proxy - deferred per proto comment
 - [x] Existing conversation importer targets the server's database (uses existing recall storage)
+- [x] Integration tests pass for all implemented services (30 tests)
