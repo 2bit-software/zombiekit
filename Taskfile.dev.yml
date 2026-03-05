@@ -140,6 +140,20 @@ tasks:
     generates:
       - bin/brains
 
+  build:mcp:
+    desc: Build the brains-mcp proxy binary
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags "{{.LDFLAGS}}" -o bin/brains-mcp ./cmd/brains-mcp
+    sources:
+      - cmd/brains-mcp/**/*.go
+      - internal/proxy/**/*.go
+      - internal/mcp/tools/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - bin/brains-mcp
+
   build:server:
     desc: Build the zk-server binary
     cmds:
