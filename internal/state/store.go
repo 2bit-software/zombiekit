@@ -14,6 +14,15 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Job status constants.
+const (
+	StatusQueued         = "queued"
+	StatusInProgress     = "in-progress"
+	StatusNeedsAttention = "needs-attention"
+	StatusComplete       = "complete"
+	StatusClosed         = "closed"
+)
+
 // Job represents an autonomous development task tracked by the orchestrator.
 type Job struct {
 	TicketID     string
@@ -32,6 +41,8 @@ type StateStore interface {
 
 	CreateJob(ctx context.Context, ticketID, worktreePath, cmuxSession string) error
 	GetJob(ctx context.Context, ticketID string) (*Job, error)
+	ListJobsByStatus(ctx context.Context, statuses ...string) ([]Job, error)
+	SetJobStatus(ctx context.Context, ticketID string, status string) error
 	SetPR(ctx context.Context, ticketID string, prNumber int64) error
 
 	GetCommentWatermark(ctx context.Context, prNumber int64) (int64, error)
@@ -39,6 +50,7 @@ type StateStore interface {
 
 	TryAcquireSlot(ctx context.Context, projectID string, limit int) (bool, error)
 	ReleaseSlot(ctx context.Context, projectID string) error
+	ResetAllSlots(ctx context.Context) (int, error)
 }
 
 // SQLiteStore implements StateStore backed by a local SQLite database.
@@ -116,8 +128,8 @@ func (s *SQLiteStore) CreateJob(ctx context.Context, ticketID, worktreePath, cmu
 	now := time.Now()
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO jobs (ticket_id, worktree_path, cmux_session, status, created_at, updated_at)
-		 VALUES (?, ?, ?, 'queued', ?, ?)`,
-		ticketID, worktreePath, cmuxSession, now, now,
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		ticketID, worktreePath, cmuxSession, StatusQueued, now, now,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -148,6 +160,74 @@ func (s *SQLiteStore) GetJob(ctx context.Context, ticketID string) (*Job, error)
 		job.PRNumber = &prNumber.Int64
 	}
 	return &job, nil
+}
+
+// ListJobsByStatus returns all jobs matching any of the given statuses.
+// Returns an empty slice (not nil) when no jobs match.
+func (s *SQLiteStore) ListJobsByStatus(ctx context.Context, statuses ...string) ([]Job, error) {
+	if len(statuses) == 0 {
+		return []Job{}, nil
+	}
+
+	placeholders := make([]string, len(statuses))
+	args := make([]any, len(statuses))
+	for i, status := range statuses {
+		placeholders[i] = "?"
+		args[i] = status
+	}
+
+	query := fmt.Sprintf(
+		`SELECT ticket_id, worktree_path, cmux_session, pr_number, status, created_at, updated_at
+		 FROM jobs WHERE status IN (%s)`,
+		strings.Join(placeholders, ", "),
+	)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list jobs by status: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []Job
+	for rows.Next() {
+		var job Job
+		var prNumber sql.NullInt64
+		if err := rows.Scan(&job.TicketID, &job.WorktreePath, &job.CmuxSession, &prNumber, &job.Status, &job.CreatedAt, &job.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan job row: %w", err)
+		}
+		if prNumber.Valid {
+			job.PRNumber = &prNumber.Int64
+		}
+		jobs = append(jobs, job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate job rows: %w", err)
+	}
+
+	if jobs == nil {
+		return []Job{}, nil
+	}
+	return jobs, nil
+}
+
+// SetJobStatus updates the status of a job and its updated_at timestamp.
+// Returns ErrJobNotFound if no job exists for the given ticket ID.
+func (s *SQLiteStore) SetJobStatus(ctx context.Context, ticketID string, status string) error {
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE jobs SET status = ?, updated_at = ? WHERE ticket_id = ?`,
+		status, time.Now(), ticketID,
+	)
+	if err != nil {
+		return fmt.Errorf("set status for job %s: %w", ticketID, err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set status for job %s: %w", ticketID, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("set status for job %s: %w", ticketID, ErrJobNotFound)
+	}
+	return nil
 }
 
 // SetPR associates a PR number with an existing job.
@@ -261,4 +341,20 @@ func (s *SQLiteStore) ReleaseSlot(ctx context.Context, projectID string) error {
 		return fmt.Errorf("release slot for %s: %w", projectID, err)
 	}
 	return nil
+}
+
+// ResetAllSlots sets all concurrency slot active counts to zero.
+// Returns the number of projects that had active slots reset.
+func (s *SQLiteStore) ResetAllSlots(ctx context.Context) (int, error) {
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE concurrency_slots SET active_count = 0 WHERE active_count > 0`,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("reset all slots: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("reset all slots: %w", err)
+	}
+	return int(n), nil
 }

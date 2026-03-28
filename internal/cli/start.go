@@ -6,11 +6,14 @@ import (
 	"os"
 	"time"
 
+	"path/filepath"
+
 	"github.com/urfave/cli/v2"
 	"github.com/zombiekit/brains/internal/config"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/shutdown"
 	"github.com/zombiekit/brains/internal/startup"
+	"github.com/zombiekit/brains/internal/state"
 )
 
 // newStartCommand creates the start command for running all services.
@@ -72,6 +75,27 @@ func runStart(c *cli.Context) error {
 	if len(services) == 0 {
 		log.Warn("no services enabled, nothing to start")
 		return nil
+	}
+
+	// Initialize state store for crash-recovery reconciliation
+	dataDir := os.Getenv("BRAINS_DATA_DIR")
+	if dataDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve home directory: %w", err)
+		}
+		dataDir = filepath.Join(homeDir, ".brains")
+	}
+	statePath := filepath.Join(dataDir, "state.db")
+	stateStore, err := state.NewSQLiteStore(c.Context, statePath)
+	if err != nil {
+		return fmt.Errorf("initialize state store: %w", err)
+	}
+	defer stateStore.Close()
+
+	// Run crash-recovery reconciliation before launching services
+	if err := state.ApplyReconciliation(c.Context, stateStore, log); err != nil {
+		return fmt.Errorf("startup reconciliation: %w", err)
 	}
 
 	log.Info("starting services", "count", len(services))

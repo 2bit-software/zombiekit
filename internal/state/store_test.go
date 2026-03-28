@@ -165,7 +165,7 @@ func TestCreateJob_AndGetJob(t *testing.T) {
 	assert.Equal(t, "/tmp/worktree", job.WorktreePath)
 	assert.Equal(t, "session-abc", job.CmuxSession)
 	assert.Nil(t, job.PRNumber)
-	assert.Equal(t, "queued", job.Status)
+	assert.Equal(t, StatusQueued, job.Status)
 	assert.True(t, job.CreatedAt.After(before))
 	assert.True(t, job.UpdatedAt.After(before))
 }
@@ -387,6 +387,134 @@ func TestTryAcquireSlot_Concurrent(t *testing.T) {
 		}
 	}
 	assert.Equal(t, slotLimit, successes, "exactly %d goroutines should acquire slots", slotLimit)
+}
+
+// --- ListJobsByStatus tests ---
+
+func TestListJobsByStatus_FiltersCorrectly(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
+	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2"))
+	// DEV-2 stays queued
+
+	jobs, err := store.ListJobsByStatus(ctx, StatusInProgress)
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	assert.Equal(t, "DEV-1", jobs[0].TicketID)
+}
+
+func TestListJobsByStatus_MultipleStatuses(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
+	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2"))
+	require.NoError(t, store.SetJobStatus(ctx, "DEV-2", StatusComplete))
+	require.NoError(t, store.CreateJob(ctx, "DEV-3", "/tmp/wt3", "s3"))
+	// DEV-3 stays queued
+
+	jobs, err := store.ListJobsByStatus(ctx, StatusInProgress, StatusComplete)
+	require.NoError(t, err)
+	require.Len(t, jobs, 2)
+
+	ticketIDs := []string{jobs[0].TicketID, jobs[1].TicketID}
+	assert.Contains(t, ticketIDs, "DEV-1")
+	assert.Contains(t, ticketIDs, "DEV-2")
+}
+
+func TestListJobsByStatus_NoMatches(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+
+	jobs, err := store.ListJobsByStatus(ctx, StatusInProgress)
+	require.NoError(t, err)
+	assert.Empty(t, jobs)
+	assert.NotNil(t, jobs)
+}
+
+func TestListJobsByStatus_EmptyStore(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	jobs, err := store.ListJobsByStatus(ctx, StatusInProgress)
+	require.NoError(t, err)
+	assert.Empty(t, jobs)
+	assert.NotNil(t, jobs)
+}
+
+// --- SetJobStatus tests ---
+
+func TestSetJobStatus_UpdatesStatusAndTimestamp(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	jobBefore, err := store.GetJob(ctx, "DEV-1")
+	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
+
+	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
+
+	job, err := store.GetJob(ctx, "DEV-1")
+	require.NoError(t, err)
+	assert.Equal(t, StatusInProgress, job.Status)
+	assert.True(t, job.UpdatedAt.After(jobBefore.UpdatedAt))
+}
+
+func TestSetJobStatus_NonExistent_ReturnsErrJobNotFound(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	err := store.SetJobStatus(ctx, "GHOST", StatusInProgress)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrJobNotFound))
+}
+
+// --- ResetAllSlots tests ---
+
+func TestResetAllSlots_ResetsActiveCounts(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	_, err := store.TryAcquireSlot(ctx, "proj-1", 5)
+	require.NoError(t, err)
+	_, err = store.TryAcquireSlot(ctx, "proj-1", 5)
+	require.NoError(t, err)
+	_, err = store.TryAcquireSlot(ctx, "proj-2", 3)
+	require.NoError(t, err)
+
+	n, err := store.ResetAllSlots(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 2, n) // two projects had active slots
+
+	var count1, count2 int
+	err = store.DB().QueryRowContext(ctx,
+		"SELECT active_count FROM concurrency_slots WHERE project_id = ?", "proj-1",
+	).Scan(&count1)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count1)
+
+	err = store.DB().QueryRowContext(ctx,
+		"SELECT active_count FROM concurrency_slots WHERE project_id = ?", "proj-2",
+	).Scan(&count2)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count2)
+}
+
+func TestResetAllSlots_NoActiveSlots(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	n, err := store.ResetAllSlots(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n)
 }
 
 // --- Cross-cutting tests ---
