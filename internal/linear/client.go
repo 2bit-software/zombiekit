@@ -23,6 +23,7 @@ type Ticket struct {
 	Labels      []string
 	Priority    int
 	URL         string
+	TeamID      string
 }
 
 // CreateTicketInput holds parameters for creating a ticket.
@@ -34,6 +35,7 @@ type CreateTicketInput struct {
 	LabelIDs    []string
 	Priority    *int
 	AssigneeID  string
+	ProjectID   string
 }
 
 // AttachmentInput holds parameters for creating an attachment.
