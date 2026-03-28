@@ -222,6 +222,7 @@ query($label: String!, $after: String) {
       priority
       state { name }
       labels { nodes { name } }
+      team { id }
     }
     pageInfo {
       hasNextPage
@@ -241,6 +242,63 @@ query($id: String!) {
     priority
     state { name }
     labels { nodes { name } }
+    team { id }
+  }
+}`
+
+// Mutation and resolution queries
+
+const resolveWorkflowStateQuery = `
+query($teamId: String!, $name: String!) {
+  workflowStates(
+    filter: {
+      team: { id: { eq: $teamId } }
+      name: { eq: $name }
+    }
+  ) {
+    nodes {
+      id
+      name
+    }
+  }
+}`
+
+const resolveLabelQuery = `
+query($name: String!) {
+  issueLabels(
+    filter: {
+      name: { eq: $name }
+    }
+  ) {
+    nodes {
+      id
+      name
+    }
+  }
+}`
+
+const issueUpdateMutation = `
+mutation($id: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $id, input: $input) {
+    success
+  }
+}`
+
+const issueCreateMutation = `
+mutation($input: IssueCreateInput!) {
+  issueCreate(input: $input) {
+    success
+    issue {
+      id
+      identifier
+      title
+      description
+      url
+      priority
+      state { name }
+      labels { nodes { name } }
+      team { id }
+    }
   }
 }`
 
@@ -275,6 +333,40 @@ type issueNode struct {
 			Name string `json:"name"`
 		} `json:"nodes"`
 	} `json:"labels"`
+	Team struct {
+		ID string `json:"id"`
+	} `json:"team"`
+}
+
+type workflowStatesResponse struct {
+	WorkflowStates struct {
+		Nodes []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"nodes"`
+	} `json:"workflowStates"`
+}
+
+type issueLabelsResponse struct {
+	IssueLabels struct {
+		Nodes []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"nodes"`
+	} `json:"issueLabels"`
+}
+
+type issueUpdateResponse struct {
+	IssueUpdate struct {
+		Success bool `json:"success"`
+	} `json:"issueUpdate"`
+}
+
+type issueCreateResponse struct {
+	IssueCreate struct {
+		Success bool      `json:"success"`
+		Issue   issueNode `json:"issue"`
+	} `json:"issueCreate"`
 }
 
 func (n issueNode) toTicket() Ticket {
@@ -295,6 +387,7 @@ func (n issueNode) toTicket() Ticket {
 		Labels:      labels,
 		Priority:    int(n.Priority),
 		URL:         n.URL,
+		TeamID:      n.Team.ID,
 	}
 }
 
@@ -341,20 +434,135 @@ func (c *httpClient) GetTicket(ctx context.Context, id string) (*Ticket, error) 
 	return &t, nil
 }
 
+func (c *httpClient) resolveWorkflowStateID(ctx context.Context, teamID, name string) (string, error) {
+	var resp workflowStatesResponse
+	vars := map[string]any{"teamId": teamID, "name": name}
+	if err := c.doWithRetry(ctx, resolveWorkflowStateQuery, vars, &resp); err != nil {
+		return "", fmt.Errorf("resolve workflow state: %w", err)
+	}
+	if len(resp.WorkflowStates.Nodes) == 0 {
+		return "", NewNotFoundError(fmt.Sprintf("linear: workflow state %q not found for team %s", name, teamID), nil)
+	}
+	return resp.WorkflowStates.Nodes[0].ID, nil
+}
+
+func (c *httpClient) resolveLabelID(ctx context.Context, name string) (string, error) {
+	var resp issueLabelsResponse
+	vars := map[string]any{"name": name}
+	if err := c.doWithRetry(ctx, resolveLabelQuery, vars, &resp); err != nil {
+		return "", fmt.Errorf("resolve label: %w", err)
+	}
+	switch len(resp.IssueLabels.Nodes) {
+	case 0:
+		return "", NewNotFoundError(fmt.Sprintf("linear: label %q not found", name), nil)
+	case 1:
+		return resp.IssueLabels.Nodes[0].ID, nil
+	default:
+		return "", NewAPIError(fmt.Sprintf("linear: label %q is ambiguous (%d matches)", name, len(resp.IssueLabels.Nodes)), nil)
+	}
+}
+
 func (c *httpClient) SetTicketStatus(ctx context.Context, id string, status string) error {
-	return fmt.Errorf("SetTicketStatus: not implemented")
+	ticket, err := c.GetTicket(ctx, id)
+	if err != nil {
+		return fmt.Errorf("set ticket status: %w", err)
+	}
+
+	stateID, err := c.resolveWorkflowStateID(ctx, ticket.TeamID, status)
+	if err != nil {
+		return fmt.Errorf("set ticket status: %w", err)
+	}
+
+	var resp issueUpdateResponse
+	vars := map[string]any{
+		"id":    id,
+		"input": map[string]any{"stateId": stateID},
+	}
+	if err := c.doWithRetry(ctx, issueUpdateMutation, vars, &resp); err != nil {
+		return fmt.Errorf("set ticket status: %w", err)
+	}
+	if !resp.IssueUpdate.Success {
+		return NewAPIError(fmt.Sprintf("linear: issueUpdate failed for ticket %s", id), nil)
+	}
+	return nil
 }
 
 func (c *httpClient) ApplyLabel(ctx context.Context, id string, label string) error {
-	return fmt.Errorf("ApplyLabel: not implemented")
+	labelID, err := c.resolveLabelID(ctx, label)
+	if err != nil {
+		return fmt.Errorf("apply label: %w", err)
+	}
+
+	var resp issueUpdateResponse
+	vars := map[string]any{
+		"id":    id,
+		"input": map[string]any{"addedLabelIds": []string{labelID}},
+	}
+	if err := c.doWithRetry(ctx, issueUpdateMutation, vars, &resp); err != nil {
+		return fmt.Errorf("apply label: %w", err)
+	}
+	if !resp.IssueUpdate.Success {
+		return NewAPIError(fmt.Sprintf("linear: issueUpdate failed for ticket %s", id), nil)
+	}
+	return nil
 }
 
 func (c *httpClient) RemoveLabel(ctx context.Context, id string, label string) error {
-	return fmt.Errorf("RemoveLabel: not implemented")
+	labelID, err := c.resolveLabelID(ctx, label)
+	if err != nil {
+		return fmt.Errorf("remove label: %w", err)
+	}
+
+	var resp issueUpdateResponse
+	vars := map[string]any{
+		"id":    id,
+		"input": map[string]any{"removedLabelIds": []string{labelID}},
+	}
+	if err := c.doWithRetry(ctx, issueUpdateMutation, vars, &resp); err != nil {
+		return fmt.Errorf("remove label: %w", err)
+	}
+	if !resp.IssueUpdate.Success {
+		return NewAPIError(fmt.Sprintf("linear: issueUpdate failed for ticket %s", id), nil)
+	}
+	return nil
 }
 
 func (c *httpClient) CreateTicket(ctx context.Context, input CreateTicketInput) (*Ticket, error) {
-	return nil, fmt.Errorf("CreateTicket: not implemented")
+	createInput := map[string]any{
+		"teamId": input.TeamID,
+	}
+	if input.Title != "" {
+		createInput["title"] = input.Title
+	}
+	if input.Description != "" {
+		createInput["description"] = input.Description
+	}
+	if input.StateID != "" {
+		createInput["stateId"] = input.StateID
+	}
+	if len(input.LabelIDs) > 0 {
+		createInput["labelIds"] = input.LabelIDs
+	}
+	if input.ProjectID != "" {
+		createInput["projectId"] = input.ProjectID
+	}
+	if input.Priority != nil {
+		createInput["priority"] = *input.Priority
+	}
+	if input.AssigneeID != "" {
+		createInput["assigneeId"] = input.AssigneeID
+	}
+
+	var resp issueCreateResponse
+	vars := map[string]any{"input": createInput}
+	if err := c.doWithRetry(ctx, issueCreateMutation, vars, &resp); err != nil {
+		return nil, fmt.Errorf("create ticket: %w", err)
+	}
+	if !resp.IssueCreate.Success {
+		return nil, NewAPIError("linear: issueCreate failed", nil)
+	}
+	t := resp.IssueCreate.Issue.toTicket()
+	return &t, nil
 }
 
 func (c *httpClient) UploadAttachment(ctx context.Context, ticketID string, input AttachmentInput) error {

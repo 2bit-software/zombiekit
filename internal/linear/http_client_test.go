@@ -1,11 +1,14 @@
 package linear
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -398,21 +401,433 @@ func TestDo_Unauthorized(t *testing.T) {
 
 func TestUnimplemented_Methods(t *testing.T) {
 	c, _ := NewClient("key")
-
 	ctx := context.Background()
 
-	err := c.SetTicketStatus(ctx, "id", "status")
+	err := c.UploadAttachment(ctx, "id", AttachmentInput{})
 	assert.ErrorContains(t, err, "not implemented")
+}
 
-	err = c.ApplyLabel(ctx, "id", "label")
-	assert.ErrorContains(t, err, "not implemented")
+// --- Query dispatcher for multi-step operation tests ---
 
-	err = c.RemoveLabel(ctx, "id", "label")
-	assert.ErrorContains(t, err, "not implemented")
+// queryDispatcher routes GraphQL requests to different handlers based on query content.
+// Patterns must be mutually exclusive — map iteration order is non-deterministic.
+func queryDispatcher(handlers map[string]http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		for pattern, handler := range handlers {
+			if strings.Contains(string(body), pattern) {
+				handler(w, r)
+				return
+			}
+		}
+		http.Error(w, "unmatched query", http.StatusInternalServerError)
+	}
+}
 
-	_, err = c.CreateTicket(ctx, CreateTicketInput{})
-	assert.ErrorContains(t, err, "not implemented")
+// --- resolveWorkflowStateID tests ---
 
-	err = c.UploadAttachment(ctx, "id", AttachmentInput{})
-	assert.ErrorContains(t, err, "not implemented")
+func TestResolveWorkflowStateID_Found(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"workflowStates": map[string]any{
+				"nodes": []map[string]any{
+					{"id": "state-uuid-1", "name": "In Progress"},
+				},
+			},
+		}))
+	})
+
+	id, err := c.resolveWorkflowStateID(context.Background(), "team-1", "In Progress")
+	require.NoError(t, err)
+	assert.Equal(t, "state-uuid-1", id)
+}
+
+func TestResolveWorkflowStateID_NotFound(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"workflowStates": map[string]any{
+				"nodes": []any{},
+			},
+		}))
+	})
+
+	_, err := c.resolveWorkflowStateID(context.Background(), "team-1", "Nonexistent")
+	require.Error(t, err)
+	assert.True(t, IsNotFound(err))
+	assert.Contains(t, err.Error(), "Nonexistent")
+	assert.Contains(t, err.Error(), "team-1")
+}
+
+// --- resolveLabelID tests ---
+
+func TestResolveLabelID_Found(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueLabels": map[string]any{
+				"nodes": []map[string]any{
+					{"id": "label-uuid-1", "name": "improvements"},
+				},
+			},
+		}))
+	})
+
+	id, err := c.resolveLabelID(context.Background(), "improvements")
+	require.NoError(t, err)
+	assert.Equal(t, "label-uuid-1", id)
+}
+
+func TestResolveLabelID_NotFound(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueLabels": map[string]any{
+				"nodes": []any{},
+			},
+		}))
+	})
+
+	_, err := c.resolveLabelID(context.Background(), "nonexistent")
+	require.Error(t, err)
+	assert.True(t, IsNotFound(err))
+	assert.Contains(t, err.Error(), "nonexistent")
+}
+
+func TestResolveLabelID_Ambiguous(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueLabels": map[string]any{
+				"nodes": []map[string]any{
+					{"id": "label-1", "name": "bug"},
+					{"id": "label-2", "name": "bug"},
+				},
+			},
+		}))
+	})
+
+	_, err := c.resolveLabelID(context.Background(), "bug")
+	require.Error(t, err)
+	assert.True(t, IsAPIError(err))
+	assert.Contains(t, err.Error(), "bug")
+	assert.Contains(t, err.Error(), "ambiguous")
+	assert.Contains(t, err.Error(), "2 matches")
+}
+
+// --- SetTicketStatus tests ---
+
+func TestSetTicketStatus_Success(t *testing.T) {
+	c, _ := newTestClient(t, queryDispatcher(map[string]http.HandlerFunc{
+		"issue(id": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issue": map[string]any{
+					"id": "uuid-1", "identifier": "DEV-1", "title": "Test",
+					"description": "desc", "url": "", "priority": 0.0,
+					"state": map[string]any{"name": "Todo"},
+					"labels": map[string]any{"nodes": []any{}},
+					"team":   map[string]any{"id": "team-uuid-1"},
+				},
+			}))
+		},
+		"workflowStates": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"workflowStates": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "state-done", "name": "Done"},
+					},
+				},
+			}))
+		},
+		"issueUpdate": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueUpdate": map[string]any{"success": true},
+			}))
+		},
+	}))
+
+	err := c.SetTicketStatus(context.Background(), "DEV-1", "Done")
+	require.NoError(t, err)
+}
+
+func TestSetTicketStatus_StatusNotFound(t *testing.T) {
+	c, _ := newTestClient(t, queryDispatcher(map[string]http.HandlerFunc{
+		"issue(id": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issue": map[string]any{
+					"id": "uuid-1", "identifier": "DEV-1", "title": "Test",
+					"description": "desc", "url": "", "priority": 0.0,
+					"state": map[string]any{"name": "Todo"},
+					"labels": map[string]any{"nodes": []any{}},
+					"team":   map[string]any{"id": "team-uuid-1"},
+				},
+			}))
+		},
+		"workflowStates": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"workflowStates": map[string]any{
+					"nodes": []any{},
+				},
+			}))
+		},
+	}))
+
+	err := c.SetTicketStatus(context.Background(), "DEV-1", "Nonexistent")
+	require.Error(t, err)
+	assert.True(t, IsNotFound(err))
+	assert.Contains(t, err.Error(), "Nonexistent")
+}
+
+func TestSetTicketStatus_TicketNotFound(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlError("", "Entity not found"))
+	})
+
+	err := c.SetTicketStatus(context.Background(), "DEV-99999", "Done")
+	require.Error(t, err)
+	assert.True(t, IsNotFound(err))
+}
+
+// --- ApplyLabel tests ---
+
+func TestApplyLabel_Success(t *testing.T) {
+	c, _ := newTestClient(t, queryDispatcher(map[string]http.HandlerFunc{
+		"issueLabels": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueLabels": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "label-uuid-1", "name": "improvements"},
+					},
+				},
+			}))
+		},
+		"issueUpdate": func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			assert.Contains(t, string(body), "addedLabelIds")
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueUpdate": map[string]any{"success": true},
+			}))
+		},
+	}))
+
+	err := c.ApplyLabel(context.Background(), "DEV-1", "improvements")
+	require.NoError(t, err)
+}
+
+func TestApplyLabel_AlreadyApplied_Idempotent(t *testing.T) {
+	c, _ := newTestClient(t, queryDispatcher(map[string]http.HandlerFunc{
+		"issueLabels": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueLabels": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "label-uuid-1", "name": "improvements"},
+					},
+				},
+			}))
+		},
+		"issueUpdate": func(w http.ResponseWriter, r *http.Request) {
+			// Linear returns success even if label already present
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueUpdate": map[string]any{"success": true},
+			}))
+		},
+	}))
+
+	err := c.ApplyLabel(context.Background(), "DEV-1", "improvements")
+	require.NoError(t, err)
+}
+
+func TestApplyLabel_LabelNotFound(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueLabels": map[string]any{
+				"nodes": []any{},
+			},
+		}))
+	})
+
+	err := c.ApplyLabel(context.Background(), "DEV-1", "nonexistent")
+	require.Error(t, err)
+	assert.True(t, IsNotFound(err))
+	assert.Contains(t, err.Error(), "nonexistent")
+}
+
+func TestApplyLabel_Ambiguous(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueLabels": map[string]any{
+				"nodes": []map[string]any{
+					{"id": "label-1", "name": "bug"},
+					{"id": "label-2", "name": "bug"},
+				},
+			},
+		}))
+	})
+
+	err := c.ApplyLabel(context.Background(), "DEV-1", "bug")
+	require.Error(t, err)
+	assert.True(t, IsAPIError(err))
+	assert.Contains(t, err.Error(), "ambiguous")
+}
+
+// --- RemoveLabel tests ---
+
+func TestRemoveLabel_Success(t *testing.T) {
+	c, _ := newTestClient(t, queryDispatcher(map[string]http.HandlerFunc{
+		"issueLabels": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueLabels": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "label-uuid-1", "name": "improvements"},
+					},
+				},
+			}))
+		},
+		"issueUpdate": func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			assert.Contains(t, string(body), "removedLabelIds")
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueUpdate": map[string]any{"success": true},
+			}))
+		},
+	}))
+
+	err := c.RemoveLabel(context.Background(), "DEV-1", "improvements")
+	require.NoError(t, err)
+}
+
+func TestRemoveLabel_AlreadyAbsent_Idempotent(t *testing.T) {
+	c, _ := newTestClient(t, queryDispatcher(map[string]http.HandlerFunc{
+		"issueLabels": func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueLabels": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "label-uuid-1", "name": "improvements"},
+					},
+				},
+			}))
+		},
+		"issueUpdate": func(w http.ResponseWriter, r *http.Request) {
+			// Linear returns success even if label wasn't on the ticket
+			jsonResponse(w, 200, gqlSuccess(map[string]any{
+				"issueUpdate": map[string]any{"success": true},
+			}))
+		},
+	}))
+
+	err := c.RemoveLabel(context.Background(), "DEV-1", "improvements")
+	require.NoError(t, err)
+}
+
+func TestRemoveLabel_LabelNotFound(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueLabels": map[string]any{
+				"nodes": []any{},
+			},
+		}))
+	})
+
+	err := c.RemoveLabel(context.Background(), "DEV-1", "nonexistent")
+	require.Error(t, err)
+	assert.True(t, IsNotFound(err))
+	assert.Contains(t, err.Error(), "nonexistent")
+}
+
+func TestRemoveLabel_Ambiguous(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueLabels": map[string]any{
+				"nodes": []map[string]any{
+					{"id": "label-1", "name": "bug"},
+					{"id": "label-2", "name": "bug"},
+				},
+			},
+		}))
+	})
+
+	err := c.RemoveLabel(context.Background(), "DEV-1", "bug")
+	require.Error(t, err)
+	assert.True(t, IsAPIError(err))
+	assert.Contains(t, err.Error(), "ambiguous")
+}
+
+// --- CreateTicket tests ---
+
+func TestCreateTicket_Success(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueCreate": map[string]any{
+				"success": true,
+				"issue": map[string]any{
+					"id": "new-uuid", "identifier": "DEV-200", "title": "New ticket",
+					"description": "Created by automation", "url": "https://linear.app/test/DEV-200",
+					"priority": 2.0,
+					"state":  map[string]any{"name": "Backlog"},
+					"labels": map[string]any{"nodes": []map[string]any{{"name": "improvements"}}},
+					"team":   map[string]any{"id": "team-uuid-1"},
+				},
+			},
+		}))
+	})
+
+	priority := 2
+	ticket, err := c.CreateTicket(context.Background(), CreateTicketInput{
+		TeamID:      "team-uuid-1",
+		Title:       "New ticket",
+		Description: "Created by automation",
+		LabelIDs:    []string{"label-uuid-1"},
+		ProjectID:   "project-uuid-1",
+		Priority:    &priority,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "new-uuid", ticket.ID)
+	assert.Equal(t, "DEV-200", ticket.Identifier)
+	assert.Equal(t, "New ticket", ticket.Title)
+	assert.Equal(t, "Backlog", ticket.Status)
+	assert.Equal(t, []string{"improvements"}, ticket.Labels)
+	assert.Equal(t, "team-uuid-1", ticket.TeamID)
+}
+
+func TestCreateTicket_MinimalInput(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		bodyStr := string(body)
+		// Verify only teamId and title are present, not optional fields
+		assert.Contains(t, bodyStr, "teamId")
+		assert.NotContains(t, bodyStr, "projectId")
+		assert.NotContains(t, bodyStr, "assigneeId")
+		assert.NotContains(t, bodyStr, "stateId")
+
+		jsonResponse(w, 200, gqlSuccess(map[string]any{
+			"issueCreate": map[string]any{
+				"success": true,
+				"issue": map[string]any{
+					"id": "new-uuid", "identifier": "DEV-201", "title": "Minimal",
+					"description": nil, "url": "https://linear.app/test/DEV-201",
+					"priority": 0.0,
+					"state":  map[string]any{"name": "Backlog"},
+					"labels": map[string]any{"nodes": []any{}},
+					"team":   map[string]any{"id": "team-uuid-1"},
+				},
+			},
+		}))
+	})
+
+	ticket, err := c.CreateTicket(context.Background(), CreateTicketInput{
+		TeamID: "team-uuid-1",
+		Title:  "Minimal",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "DEV-201", ticket.Identifier)
+}
+
+func TestCreateTicket_APIError(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, gqlError("", "Project not found"))
+	})
+
+	_, err := c.CreateTicket(context.Background(), CreateTicketInput{
+		TeamID:    "team-uuid-1",
+		Title:     "Test",
+		ProjectID: "invalid-project",
+	})
+	require.Error(t, err)
 }
