@@ -249,7 +249,7 @@ query($id: String!) {
 // Mutation and resolution queries
 
 const resolveWorkflowStateQuery = `
-query($teamId: String!, $name: String!) {
+query($teamId: ID!, $name: String!) {
   workflowStates(
     filter: {
       team: { id: { eq: $teamId } }

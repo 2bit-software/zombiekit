@@ -88,22 +88,47 @@ func TestIntegration_SetTicketStatus_InvalidStatus(t *testing.T) {
 	assert.True(t, IsNotFound(err))
 }
 
+func TestIntegration_ResolveLabelID(t *testing.T) {
+	c := integrationClient(t)
+	// Discover a label from an existing ticket
+	ticket, err := c.GetTicket(context.Background(), "DEV-157")
+	require.NoError(t, err)
+	if len(ticket.Labels) == 0 {
+		t.Skip("DEV-157 has no labels to test with")
+	}
+	label := ticket.Labels[0]
+	t.Logf("Testing with label: %q", label)
+
+	id, err := c.resolveLabelID(context.Background(), label)
+	require.NoError(t, err)
+	assert.NotEmpty(t, id)
+}
+
 func TestIntegration_ApplyAndRemoveLabel(t *testing.T) {
 	c := integrationClient(t)
-	// Apply a label, then remove it
-	err := c.ApplyLabel(context.Background(), "DEV-158", "improvements")
+	// Discover a label from an existing ticket
+	ticket, err := c.GetTicket(context.Background(), "DEV-157")
+	require.NoError(t, err)
+	if len(ticket.Labels) == 0 {
+		t.Skip("DEV-157 has no labels to test with")
+	}
+	label := ticket.Labels[0]
+	t.Logf("Testing with label: %q", label)
+
+	// Apply label
+	err = c.ApplyLabel(context.Background(), "DEV-158", label)
 	require.NoError(t, err)
 
 	// Apply again (idempotent)
-	err = c.ApplyLabel(context.Background(), "DEV-158", "improvements")
+	err = c.ApplyLabel(context.Background(), "DEV-158", label)
 	require.NoError(t, err)
 
 	// Remove
-	err = c.RemoveLabel(context.Background(), "DEV-158", "improvements")
+	err = c.RemoveLabel(context.Background(), "DEV-158", label)
 	require.NoError(t, err)
 
 	// Remove again (idempotent)
-	err = c.RemoveLabel(context.Background(), "DEV-158", "improvements")
+	err = c.RemoveLabel(context.Background(), "DEV-158", label)
 	require.NoError(t, err)
 }
 
