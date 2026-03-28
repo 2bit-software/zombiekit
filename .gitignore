@@ -1,5 +1,7 @@
 # Binaries
 brains
+brains-mcp
+zk-server
 bin/
 *.exe
 *.exe~
