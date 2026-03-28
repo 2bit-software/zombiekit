@@ -76,7 +76,8 @@ Goal: Properly close out an initiative, archive artifacts, and clear active stat
         }
         ```
      d. If "Yes, commit changes":
-        - Run `git add -A` via Bash tool to stage all changes
+        - **IMPORTANT**: Stage BOTH implementation files AND the initiative's `history/{initiative}/` directory. The spec, research, plan, tasks, and INITIATIVE.md are part of the feature work and must be committed together. Never commit implementation files without their corresponding history artifacts.
+        - Stage the relevant files via Bash (prefer explicit paths over `git add -A`)
         - Use `Skill` tool with `skill: "commit-message"` to generate and execute commit
         - If commit fails: Display error message, proceed to step 6
      e. Proceed to step 6
