@@ -1,0 +1,106 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"time"
+
+	"github.com/urfave/cli/v2"
+	"github.com/zombiekit/brains/internal/logging"
+	"github.com/zombiekit/brains/internal/orchestrator"
+	"github.com/zombiekit/brains/internal/state"
+	"github.com/zombiekit/brains/internal/version"
+)
+
+func main() {
+	app := &cli.App{
+		Name:    "orchestrator",
+		Usage:   "ZombieKit autonomous development orchestrator",
+		Version: version.Get().Short(),
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "linear-api-key",
+				Usage:   "Linear API key",
+				EnvVars: []string{"ORCH_LINEAR_API_KEY"},
+			},
+			&cli.StringFlag{
+				Name:    "github-token",
+				Usage:   "GitHub personal access token",
+				EnvVars: []string{"ORCH_GITHUB_TOKEN"},
+			},
+			&cli.IntFlag{
+				Name:    "callback-port",
+				Usage:   "HTTP callback server port",
+				Value:   8666,
+				EnvVars: []string{"ORCH_CALLBACK_PORT"},
+			},
+			&cli.StringFlag{
+				Name:    "worktrees-root",
+				Usage:   "Root directory for git worktrees",
+				EnvVars: []string{"ORCH_WORKTREES_ROOT"},
+			},
+			&cli.StringFlag{
+				Name:    "db-path",
+				Usage:   "Path to SQLite database file",
+				EnvVars: []string{"ORCH_DB_PATH"},
+			},
+			&cli.IntFlag{
+				Name:    "concurrency-limit",
+				Usage:   "Max concurrent jobs per project",
+				Value:   1,
+				EnvVars: []string{"ORCH_CONCURRENCY_LIMIT"},
+			},
+			&cli.DurationFlag{
+				Name:    "poll-interval",
+				Usage:   "Watcher polling interval",
+				Value:   30 * time.Second,
+				EnvVars: []string{"ORCH_POLL_INTERVAL"},
+			},
+			&cli.StringFlag{
+				Name:    "log-level",
+				Usage:   "Log level (debug, info, warn, error)",
+				Value:   "info",
+				EnvVars: []string{"ORCH_LOG_LEVEL"},
+			},
+			&cli.BoolFlag{
+				Name:    "log-json",
+				Usage:   "Output logs as JSON",
+				EnvVars: []string{"ORCH_LOG_JSON"},
+			},
+			&cli.DurationFlag{
+				Name:    "shutdown-timeout",
+				Usage:   "Max time to drain on shutdown",
+				Value:   30 * time.Second,
+				EnvVars: []string{"ORCH_SHUTDOWN_TIMEOUT"},
+			},
+		},
+		Action: run,
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		slog.Error("orchestrator failed", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run(c *cli.Context) error {
+	cfg, err := orchestrator.NewConfig(c)
+	if err != nil {
+		return err
+	}
+
+	logging.InitLogger(cfg.LogLevel, cfg.LogJSON, nil)
+	logging.Logger().Info("orchestrator starting",
+		slog.String("version", version.Get().Short()),
+	)
+
+	ctx := context.Background()
+	store, err := state.NewSQLiteStore(ctx, cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	return orchestrator.New(cfg, store).Run()
+}
