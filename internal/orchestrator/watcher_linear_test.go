@@ -204,6 +204,9 @@ func (s *stubState) ListJobsByStatus(_ context.Context, _ ...string) ([]state.Jo
 }
 func (s *stubState) SetJobStatus(_ context.Context, _, _ string) error { return nil }
 func (s *stubState) SetPR(_ context.Context, _ string, _ int64) error  { return nil }
+func (s *stubState) GetJobByPR(_ context.Context, _ int64) (*state.Job, error) {
+	return nil, nil
+}
 func (s *stubState) GetCommentWatermark(_ context.Context, _ int64) (int64, error) {
 	return 0, nil
 }

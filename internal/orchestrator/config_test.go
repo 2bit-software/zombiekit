@@ -32,6 +32,7 @@ func validConfig(t *testing.T) *Config {
 		GitHubRepo:       "test-repo",
 		BaseBranch:       "main",
 		TrackingLabel:    "ai-managed",
+		BotUsername:      "test-bot",
 	}
 }
 

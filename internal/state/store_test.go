@@ -517,6 +517,47 @@ func TestResetAllSlots_NoActiveSlots(t *testing.T) {
 	assert.Equal(t, 0, n)
 }
 
+// --- GetJobByPR tests ---
+
+func TestGetJobByPR_Found(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.CreateJob(ctx, "DEV-300", "/tmp/wt-pr", "session-pr"))
+	require.NoError(t, store.SetPR(ctx, "DEV-300", 77))
+
+	job, err := store.GetJobByPR(ctx, 77)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+
+	assert.Equal(t, "DEV-300", job.TicketID)
+	assert.Equal(t, "/tmp/wt-pr", job.WorktreePath)
+	assert.Equal(t, "session-pr", job.CmuxSession)
+	require.NotNil(t, job.PRNumber)
+	assert.Equal(t, int64(77), *job.PRNumber)
+	assert.Equal(t, StatusQueued, job.Status)
+}
+
+func TestGetJobByPR_NotFound(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	job, err := store.GetJobByPR(ctx, 9999)
+	require.NoError(t, err)
+	assert.Nil(t, job)
+}
+
+func TestGetJobByPR_NoPRSet(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.CreateJob(ctx, "DEV-301", "/tmp/wt-nopr", "session-nopr"))
+
+	job, err := store.GetJobByPR(ctx, 0)
+	require.NoError(t, err)
+	assert.Nil(t, job)
+}
+
 // --- Cross-cutting tests ---
 
 func TestPersistence_AcrossReopen(t *testing.T) {

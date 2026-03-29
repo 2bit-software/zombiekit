@@ -54,17 +54,19 @@ func (o *Orchestrator) Run() error {
 	}
 
 	callbackSrv := callback.New(o.cfg.CallbackPort)
+	dispatcher := NewCommentDispatcher(logger)
 
 	router := NewRouter(
 		callbackSrv.Events(),
 		o.store, o.github, o.linear,
 		archival.NoopArchiver{}, friction.NoopAuditor{},
+		dispatcher,
 		o.cfg, logger,
 	)
 
 	linearPoller := o.NewLinearPoller()
 	prWatcher := NewWatcherStub(WatcherPRWatcher, o.cfg.PollInterval)
-	commentWatcher := NewWatcherStub(WatcherCommentWatcher, o.cfg.PollInterval)
+	commentWatcher := o.NewCommentWatcher(dispatcher)
 
 	logger.Info("starting services")
 	mgr := shutdown.New(o.cfg.ShutdownTimeout)

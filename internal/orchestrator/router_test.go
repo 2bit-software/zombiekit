@@ -48,7 +48,7 @@ func newRouterFixture(t *testing.T) *routerFixture {
 		TrackingLabel: "ai-managed",
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	r := NewRouter(events, store, gh, lc, arch, aud, cfg, logger)
+	r := NewRouter(events, store, gh, lc, arch, aud, nil, cfg, logger)
 
 	return &routerFixture{
 		events:   events,
@@ -101,6 +101,9 @@ func (m *routerMockStore) TryAcquireSlot(_ context.Context, _ string, _ int) (bo
 	return true, nil
 }
 func (m *routerMockStore) ResetAllSlots(_ context.Context) (int, error) { return 0, nil }
+func (m *routerMockStore) GetJobByPR(_ context.Context, _ int64) (*state.Job, error) {
+	return nil, nil
+}
 func (m *routerMockStore) GetCommentWatermark(_ context.Context, _ int64) (int64, error) {
 	return 0, nil
 }
