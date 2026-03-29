@@ -10,7 +10,10 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/zombiekit/brains/internal/config"
+	internalgit "github.com/zombiekit/brains/internal/git"
 	"github.com/zombiekit/brains/internal/mcp/tools/codereasoning"
+	ghprtool "github.com/zombiekit/brains/internal/mcp/tools/ghpr"
+	gittool "github.com/zombiekit/brains/internal/mcp/tools/git"
 	initiativetool "github.com/zombiekit/brains/internal/mcp/tools/initiative"
 	profiletool "github.com/zombiekit/brains/internal/mcp/tools/profile"
 	recalltool "github.com/zombiekit/brains/internal/mcp/tools/recall"
@@ -32,13 +35,16 @@ type Server struct {
 	workflowTool   *workflowtool.Tool
 	initiativeTool *initiativetool.Tool
 	recallTool     *recalltool.Tool
+	gitTool        *gittool.Tool
+	ghPRTool       *ghprtool.Tool
 	config         *config.Config
 }
 
 // NewServer creates a new MCP server with the given storage backend and configuration.
 // If cfg is nil, all tools are enabled by default.
 // recallStorage may be nil if recall features are not needed.
-func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config.Config) *Server {
+// workDir is the working directory for git operations (empty string disables git tools).
+func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config.Config, workDir ...string) *Server {
 	if cfg == nil {
 		cfg = config.NewDefaultConfig()
 	}
@@ -61,6 +67,22 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 		recallToolInst = recalltool.NewTool(recallStorage)
 	}
 
+	// Create git tools if a working directory is provided
+	var gitToolInst *gittool.Tool
+	var ghPRToolInst *ghprtool.Tool
+	gitWorkDir := ""
+	if len(workDir) > 0 && workDir[0] != "" {
+		gitWorkDir = workDir[0]
+	}
+	if gitWorkDir != "" {
+		if runner, err := internalgit.NewRunner(gitWorkDir); err == nil {
+			gitToolInst = gittool.NewTool(runner)
+		}
+		if prTool, err := ghprtool.NewTool(gitWorkDir); err == nil {
+			ghPRToolInst = prTool
+		}
+	}
+
 	s := &Server{
 		mcpServer:      mcpServer,
 		storage:        storage,
@@ -72,6 +94,8 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 		workflowTool:   wfTool,
 		initiativeTool: initiativeToolInst,
 		recallTool:     recallToolInst,
+		gitTool:        gitToolInst,
+		ghPRTool:       ghPRToolInst,
 		config:         cfg,
 	}
 
@@ -155,6 +179,12 @@ func (s *Server) registerTools() {
 
 	// Register recall tools
 	s.registerRecallTools()
+
+	// Register git tools
+	s.registerGitTool()
+
+	// Register gh-pr tool
+	s.registerGHPRTool()
 }
 
 // handleStickyMemory handles stickymemory tool calls.
@@ -463,6 +493,117 @@ func (s *Server) handleRecallReadConversation(ctx context.Context, req mcp.CallT
 	}
 
 	result, err := s.recallTool.ReadConversation(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// registerGitTool registers the git MCP tool.
+func (s *Server) registerGitTool() {
+	if s.gitTool == nil || !s.config.IsToolEnabled("git") {
+		return
+	}
+
+	gitDef := s.gitTool.Definition()
+	gitMCPTool := mcp.NewTool(gitDef.Name,
+		mcp.WithDescription(gitDef.Description),
+		mcp.WithString("action",
+			mcp.Required(),
+			mcp.Description("Git operation to perform"),
+			mcp.Enum("status", "log", "diff", "stage", "commit", "push"),
+		),
+		mcp.WithString("base",
+			mcp.Description("Base ref for log/diff (default: main)"),
+		),
+		mcp.WithString("range",
+			mcp.Description("Git revision range for log (e.g., 'main..HEAD')"),
+		),
+		mcp.WithNumber("count",
+			mcp.Description("Number of log entries (default: 10)"),
+		),
+		mcp.WithString("scope",
+			mcp.Description("Diff scope: all, staged, unstaged (default: all)"),
+		),
+		mcp.WithBoolean("stat_only",
+			mcp.Description("Return only file stat, not full diff content"),
+		),
+		mcp.WithString("paths",
+			mcp.Description("Comma-separated file paths to limit diff"),
+		),
+		mcp.WithString("files",
+			mcp.Description("Comma-separated file paths to stage (required for stage action)"),
+		),
+		mcp.WithString("message",
+			mcp.Description("Commit message (required for commit action)"),
+		),
+		mcp.WithBoolean("set_upstream",
+			mcp.Description("Set upstream tracking on push (default: false)"),
+		),
+		mcp.WithString("remote",
+			mcp.Description("Remote name for push (default: origin)"),
+		),
+	)
+	s.mcpServer.AddTool(gitMCPTool, s.handleGit)
+}
+
+// handleGit handles git tool calls.
+func (s *Server) handleGit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	result, err := s.gitTool.Execute(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// registerGHPRTool registers the gh-pr MCP tool.
+func (s *Server) registerGHPRTool() {
+	if s.ghPRTool == nil || !s.config.IsToolEnabled("gh-pr") {
+		return
+	}
+
+	prDef := s.ghPRTool.Definition()
+	prMCPTool := mcp.NewTool(prDef.Name,
+		mcp.WithDescription(prDef.Description),
+		mcp.WithString("action",
+			mcp.Required(),
+			mcp.Description("PR operation to perform"),
+			mcp.Enum("view", "create", "comment"),
+		),
+		mcp.WithString("title",
+			mcp.Description("PR title (required for create)"),
+		),
+		mcp.WithString("body",
+			mcp.Description("PR body or comment text (required for create/comment)"),
+		),
+		mcp.WithString("base",
+			mcp.Description("Base branch for PR (default: main)"),
+		),
+		mcp.WithBoolean("draft",
+			mcp.Description("Create PR as draft (default: false)"),
+		),
+		mcp.WithNumber("pr_number",
+			mcp.Description("PR number (required for comment)"),
+		),
+	)
+	s.mcpServer.AddTool(prMCPTool, s.handleGHPR)
+}
+
+// handleGHPR handles gh-pr tool calls.
+func (s *Server) handleGHPR(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	result, err := s.ghPRTool.Execute(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

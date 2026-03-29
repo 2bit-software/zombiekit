@@ -17,6 +17,8 @@ var KnownTools = []string{
 	"workflow-compose",
 	"recall-list-conversations",
 	"recall-read-conversation",
+	"git",
+	"gh-pr",
 }
 
 // ToolCategory derives the category name from a tool name.
