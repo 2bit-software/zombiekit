@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v2"
+	"github.com/zombiekit/brains/internal/cmux"
+	"github.com/zombiekit/brains/internal/linear"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/orchestrator"
 	"github.com/zombiekit/brains/internal/state"
 	"github.com/zombiekit/brains/internal/version"
+	"github.com/zombiekit/brains/internal/worktree"
 )
 
 func main() {
@@ -74,6 +77,16 @@ func main() {
 				Value:   30 * time.Second,
 				EnvVars: []string{"ORCH_SHUTDOWN_TIMEOUT"},
 			},
+			&cli.StringFlag{
+				Name:    "project-id",
+				Usage:   "Linear project identifier for concurrency slot scoping",
+				EnvVars: []string{"ORCH_PROJECT_ID"},
+			},
+			&cli.StringFlag{
+				Name:    "repo-dir",
+				Usage:   "Git repository root directory (must contain .git)",
+				EnvVars: []string{"ORCH_REPO_DIR"},
+			},
 		},
 		Action: run,
 	}
@@ -102,5 +115,20 @@ func run(c *cli.Context) error {
 	}
 	defer store.Close()
 
-	return orchestrator.New(cfg, store).Run()
+	linearClient, err := linear.NewClient(cfg.LinearAPIKey)
+	if err != nil {
+		return err
+	}
+
+	worktreeMgr, err := worktree.New(cfg.RepoDir, worktree.WithWorktreesRoot(cfg.WorktreesRoot))
+	if err != nil {
+		return err
+	}
+
+	sessionMgr, err := cmux.New()
+	if err != nil {
+		return err
+	}
+
+	return orchestrator.New(cfg, store, linearClient, worktreeMgr, sessionMgr).Run()
 }

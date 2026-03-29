@@ -12,6 +12,9 @@ import (
 
 func validConfig(t *testing.T) *Config {
 	t.Helper()
+	// Create a fake repo dir with .git
+	repoDir := filepath.Join(t.TempDir(), "repo")
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755))
 	return &Config{
 		LinearAPIKey:     "lin_test_key",
 		GitHubToken:      "ghp_test_token",
@@ -23,6 +26,8 @@ func validConfig(t *testing.T) *Config {
 		LogLevel:         "info",
 		LogJSON:          false,
 		ShutdownTimeout:  30 * time.Second,
+		ProjectID:        "test-project",
+		RepoDir:          repoDir,
 	}
 }
 
@@ -108,6 +113,27 @@ func TestValidate_InvalidLogLevel(t *testing.T) {
 	assert.ErrorContains(t, err, "--log-level/ORCH_LOG_LEVEL must be one of: debug, info, warn, error")
 }
 
+func TestValidate_MissingProjectID(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.ProjectID = ""
+	err := cfg.Validate()
+	assert.ErrorContains(t, err, "--project-id/ORCH_PROJECT_ID is required")
+}
+
+func TestValidate_MissingRepoDir(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.RepoDir = ""
+	err := cfg.Validate()
+	assert.ErrorContains(t, err, "--repo-dir/ORCH_REPO_DIR is required")
+}
+
+func TestValidate_RepoDirNoGit(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.RepoDir = t.TempDir() // exists but has no .git
+	err := cfg.Validate()
+	assert.ErrorContains(t, err, "does not contain a .git directory")
+}
+
 func TestValidate_MultipleErrors(t *testing.T) {
 	cfg := &Config{}
 	err := cfg.Validate()
@@ -122,6 +148,8 @@ func TestValidate_MultipleErrors(t *testing.T) {
 	assert.Contains(t, msg, "--poll-interval")
 	assert.Contains(t, msg, "--log-level")
 	assert.Contains(t, msg, "--shutdown-timeout")
+	assert.Contains(t, msg, "--project-id")
+	assert.Contains(t, msg, "--repo-dir")
 }
 
 func TestValidate_WorktreesDirCreated(t *testing.T) {
