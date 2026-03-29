@@ -86,7 +86,7 @@ func testConfig(t *testing.T) *Config {
 func TestRun_ReconciliationRuns(t *testing.T) {
 	setupLogger(t)
 	store := &mockStore{}
-	orch := New(testConfig(t), store)
+	orch := New(testConfig(t), store, &stubLinear{}, &stubWorktree{basePath: t.TempDir()}, &stubSession{})
 
 	// Run in a goroutine and send SIGINT to stop quickly
 	// Since we can't easily send signals in tests, we use a port-0 callback
@@ -109,7 +109,7 @@ func TestRun_ReconciliationFailure_PreventsServices(t *testing.T) {
 		listJobsErr: fmt.Errorf("database locked"),
 	}
 	cfg := testConfig(t)
-	orch := New(cfg, store)
+	orch := New(cfg, store, nil, nil, nil)
 
 	err := orch.Run()
 

@@ -5,22 +5,34 @@ import (
 	"fmt"
 
 	"github.com/zombiekit/brains/internal/callback"
+	"github.com/zombiekit/brains/internal/cmux"
+	"github.com/zombiekit/brains/internal/linear"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/shutdown"
 	"github.com/zombiekit/brains/internal/state"
+	"github.com/zombiekit/brains/internal/worktree"
 )
 
 // Orchestrator owns the daemon lifecycle: reconciliation, service assembly,
 // and shutdown coordination. Resource acquisition (store, logger) is handled
 // by the caller.
 type Orchestrator struct {
-	cfg   *Config
-	store state.StateStore
+	cfg       *Config
+	store     state.StateStore
+	linear    linear.Client
+	worktrees worktree.Manager
+	sessions  cmux.SessionManager
 }
 
-// New creates an Orchestrator with the given config and state store.
-func New(cfg *Config, store state.StateStore) *Orchestrator {
-	return &Orchestrator{cfg: cfg, store: store}
+// New creates an Orchestrator with the given config and dependencies.
+func New(cfg *Config, store state.StateStore, lc linear.Client, wt worktree.Manager, sm cmux.SessionManager) *Orchestrator {
+	return &Orchestrator{
+		cfg:       cfg,
+		store:     store,
+		linear:    lc,
+		worktrees: wt,
+		sessions:  sm,
+	}
 }
 
 // Run executes the orchestrator lifecycle:
@@ -38,7 +50,7 @@ func (o *Orchestrator) Run() error {
 
 	callbackSrv := callback.New(o.cfg.CallbackPort)
 
-	linearPoller := NewWatcherStub(WatcherLinearPoller, o.cfg.PollInterval)
+	linearPoller := o.NewLinearPoller()
 	prWatcher := NewWatcherStub(WatcherPRWatcher, o.cfg.PollInterval)
 	commentWatcher := NewWatcherStub(WatcherCommentWatcher, o.cfg.PollInterval)
 

@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,6 +26,8 @@ type Config struct {
 	LogLevel         string
 	LogJSON          bool
 	ShutdownTimeout  time.Duration
+	ProjectID        string
+	RepoDir          string
 }
 
 // NewConfig parses a urfave/cli context into a validated Config.
@@ -40,6 +43,8 @@ func NewConfig(c *cli.Context) (*Config, error) {
 		LogLevel:         c.String("log-level"),
 		LogJSON:          c.Bool("log-json"),
 		ShutdownTimeout:  c.Duration("shutdown-timeout"),
+		ProjectID:        c.String("project-id"),
+		RepoDir:          c.String("repo-dir"),
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -78,6 +83,12 @@ func (c *Config) Validate() error {
 	if c.ShutdownTimeout <= 0 {
 		errs = append(errs, "--shutdown-timeout/ORCH_SHUTDOWN_TIMEOUT must be > 0")
 	}
+	if c.ProjectID == "" {
+		errs = append(errs, "--project-id/ORCH_PROJECT_ID is required")
+	}
+	if c.RepoDir == "" {
+		errs = append(errs, "--repo-dir/ORCH_REPO_DIR is required")
+	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("config validation failed: %s", strings.Join(errs, "; "))
@@ -85,6 +96,13 @@ func (c *Config) Validate() error {
 
 	if err := os.MkdirAll(c.WorktreesRoot, 0o755); err != nil {
 		return fmt.Errorf("create worktrees directory: %w", err)
+	}
+
+	if c.RepoDir != "" {
+		gitPath := filepath.Join(c.RepoDir, ".git")
+		if _, err := os.Stat(gitPath); err != nil {
+			return fmt.Errorf("repo-dir %q does not contain a .git directory: %w", c.RepoDir, err)
+		}
 	}
 
 	return nil
