@@ -45,6 +45,8 @@ type StateStore interface {
 	SetJobStatus(ctx context.Context, ticketID string, status string) error
 	SetPR(ctx context.Context, ticketID string, prNumber int64) error
 
+	GetJobByPR(ctx context.Context, prNumber int64) (*Job, error)
+
 	GetCommentWatermark(ctx context.Context, prNumber int64) (int64, error)
 	SetCommentWatermark(ctx context.Context, prNumber int64, commentID int64) error
 
@@ -248,6 +250,28 @@ func (s *SQLiteStore) SetPR(ctx context.Context, ticketID string, prNumber int64
 		return fmt.Errorf("set PR for job %s: %w", ticketID, ErrJobNotFound)
 	}
 	return nil
+}
+
+// GetJobByPR retrieves a job by its associated PR number.
+// Returns nil, nil if no job exists for the given PR number.
+func (s *SQLiteStore) GetJobByPR(ctx context.Context, prNumber int64) (*Job, error) {
+	var job Job
+	var prNum sql.NullInt64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT ticket_id, worktree_path, cmux_session, pr_number, status, created_at, updated_at
+		 FROM jobs WHERE pr_number = ?`,
+		prNumber,
+	).Scan(&job.TicketID, &job.WorktreePath, &job.CmuxSession, &prNum, &job.Status, &job.CreatedAt, &job.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get job by PR %d: %w", prNumber, err)
+	}
+	if prNum.Valid {
+		job.PRNumber = &prNum.Int64
+	}
+	return &job, nil
 }
 
 // GetCommentWatermark returns the last processed comment ID for a PR.

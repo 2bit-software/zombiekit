@@ -19,14 +19,15 @@ import (
 // Router consumes events from the callback server and dispatches them to
 // typed handlers that coordinate post-session processing.
 type Router struct {
-	events   <-chan callback.Event
-	store    state.StateStore
-	github   github.Client
-	linear   linear.Client
-	archiver archival.Archiver
-	auditor  friction.Auditor
-	cfg      *Config
-	logger   *slog.Logger
+	events     <-chan callback.Event
+	store      state.StateStore
+	github     github.Client
+	linear     linear.Client
+	archiver   archival.Archiver
+	auditor    friction.Auditor
+	dispatcher *CommentDispatcher
+	cfg        *Config
+	logger     *slog.Logger
 }
 
 // NewRouter creates a Router wired to the given dependencies.
@@ -37,18 +38,20 @@ func NewRouter(
 	lc linear.Client,
 	arch archival.Archiver,
 	aud friction.Auditor,
+	dispatcher *CommentDispatcher,
 	cfg *Config,
 	logger *slog.Logger,
 ) *Router {
 	return &Router{
-		events:   events,
-		store:    store,
-		github:   gh,
-		linear:   lc,
-		archiver: arch,
-		auditor:  aud,
-		cfg:      cfg,
-		logger:   logger,
+		events:     events,
+		store:      store,
+		github:     gh,
+		linear:     lc,
+		archiver:   arch,
+		auditor:    aud,
+		dispatcher: dispatcher,
+		cfg:        cfg,
+		logger:     logger,
 	}
 }
 
@@ -181,6 +184,13 @@ func (r *Router) handleFailed(ctx context.Context, evt callback.Event, logger *s
 		logger.Error("archival failed", slog.String("step", "Archive"), slog.String("err", archiveErr.Error()))
 	}
 
+	if r.dispatcher != nil {
+		r.dispatcher.NotifyResult(evt.TicketID, SessionResult{
+			Kind:     SessionFailed,
+			TicketID: evt.TicketID,
+		})
+	}
+
 	logger.Info("failure processed", slog.String("reason", evt.Reason))
 }
 
@@ -240,6 +250,19 @@ func (r *Router) handleCommentResolved(ctx context.Context, evt callback.Event, 
 	}
 	if err := r.auditor.Audit(ctx, evt.TicketID, evt.Kind); err != nil {
 		logger.Error("audit failed", slog.String("step", "Audit"), slog.String("err", err.Error()))
+	}
+
+	// Release concurrency slot acquired by comment watcher before SpawnSession.
+	if err := r.store.ReleaseSlot(ctx, r.cfg.ProjectID); err != nil {
+		logger.Error("failed to release slot", slog.String("step", "ReleaseSlot"), slog.String("err", err.Error()))
+	}
+
+	if r.dispatcher != nil {
+		r.dispatcher.NotifyResult(evt.TicketID, SessionResult{
+			Kind:     SessionResolved,
+			TicketID: evt.TicketID,
+			PRNumber: prNumber,
+		})
 	}
 
 	logger.Info("comment resolution processed", slog.Int("pr_number", prNumber), slog.Int64("comment_id", commentID))

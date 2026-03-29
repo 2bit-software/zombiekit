@@ -110,6 +110,11 @@ func main() {
 				Value:   "ai-managed",
 				EnvVars: []string{"ORCH_TRACKING_LABEL"},
 			},
+			&cli.StringFlag{
+				Name:    "bot-username",
+				Usage:   "GitHub username of the bot account (for filtering self-authored comments)",
+				EnvVars: []string{"ORCH_BOT_USERNAME"},
+			},
 		},
 		Action: run,
 	}

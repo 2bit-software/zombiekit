@@ -32,6 +32,7 @@ type Config struct {
 	GitHubRepo       string
 	BaseBranch       string
 	TrackingLabel    string
+	BotUsername      string
 }
 
 // NewConfig parses a urfave/cli context into a validated Config.
@@ -53,6 +54,7 @@ func NewConfig(c *cli.Context) (*Config, error) {
 		GitHubRepo:       c.String("github-repo"),
 		BaseBranch:       c.String("base-branch"),
 		TrackingLabel:    c.String("tracking-label"),
+		BotUsername:      c.String("bot-username"),
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -102,6 +104,9 @@ func (c *Config) Validate() error {
 	}
 	if c.GitHubRepo == "" {
 		errs = append(errs, "--github-repo/ORCH_GITHUB_REPO is required")
+	}
+	if c.BotUsername == "" {
+		errs = append(errs, "--bot-username/ORCH_BOT_USERNAME is required")
 	}
 
 	if len(errs) > 0 {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zombiekit/brains/internal/github"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/state"
 )
@@ -41,6 +42,9 @@ func (m *mockStore) SetJobStatus(_ context.Context, _ string, _ string) error {
 }
 
 func (m *mockStore) SetPR(_ context.Context, _ string, _ int64) error { return nil }
+func (m *mockStore) GetJobByPR(_ context.Context, _ int64) (*state.Job, error) {
+	return nil, nil
+}
 
 func (m *mockStore) GetCommentWatermark(_ context.Context, _ int64) (int64, error) {
 	return 0, nil
@@ -80,13 +84,20 @@ func testConfig(t *testing.T) *Config {
 		PollInterval:     100 * time.Millisecond,
 		LogLevel:         "debug",
 		ShutdownTimeout:  5 * time.Second,
+		BotUsername:      "test-bot",
+		TrackingLabel:    "ai-managed",
 	}
 }
 
 func TestRun_ReconciliationRuns(t *testing.T) {
 	setupLogger(t)
 	store := &mockStore{}
-	orch := New(testConfig(t), store, &stubLinear{}, nil, &stubWorktree{basePath: t.TempDir()}, &stubSession{})
+	gh := &github.MockClient{
+		ListOpenPRsFn: func(_ context.Context, _ string) ([]github.PRSummary, error) {
+			return nil, nil
+		},
+	}
+	orch := New(testConfig(t), store, &stubLinear{}, gh, &stubWorktree{basePath: t.TempDir()}, &stubSession{})
 
 	// Run in a goroutine and send SIGINT to stop quickly
 	// Since we can't easily send signals in tests, we use a port-0 callback
