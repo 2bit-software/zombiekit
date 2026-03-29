@@ -126,8 +126,11 @@ func runServe(c *cli.Context) error {
 		}
 	}
 
+	// Resolve working directory for git tools
+	workDir, _ := os.Getwd()
+
 	// Create MCP server with tool configuration
-	server := mcp.NewServer(storage, recallStorage, toolCfg)
+	server := mcp.NewServer(storage, recallStorage, toolCfg, workDir)
 	defer server.Close()
 
 	mode := c.String("mode")
