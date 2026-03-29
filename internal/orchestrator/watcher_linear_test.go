@@ -68,6 +68,10 @@ func (s *stubLinear) UploadAttachment(_ context.Context, _ string, _ linear.Atta
 	s.record("UploadAttachment")
 	return nil
 }
+func (s *stubLinear) PostComment(_ context.Context, _, _ string) error {
+	s.record("PostComment")
+	return nil
+}
 
 type stubWorktree struct {
 	mu        sync.Mutex
@@ -245,7 +249,7 @@ func buildOrch(t *testing.T, sl *stubLinear, sw *stubWorktree, ss *stubSession, 
 		ConcurrencyLimit: 1,
 		ProjectID:        "test-project",
 	}
-	return New(cfg, st, sl, sw, ss)
+	return New(cfg, st, sl, nil, sw, ss)
 }
 
 // --- T007: Happy path and concurrency tests ---
@@ -308,7 +312,7 @@ func TestLinearPoller_CallbackURL(t *testing.T) {
 		ConcurrencyLimit: 1,
 		ProjectID:        "test-project",
 	}
-	o := New(cfg, st, sl, sw, cs)
+	o := New(cfg, st, sl, nil, sw, cs)
 	o.pollAndProcess(context.Background())
 
 	require.NotNil(t, capturedEnv)

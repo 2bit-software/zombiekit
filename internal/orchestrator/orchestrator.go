@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/zombiekit/brains/internal/archival"
 	"github.com/zombiekit/brains/internal/callback"
 	"github.com/zombiekit/brains/internal/cmux"
+	"github.com/zombiekit/brains/internal/friction"
+	"github.com/zombiekit/brains/internal/github"
 	"github.com/zombiekit/brains/internal/linear"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/shutdown"
@@ -20,16 +23,18 @@ type Orchestrator struct {
 	cfg       *Config
 	store     state.StateStore
 	linear    linear.Client
+	github    github.Client
 	worktrees worktree.Manager
 	sessions  cmux.SessionManager
 }
 
 // New creates an Orchestrator with the given config and dependencies.
-func New(cfg *Config, store state.StateStore, lc linear.Client, wt worktree.Manager, sm cmux.SessionManager) *Orchestrator {
+func New(cfg *Config, store state.StateStore, lc linear.Client, gh github.Client, wt worktree.Manager, sm cmux.SessionManager) *Orchestrator {
 	return &Orchestrator{
 		cfg:       cfg,
 		store:     store,
 		linear:    lc,
+		github:    gh,
 		worktrees: wt,
 		sessions:  sm,
 	}
@@ -50,11 +55,18 @@ func (o *Orchestrator) Run() error {
 
 	callbackSrv := callback.New(o.cfg.CallbackPort)
 
+	router := NewRouter(
+		callbackSrv.Events(),
+		o.store, o.github, o.linear,
+		archival.NoopArchiver{}, friction.NoopAuditor{},
+		o.cfg, logger,
+	)
+
 	linearPoller := o.NewLinearPoller()
 	prWatcher := NewWatcherStub(WatcherPRWatcher, o.cfg.PollInterval)
 	commentWatcher := NewWatcherStub(WatcherCommentWatcher, o.cfg.PollInterval)
 
 	logger.Info("starting services")
 	mgr := shutdown.New(o.cfg.ShutdownTimeout)
-	return mgr.Run(callbackSrv.Run, linearPoller, prWatcher, commentWatcher)
+	return mgr.Run(callbackSrv.Run, router.Run, linearPoller, prWatcher, commentWatcher)
 }

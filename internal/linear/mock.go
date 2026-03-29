@@ -22,6 +22,7 @@ type MockClient struct {
 	RemoveLabelFn      func(ctx context.Context, id string, label string) error
 	CreateTicketFn     func(ctx context.Context, input CreateTicketInput) (*Ticket, error)
 	UploadAttachmentFn func(ctx context.Context, ticketID string, input AttachmentInput) error
+	PostCommentFn      func(ctx context.Context, issueID string, body string) error
 
 	Calls []Call
 }
@@ -80,4 +81,12 @@ func (m *MockClient) UploadAttachment(ctx context.Context, ticketID string, inpu
 		return m.UploadAttachmentFn(ctx, ticketID, input)
 	}
 	return fmt.Errorf("MockClient.UploadAttachment not configured")
+}
+
+func (m *MockClient) PostComment(ctx context.Context, issueID string, body string) error {
+	m.Calls = append(m.Calls, Call{Method: "PostComment", Args: []any{issueID, body}})
+	if m.PostCommentFn != nil {
+		return m.PostCommentFn(ctx, issueID, body)
+	}
+	return fmt.Errorf("MockClient.PostComment not configured")
 }
