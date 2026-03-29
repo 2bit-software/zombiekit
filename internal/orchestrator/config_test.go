@@ -28,6 +28,10 @@ func validConfig(t *testing.T) *Config {
 		ShutdownTimeout:  30 * time.Second,
 		ProjectID:        "test-project",
 		RepoDir:          repoDir,
+		GitHubOwner:      "test-owner",
+		GitHubRepo:       "test-repo",
+		BaseBranch:       "main",
+		TrackingLabel:    "ai-managed",
 	}
 }
 
@@ -134,6 +138,32 @@ func TestValidate_RepoDirNoGit(t *testing.T) {
 	assert.ErrorContains(t, err, "does not contain a .git directory")
 }
 
+func TestValidate_MissingGitHubOwner(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.GitHubOwner = ""
+	err := cfg.Validate()
+	assert.ErrorContains(t, err, "--github-owner/ORCH_GITHUB_OWNER is required")
+}
+
+func TestValidate_MissingGitHubRepo(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.GitHubRepo = ""
+	err := cfg.Validate()
+	assert.ErrorContains(t, err, "--github-repo/ORCH_GITHUB_REPO is required")
+}
+
+func TestValidate_DefaultBaseBranch(t *testing.T) {
+	cfg := validConfig(t)
+	assert.Equal(t, "main", cfg.BaseBranch)
+	assert.NoError(t, cfg.Validate())
+}
+
+func TestValidate_DefaultTrackingLabel(t *testing.T) {
+	cfg := validConfig(t)
+	assert.Equal(t, "ai-managed", cfg.TrackingLabel)
+	assert.NoError(t, cfg.Validate())
+}
+
 func TestValidate_MultipleErrors(t *testing.T) {
 	cfg := &Config{}
 	err := cfg.Validate()
@@ -150,6 +180,8 @@ func TestValidate_MultipleErrors(t *testing.T) {
 	assert.Contains(t, msg, "--shutdown-timeout")
 	assert.Contains(t, msg, "--project-id")
 	assert.Contains(t, msg, "--repo-dir")
+	assert.Contains(t, msg, "--github-owner")
+	assert.Contains(t, msg, "--github-repo")
 }
 
 func TestValidate_WorktreesDirCreated(t *testing.T) {

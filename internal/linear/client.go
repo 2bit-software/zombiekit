@@ -11,6 +11,7 @@ type Client interface {
 	RemoveLabel(ctx context.Context, id string, label string) error
 	CreateTicket(ctx context.Context, input CreateTicketInput) (*Ticket, error)
 	UploadAttachment(ctx context.Context, ticketID string, input AttachmentInput) error
+	PostComment(ctx context.Context, issueID string, body string) error
 }
 
 // Ticket represents a Linear issue.

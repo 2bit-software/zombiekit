@@ -28,6 +28,10 @@ type Config struct {
 	ShutdownTimeout  time.Duration
 	ProjectID        string
 	RepoDir          string
+	GitHubOwner      string
+	GitHubRepo       string
+	BaseBranch       string
+	TrackingLabel    string
 }
 
 // NewConfig parses a urfave/cli context into a validated Config.
@@ -45,6 +49,10 @@ func NewConfig(c *cli.Context) (*Config, error) {
 		ShutdownTimeout:  c.Duration("shutdown-timeout"),
 		ProjectID:        c.String("project-id"),
 		RepoDir:          c.String("repo-dir"),
+		GitHubOwner:      c.String("github-owner"),
+		GitHubRepo:       c.String("github-repo"),
+		BaseBranch:       c.String("base-branch"),
+		TrackingLabel:    c.String("tracking-label"),
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -88,6 +96,12 @@ func (c *Config) Validate() error {
 	}
 	if c.RepoDir == "" {
 		errs = append(errs, "--repo-dir/ORCH_REPO_DIR is required")
+	}
+	if c.GitHubOwner == "" {
+		errs = append(errs, "--github-owner/ORCH_GITHUB_OWNER is required")
+	}
+	if c.GitHubRepo == "" {
+		errs = append(errs, "--github-repo/ORCH_GITHUB_REPO is required")
 	}
 
 	if len(errs) > 0 {

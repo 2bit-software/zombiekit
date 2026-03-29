@@ -38,11 +38,11 @@ func WithHTTPClient(hc *http.Client) Option {
 }
 
 type httpClient struct {
-	apiKey        string
-	endpoint      string
-	httpClient    *http.Client
-	lastHeaders   http.Header
-	retryBase     time.Duration
+	apiKey         string
+	endpoint       string
+	httpClient     *http.Client
+	lastHeaders    http.Header
+	retryBase      time.Duration
 	retryMaxJitter time.Duration
 }
 
@@ -284,6 +284,13 @@ mutation($id: String!, $input: IssueUpdateInput!) {
   }
 }`
 
+const commentCreateMutation = `
+mutation($input: CommentCreateInput!) {
+  commentCreate(input: $input) {
+    success
+  }
+}`
+
 const issueCreateMutation = `
 mutation($input: IssueCreateInput!) {
   issueCreate(input: $input) {
@@ -360,6 +367,12 @@ type issueUpdateResponse struct {
 	IssueUpdate struct {
 		Success bool `json:"success"`
 	} `json:"issueUpdate"`
+}
+
+type commentCreateResponse struct {
+	CommentCreate struct {
+		Success bool `json:"success"`
+	} `json:"commentCreate"`
 }
 
 type issueCreateResponse struct {
@@ -563,6 +576,23 @@ func (c *httpClient) CreateTicket(ctx context.Context, input CreateTicketInput) 
 	}
 	t := resp.IssueCreate.Issue.toTicket()
 	return &t, nil
+}
+
+func (c *httpClient) PostComment(ctx context.Context, issueID string, body string) error {
+	var resp commentCreateResponse
+	vars := map[string]any{
+		"input": map[string]any{
+			"issueId": issueID,
+			"body":    body,
+		},
+	}
+	if err := c.doWithRetry(ctx, commentCreateMutation, vars, &resp); err != nil {
+		return fmt.Errorf("post comment: %w", err)
+	}
+	if !resp.CommentCreate.Success {
+		return NewAPIError(fmt.Sprintf("linear: commentCreate failed for issue %s", issueID), nil)
+	}
+	return nil
 }
 
 func (c *httpClient) UploadAttachment(ctx context.Context, ticketID string, input AttachmentInput) error {

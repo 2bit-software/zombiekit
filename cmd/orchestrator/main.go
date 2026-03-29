@@ -8,6 +8,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 	"github.com/zombiekit/brains/internal/cmux"
+	"github.com/zombiekit/brains/internal/github"
 	"github.com/zombiekit/brains/internal/linear"
 	"github.com/zombiekit/brains/internal/logging"
 	"github.com/zombiekit/brains/internal/orchestrator"
@@ -87,6 +88,28 @@ func main() {
 				Usage:   "Git repository root directory (must contain .git)",
 				EnvVars: []string{"ORCH_REPO_DIR"},
 			},
+			&cli.StringFlag{
+				Name:    "github-owner",
+				Usage:   "GitHub repository owner",
+				EnvVars: []string{"ORCH_GITHUB_OWNER"},
+			},
+			&cli.StringFlag{
+				Name:    "github-repo",
+				Usage:   "GitHub repository name",
+				EnvVars: []string{"ORCH_GITHUB_REPO"},
+			},
+			&cli.StringFlag{
+				Name:    "base-branch",
+				Usage:   "Default base branch for PRs",
+				Value:   "main",
+				EnvVars: []string{"ORCH_BASE_BRANCH"},
+			},
+			&cli.StringFlag{
+				Name:    "tracking-label",
+				Usage:   "GitHub label applied to agent-created PRs",
+				Value:   "ai-managed",
+				EnvVars: []string{"ORCH_TRACKING_LABEL"},
+			},
 		},
 		Action: run,
 	}
@@ -130,5 +153,10 @@ func run(c *cli.Context) error {
 		return err
 	}
 
-	return orchestrator.New(cfg, store, linearClient, worktreeMgr, sessionMgr).Run()
+	ghClient, err := github.NewClient(cfg.GitHubToken, cfg.GitHubOwner, cfg.GitHubRepo)
+	if err != nil {
+		return err
+	}
+
+	return orchestrator.New(cfg, store, linearClient, ghClient, worktreeMgr, sessionMgr).Run()
 }
