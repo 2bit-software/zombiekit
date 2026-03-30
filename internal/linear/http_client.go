@@ -204,10 +204,11 @@ func (c *httpClient) retryDelay(attempt int) time.Duration {
 // GraphQL queries
 
 const pollReadyTicketsQuery = `
-query($label: String!, $after: String) {
+query($label: String!, $projectId: ID!, $after: String) {
   issues(
     filter: {
       labels: { name: { eq: $label } }
+      project: { id: { eq: $projectId } }
       description: { null: false }
     }
     first: 50
@@ -404,12 +405,12 @@ func (n issueNode) toTicket() Ticket {
 	}
 }
 
-func (c *httpClient) PollReadyTickets(ctx context.Context, label string) ([]Ticket, error) {
+func (c *httpClient) PollReadyTickets(ctx context.Context, label string, projectID string) ([]Ticket, error) {
 	var tickets []Ticket
 	var cursor *string
 
 	for {
-		vars := map[string]any{"label": label}
+		vars := map[string]any{"label": label, "projectId": projectID}
 		if cursor != nil {
 			vars["after"] = *cursor
 		}

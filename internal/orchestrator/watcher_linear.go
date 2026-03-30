@@ -46,7 +46,7 @@ func (o *Orchestrator) NewLinearPoller() shutdown.ServiceFunc {
 func (o *Orchestrator) pollAndProcess(ctx context.Context) {
 	logger := logging.Logger()
 
-	tickets, err := o.linear.PollReadyTickets(ctx, labelAIReady)
+	tickets, err := o.linear.PollReadyTickets(ctx, labelAIReady, o.cfg.ProjectID)
 	if err != nil {
 		logger.Error("failed to poll ready tickets", "error", err)
 		return
@@ -141,7 +141,7 @@ func (o *Orchestrator) processTicket(ctx context.Context, ticket linear.Ticket) 
 	}
 
 	// FR-007: record job in state
-	if err := o.store.CreateJob(ctx, ticket.Identifier, worktreePath, sessionRef); err != nil {
+	if err := o.store.CreateJob(ctx, ticket.Identifier, worktreePath, sessionRef, o.cfg.ProjectID); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
 

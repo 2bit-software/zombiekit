@@ -60,7 +60,7 @@ func TestNewSQLiteStore_JobsTableColumns(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 
-	expected := []string{"ticket_id", "worktree_path", "cmux_session", "pr_number", "status", "created_at", "updated_at"}
+	expected := []string{"ticket_id", "worktree_path", "cmux_session", "pr_number", "status", "created_at", "updated_at", "project_id"}
 	for _, col := range expected {
 		assert.True(t, columns[col], "jobs table should have column %s", col)
 	}
@@ -138,13 +138,13 @@ func TestRunMigrations_Idempotent(t *testing.T) {
 	err := store.Migrate(ctx)
 	require.NoError(t, err)
 
-	// Verify schema_migrations has exactly one entry
+	// Verify schema_migrations has exactly two entries (001 + 002)
 	var count int
 	err = store.DB().QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM schema_migrations",
 	).Scan(&count)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 2, count)
 }
 
 // --- Job CRUD tests ---
@@ -154,7 +154,7 @@ func TestCreateJob_AndGetJob(t *testing.T) {
 	ctx := context.Background()
 
 	before := time.Now().Add(-time.Second)
-	err := store.CreateJob(ctx, "DEV-100", "/tmp/worktree", "session-abc")
+	err := store.CreateJob(ctx, "DEV-100", "/tmp/worktree", "session-abc", "")
 	require.NoError(t, err)
 
 	job, err := store.GetJob(ctx, "DEV-100")
@@ -174,10 +174,10 @@ func TestCreateJob_Duplicate_ReturnsErrJobExists(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	err := store.CreateJob(ctx, "DEV-100", "/tmp/wt1", "s1")
+	err := store.CreateJob(ctx, "DEV-100", "/tmp/wt1", "s1", "")
 	require.NoError(t, err)
 
-	err = store.CreateJob(ctx, "DEV-100", "/tmp/wt2", "s2")
+	err = store.CreateJob(ctx, "DEV-100", "/tmp/wt2", "s2", "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrJobExists))
 
@@ -200,7 +200,7 @@ func TestSetPR_UpdatesJob(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	err := store.CreateJob(ctx, "DEV-100", "/tmp/wt", "s1")
+	err := store.CreateJob(ctx, "DEV-100", "/tmp/wt", "s1", "")
 	require.NoError(t, err)
 
 	jobBefore, err := store.GetJob(ctx, "DEV-100")
@@ -395,9 +395,9 @@ func TestListJobsByStatus_FiltersCorrectly(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
 	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
-	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2", ""))
 	// DEV-2 stays queued
 
 	jobs, err := store.ListJobsByStatus(ctx, StatusInProgress)
@@ -410,11 +410,11 @@ func TestListJobsByStatus_MultipleStatuses(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
 	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
-	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2", ""))
 	require.NoError(t, store.SetJobStatus(ctx, "DEV-2", StatusComplete))
-	require.NoError(t, store.CreateJob(ctx, "DEV-3", "/tmp/wt3", "s3"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-3", "/tmp/wt3", "s3", ""))
 	// DEV-3 stays queued
 
 	jobs, err := store.ListJobsByStatus(ctx, StatusInProgress, StatusComplete)
@@ -430,7 +430,7 @@ func TestListJobsByStatus_NoMatches(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
 
 	jobs, err := store.ListJobsByStatus(ctx, StatusInProgress)
 	require.NoError(t, err)
@@ -454,7 +454,7 @@ func TestSetJobStatus_UpdatesStatusAndTimestamp(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
 	jobBefore, err := store.GetJob(ctx, "DEV-1")
 	require.NoError(t, err)
 
@@ -523,7 +523,7 @@ func TestGetJobByPR_Found(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-300", "/tmp/wt-pr", "session-pr"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-300", "/tmp/wt-pr", "session-pr", ""))
 	require.NoError(t, store.SetPR(ctx, "DEV-300", 77))
 
 	job, err := store.GetJobByPR(ctx, 77)
@@ -551,7 +551,7 @@ func TestGetJobByPR_NoPRSet(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-301", "/tmp/wt-nopr", "session-nopr"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-301", "/tmp/wt-nopr", "session-nopr", ""))
 
 	job, err := store.GetJobByPR(ctx, 0)
 	require.NoError(t, err)
@@ -568,7 +568,7 @@ func TestPersistence_AcrossReopen(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create job, set PR, set watermark, acquire slot
-	require.NoError(t, store1.CreateJob(ctx, "DEV-200", "/tmp/wt", "s1"))
+	require.NoError(t, store1.CreateJob(ctx, "DEV-200", "/tmp/wt", "s1", ""))
 	require.NoError(t, store1.SetPR(ctx, "DEV-200", 55))
 	require.NoError(t, store1.SetCommentWatermark(ctx, 55, 999))
 	_, err = store1.TryAcquireSlot(ctx, "proj-persist", 5)

@@ -24,7 +24,11 @@ func integrationClient(t *testing.T) *httpClient {
 
 func TestIntegration_PollReadyTickets(t *testing.T) {
 	c := integrationClient(t)
-	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready")
+	projectID := os.Getenv("ORCH_PROJECT_ID")
+	if projectID == "" {
+		t.Skip("ORCH_PROJECT_ID not set")
+	}
+	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready", projectID)
 	require.NoError(t, err)
 	// We can't assert specific results, but we can assert the shape
 	for _, ticket := range tickets {

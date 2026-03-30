@@ -51,7 +51,7 @@ func (s *commentStubState) getCalls() []string {
 
 func (s *commentStubState) Migrate(_ context.Context) error { return nil }
 func (s *commentStubState) Close() error                    { return nil }
-func (s *commentStubState) CreateJob(_ context.Context, _, _, _ string) error {
+func (s *commentStubState) CreateJob(_ context.Context, _, _, _, _ string) error {
 	return nil
 }
 func (s *commentStubState) GetJob(_ context.Context, _ string) (*state.Job, error) {
@@ -98,7 +98,12 @@ func (s *commentStubState) ReleaseSlot(_ context.Context, _ string) error {
 	return s.releaseSlotErr
 }
 
-func (s *commentStubState) ResetAllSlots(_ context.Context) (int, error) { return 0, nil }
+func (s *commentStubState) ResetAllSlots(_ context.Context) (int, error)       { return 0, nil }
+func (s *commentStubState) ListAllJobs(_ context.Context) ([]state.Job, error) { return nil, nil }
+func (s *commentStubState) DeleteJob(_ context.Context, _ string) error        { return nil }
+func (s *commentStubState) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error) {
+	return nil, nil
+}
 
 // commentTestFixture bundles all test dependencies for the comment watcher.
 type commentTestFixture struct {

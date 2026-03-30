@@ -40,7 +40,7 @@ func (s *stubLinear) getCalls() []string {
 	return out
 }
 
-func (s *stubLinear) PollReadyTickets(_ context.Context, _ string) ([]linear.Ticket, error) {
+func (s *stubLinear) PollReadyTickets(_ context.Context, _, _ string) ([]linear.Ticket, error) {
 	s.record("PollReadyTickets")
 	return s.tickets, s.pollErr
 }
@@ -189,7 +189,7 @@ func (s *stubState) GetJob(_ context.Context, ticketID string) (*state.Job, erro
 	defer s.mu.Unlock()
 	return s.jobs[ticketID], nil
 }
-func (s *stubState) CreateJob(_ context.Context, ticketID, worktreePath, session string) error {
+func (s *stubState) CreateJob(_ context.Context, ticketID, worktreePath, session, _ string) error {
 	s.record("CreateJob")
 	if s.createJobErr != nil {
 		return s.createJobErr
@@ -219,7 +219,10 @@ func (s *stubState) ReleaseSlot(_ context.Context, _ string) error {
 	s.record("ReleaseSlot")
 	return s.releaseSlotErr
 }
-func (s *stubState) ResetAllSlots(_ context.Context) (int, error) { return 0, nil }
+func (s *stubState) ResetAllSlots(_ context.Context) (int, error)                 { return 0, nil }
+func (s *stubState) ListAllJobs(_ context.Context) ([]state.Job, error)           { return nil, nil }
+func (s *stubState) DeleteJob(_ context.Context, _ string) error                  { return nil }
+func (s *stubState) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error) { return nil, nil }
 
 // capturingSessionManager captures SpawnSession args for assertion.
 type capturingSessionManager struct {
