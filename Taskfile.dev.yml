@@ -152,6 +152,18 @@ tasks:
     generates:
       - bin/zk-server
 
+  build:orchestrator:
+    desc: Build the orchestrator binary
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags "{{.LDFLAGS}}" -o bin/orchestrator ./cmd/orchestrator
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - bin/orchestrator
+
   # === Proto ===
 
   proto:
