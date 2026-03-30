@@ -23,6 +23,9 @@ const (
 	StatusClosed         = "closed"
 )
 
+// ValidStatuses lists all recognized job status values.
+var ValidStatuses = []string{StatusQueued, StatusInProgress, StatusNeedsAttention, StatusComplete, StatusClosed}
+
 // Job represents an autonomous development task tracked by the orchestrator.
 type Job struct {
 	TicketID     string
@@ -30,8 +33,16 @@ type Job struct {
 	CmuxSession  string
 	PRNumber     *int64
 	Status       string
+	ProjectID    string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+// ConcurrencySlot represents a per-project concurrency capacity record.
+type ConcurrencySlot struct {
+	ProjectID   string
+	ActiveCount int
+	SlotLimit   int
 }
 
 // StateStore defines the interface for orchestrator persistent state.
@@ -39,9 +50,11 @@ type StateStore interface {
 	Migrate(ctx context.Context) error
 	Close() error
 
-	CreateJob(ctx context.Context, ticketID, worktreePath, cmuxSession string) error
+	CreateJob(ctx context.Context, ticketID, worktreePath, cmuxSession, projectID string) error
 	GetJob(ctx context.Context, ticketID string) (*Job, error)
+	ListAllJobs(ctx context.Context) ([]Job, error)
 	ListJobsByStatus(ctx context.Context, statuses ...string) ([]Job, error)
+	DeleteJob(ctx context.Context, ticketID string) error
 	SetJobStatus(ctx context.Context, ticketID string, status string) error
 	SetPR(ctx context.Context, ticketID string, prNumber int64) error
 
@@ -53,6 +66,7 @@ type StateStore interface {
 	TryAcquireSlot(ctx context.Context, projectID string, limit int) (bool, error)
 	ReleaseSlot(ctx context.Context, projectID string) error
 	ResetAllSlots(ctx context.Context) (int, error)
+	ListSlots(ctx context.Context) ([]ConcurrencySlot, error)
 }
 
 // SQLiteStore implements StateStore backed by a local SQLite database.
@@ -126,12 +140,12 @@ func (s *SQLiteStore) Close() error {
 
 // CreateJob persists a new job record with status "queued".
 // Returns ErrJobExists if a job with the same ticket ID already exists.
-func (s *SQLiteStore) CreateJob(ctx context.Context, ticketID, worktreePath, cmuxSession string) error {
+func (s *SQLiteStore) CreateJob(ctx context.Context, ticketID, worktreePath, cmuxSession, projectID string) error {
 	now := time.Now()
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO jobs (ticket_id, worktree_path, cmux_session, status, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		ticketID, worktreePath, cmuxSession, StatusQueued, now, now,
+		`INSERT INTO jobs (ticket_id, worktree_path, cmux_session, project_id, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		ticketID, worktreePath, cmuxSession, projectID, StatusQueued, now, now,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -142,26 +156,71 @@ func (s *SQLiteStore) CreateJob(ctx context.Context, ticketID, worktreePath, cmu
 	return nil
 }
 
+// jobColumns is the canonical column list for job SELECT queries.
+const jobColumns = `ticket_id, worktree_path, cmux_session, pr_number, status, project_id, created_at, updated_at`
+
+// scanJob scans a single row into a Job struct. The row must contain jobColumns in order.
+func scanJob(scanner interface{ Scan(dest ...any) error }) (Job, error) {
+	var job Job
+	var prNumber sql.NullInt64
+	err := scanner.Scan(
+		&job.TicketID, &job.WorktreePath, &job.CmuxSession,
+		&prNumber, &job.Status, &job.ProjectID,
+		&job.CreatedAt, &job.UpdatedAt,
+	)
+	if prNumber.Valid {
+		job.PRNumber = &prNumber.Int64
+	}
+	return job, err
+}
+
+// scanJobs scans all rows into a Job slice. Returns []Job{} (not nil) when empty.
+func scanJobs(rows *sql.Rows) ([]Job, error) {
+	var jobs []Job
+	for rows.Next() {
+		job, err := scanJob(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan job row: %w", err)
+		}
+		jobs = append(jobs, job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate job rows: %w", err)
+	}
+	if jobs == nil {
+		return []Job{}, nil
+	}
+	return jobs, nil
+}
+
 // GetJob retrieves a job by ticket ID.
 // Returns nil, nil if no job exists for the given ticket ID.
 func (s *SQLiteStore) GetJob(ctx context.Context, ticketID string) (*Job, error) {
-	var job Job
-	var prNumber sql.NullInt64
-	err := s.db.QueryRowContext(ctx,
-		`SELECT ticket_id, worktree_path, cmux_session, pr_number, status, created_at, updated_at
-		 FROM jobs WHERE ticket_id = ?`,
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+jobColumns+` FROM jobs WHERE ticket_id = ?`,
 		ticketID,
-	).Scan(&job.TicketID, &job.WorktreePath, &job.CmuxSession, &prNumber, &job.Status, &job.CreatedAt, &job.UpdatedAt)
+	)
+	job, err := scanJob(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get job %s: %w", ticketID, err)
 	}
-	if prNumber.Valid {
-		job.PRNumber = &prNumber.Int64
-	}
 	return &job, nil
+}
+
+// ListAllJobs returns every job ordered by updated_at descending.
+// Returns an empty slice (not nil) when no jobs exist.
+func (s *SQLiteStore) ListAllJobs(ctx context.Context) ([]Job, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+jobColumns+` FROM jobs ORDER BY updated_at DESC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list all jobs: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanJobs(rows)
 }
 
 // ListJobsByStatus returns all jobs matching any of the given statuses.
@@ -179,8 +238,7 @@ func (s *SQLiteStore) ListJobsByStatus(ctx context.Context, statuses ...string) 
 	}
 
 	query := fmt.Sprintf(
-		`SELECT ticket_id, worktree_path, cmux_session, pr_number, status, created_at, updated_at
-		 FROM jobs WHERE status IN (%s)`,
+		`SELECT `+jobColumns+` FROM jobs WHERE status IN (%s)`,
 		strings.Join(placeholders, ", "),
 	)
 
@@ -188,28 +246,27 @@ func (s *SQLiteStore) ListJobsByStatus(ctx context.Context, statuses ...string) 
 	if err != nil {
 		return nil, fmt.Errorf("list jobs by status: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
+	return scanJobs(rows)
+}
 
-	var jobs []Job
-	for rows.Next() {
-		var job Job
-		var prNumber sql.NullInt64
-		if err := rows.Scan(&job.TicketID, &job.WorktreePath, &job.CmuxSession, &prNumber, &job.Status, &job.CreatedAt, &job.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan job row: %w", err)
-		}
-		if prNumber.Valid {
-			job.PRNumber = &prNumber.Int64
-		}
-		jobs = append(jobs, job)
+// DeleteJob removes a job record by ticket ID.
+// Returns ErrJobNotFound if no job exists for the given ticket ID.
+func (s *SQLiteStore) DeleteJob(ctx context.Context, ticketID string) error {
+	result, err := s.db.ExecContext(ctx,
+		`DELETE FROM jobs WHERE ticket_id = ?`, ticketID,
+	)
+	if err != nil {
+		return fmt.Errorf("delete job %s: %w", ticketID, err)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate job rows: %w", err)
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete job %s: %w", ticketID, err)
 	}
-
-	if jobs == nil {
-		return []Job{}, nil
+	if n == 0 {
+		return fmt.Errorf("delete job %s: %w", ticketID, ErrJobNotFound)
 	}
-	return jobs, nil
+	return nil
 }
 
 // SetJobStatus updates the status of a job and its updated_at timestamp.
@@ -255,21 +312,16 @@ func (s *SQLiteStore) SetPR(ctx context.Context, ticketID string, prNumber int64
 // GetJobByPR retrieves a job by its associated PR number.
 // Returns nil, nil if no job exists for the given PR number.
 func (s *SQLiteStore) GetJobByPR(ctx context.Context, prNumber int64) (*Job, error) {
-	var job Job
-	var prNum sql.NullInt64
-	err := s.db.QueryRowContext(ctx,
-		`SELECT ticket_id, worktree_path, cmux_session, pr_number, status, created_at, updated_at
-		 FROM jobs WHERE pr_number = ?`,
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+jobColumns+` FROM jobs WHERE pr_number = ?`,
 		prNumber,
-	).Scan(&job.TicketID, &job.WorktreePath, &job.CmuxSession, &prNum, &job.Status, &job.CreatedAt, &job.UpdatedAt)
+	)
+	job, err := scanJob(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get job by PR %d: %w", prNumber, err)
-	}
-	if prNum.Valid {
-		job.PRNumber = &prNum.Int64
 	}
 	return &job, nil
 }
@@ -365,6 +417,34 @@ func (s *SQLiteStore) ReleaseSlot(ctx context.Context, projectID string) error {
 		return fmt.Errorf("release slot for %s: %w", projectID, err)
 	}
 	return nil
+}
+
+// ListSlots returns all concurrency slot records.
+// Returns an empty slice (not nil) when no slots exist.
+func (s *SQLiteStore) ListSlots(ctx context.Context) ([]ConcurrencySlot, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT project_id, active_count, slot_limit FROM concurrency_slots`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list slots: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var slots []ConcurrencySlot
+	for rows.Next() {
+		var slot ConcurrencySlot
+		if err := rows.Scan(&slot.ProjectID, &slot.ActiveCount, &slot.SlotLimit); err != nil {
+			return nil, fmt.Errorf("scan slot row: %w", err)
+		}
+		slots = append(slots, slot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate slot rows: %w", err)
+	}
+	if slots == nil {
+		return []ConcurrencySlot{}, nil
+	}
+	return slots, nil
 }
 
 // ResetAllSlots sets all concurrency slot active counts to zero.

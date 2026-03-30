@@ -91,16 +91,21 @@ type routerMockStore struct {
 	calls             []string
 }
 
-func (m *routerMockStore) Migrate(_ context.Context) error                   { return nil }
-func (m *routerMockStore) Close() error                                      { return nil }
-func (m *routerMockStore) CreateJob(_ context.Context, _, _, _ string) error { return nil }
+func (m *routerMockStore) Migrate(_ context.Context) error                      { return nil }
+func (m *routerMockStore) Close() error                                         { return nil }
+func (m *routerMockStore) CreateJob(_ context.Context, _, _, _, _ string) error { return nil }
 func (m *routerMockStore) ListJobsByStatus(_ context.Context, _ ...string) ([]state.Job, error) {
 	return nil, nil
 }
 func (m *routerMockStore) TryAcquireSlot(_ context.Context, _ string, _ int) (bool, error) {
 	return true, nil
 }
-func (m *routerMockStore) ResetAllSlots(_ context.Context) (int, error) { return 0, nil }
+func (m *routerMockStore) ResetAllSlots(_ context.Context) (int, error)       { return 0, nil }
+func (m *routerMockStore) ListAllJobs(_ context.Context) ([]state.Job, error) { return nil, nil }
+func (m *routerMockStore) DeleteJob(_ context.Context, _ string) error        { return nil }
+func (m *routerMockStore) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error) {
+	return nil, nil
+}
 func (m *routerMockStore) GetJobByPR(_ context.Context, _ int64) (*state.Job, error) {
 	return nil, nil
 }

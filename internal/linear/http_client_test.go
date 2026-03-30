@@ -89,7 +89,7 @@ func TestAuthHeader_NoBearer(t *testing.T) {
 		jsonResponse(w, 200, gqlSuccess(map[string]any{"issues": map[string]any{"nodes": []any{}, "pageInfo": map[string]any{"hasNextPage": false}}}))
 	})
 
-	_, err := c.PollReadyTickets(context.Background(), "ai-ready")
+	_, err := c.PollReadyTickets(context.Background(), "ai-ready", "proj-1")
 	require.NoError(t, err)
 	assert.Equal(t, "test-api-key", gotAuth)
 }
@@ -118,7 +118,7 @@ func TestPollReadyTickets_Success(t *testing.T) {
 		}))
 	})
 
-	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready")
+	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready", "proj-1")
 	require.NoError(t, err)
 	require.Len(t, tickets, 1)
 
@@ -142,7 +142,7 @@ func TestPollReadyTickets_EmptyResult(t *testing.T) {
 		}))
 	})
 
-	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready")
+	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready", "proj-1")
 	require.NoError(t, err)
 	assert.Empty(t, tickets)
 	assert.NotNil(t, tickets)
@@ -189,7 +189,7 @@ func TestPollReadyTickets_FiltersEmptyDescription(t *testing.T) {
 		}))
 	})
 
-	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready")
+	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready", "proj-1")
 	require.NoError(t, err)
 	require.Len(t, tickets, 1)
 	assert.Equal(t, "DEV-100", tickets[0].Identifier)
@@ -221,7 +221,7 @@ func TestPollReadyTickets_Pagination(t *testing.T) {
 		}
 	})
 
-	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready")
+	tickets, err := c.PollReadyTickets(context.Background(), "ai-ready", "proj-1")
 	require.NoError(t, err)
 	require.Len(t, tickets, 2)
 	assert.Equal(t, "DEV-1", tickets[0].Identifier)
@@ -521,7 +521,7 @@ func TestSetTicketStatus_Success(t *testing.T) {
 				"issue": map[string]any{
 					"id": "uuid-1", "identifier": "DEV-1", "title": "Test",
 					"description": "desc", "url": "", "priority": 0.0,
-					"state": map[string]any{"name": "Todo"},
+					"state":  map[string]any{"name": "Todo"},
 					"labels": map[string]any{"nodes": []any{}},
 					"team":   map[string]any{"id": "team-uuid-1"},
 				},
@@ -554,7 +554,7 @@ func TestSetTicketStatus_StatusNotFound(t *testing.T) {
 				"issue": map[string]any{
 					"id": "uuid-1", "identifier": "DEV-1", "title": "Test",
 					"description": "desc", "url": "", "priority": 0.0,
-					"state": map[string]any{"name": "Todo"},
+					"state":  map[string]any{"name": "Todo"},
 					"labels": map[string]any{"nodes": []any{}},
 					"team":   map[string]any{"id": "team-uuid-1"},
 				},
@@ -760,9 +760,9 @@ func TestCreateTicket_Success(t *testing.T) {
 					"id": "new-uuid", "identifier": "DEV-200", "title": "New ticket",
 					"description": "Created by automation", "url": "https://linear.app/test/DEV-200",
 					"priority": 2.0,
-					"state":  map[string]any{"name": "Backlog"},
-					"labels": map[string]any{"nodes": []map[string]any{{"name": "improvements"}}},
-					"team":   map[string]any{"id": "team-uuid-1"},
+					"state":    map[string]any{"name": "Backlog"},
+					"labels":   map[string]any{"nodes": []map[string]any{{"name": "improvements"}}},
+					"team":     map[string]any{"id": "team-uuid-1"},
 				},
 			},
 		}))
@@ -803,9 +803,9 @@ func TestCreateTicket_MinimalInput(t *testing.T) {
 					"id": "new-uuid", "identifier": "DEV-201", "title": "Minimal",
 					"description": nil, "url": "https://linear.app/test/DEV-201",
 					"priority": 0.0,
-					"state":  map[string]any{"name": "Backlog"},
-					"labels": map[string]any{"nodes": []any{}},
-					"team":   map[string]any{"id": "team-uuid-1"},
+					"state":    map[string]any{"name": "Backlog"},
+					"labels":   map[string]any{"nodes": []any{}},
+					"team":     map[string]any{"id": "team-uuid-1"},
 				},
 			},
 		}))

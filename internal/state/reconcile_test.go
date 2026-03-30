@@ -17,10 +17,10 @@ func TestPlanReconciliation(t *testing.T) {
 	now := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name           string
-		jobs           []Job
-		wantOrphaned   int
-		wantTicketIDs  []string
+		name            string
+		jobs            []Job
+		wantOrphaned    int
+		wantTicketIDs   []string
 		wantHasFindings bool
 	}{
 		{
@@ -164,7 +164,7 @@ func TestApplyReconciliation_SingleOrphanedJob(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
 	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
 
 	err := ApplyReconciliation(ctx, store, testLogger())
@@ -180,7 +180,7 @@ func TestApplyReconciliation_MultipleOrphanedJobs(t *testing.T) {
 	ctx := context.Background()
 
 	for _, id := range []string{"DEV-1", "DEV-2", "DEV-3"} {
-		require.NoError(t, store.CreateJob(ctx, id, "/tmp/"+id, "s-"+id))
+		require.NoError(t, store.CreateJob(ctx, id, "/tmp/"+id, "s-"+id, ""))
 		require.NoError(t, store.SetJobStatus(ctx, id, StatusInProgress))
 	}
 
@@ -198,13 +198,13 @@ func TestApplyReconciliation_MixedStatuses(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
 	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2", ""))
 	require.NoError(t, store.SetJobStatus(ctx, "DEV-2", StatusComplete))
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-3", "/tmp/wt3", "s3"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-3", "/tmp/wt3", "s3", ""))
 	// DEV-3 stays queued
 
 	err := ApplyReconciliation(ctx, store, testLogger())
@@ -224,7 +224,7 @@ func TestApplyReconciliation_ResetsSlots(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1"))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
 	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
 
 	_, err := store.TryAcquireSlot(ctx, "proj-1", 5)

@@ -22,12 +22,12 @@ func TestMockClient_ConfiguredResponse_PollReadyTickets(t *testing.T) {
 		{ID: "2", Identifier: "DEV-101", Title: "Second"},
 	}
 	m := &MockClient{
-		PollReadyTicketsFn: func(_ context.Context, _ string) ([]Ticket, error) {
+		PollReadyTicketsFn: func(_ context.Context, _, _ string) ([]Ticket, error) {
 			return tickets, nil
 		},
 	}
 
-	got, err := m.PollReadyTickets(context.Background(), "ready")
+	got, err := m.PollReadyTickets(context.Background(), "ready", "proj-1")
 	require.NoError(t, err)
 	assert.Len(t, got, 2)
 	assert.Equal(t, "DEV-100", got[0].Identifier)
@@ -65,7 +65,7 @@ func TestMockClient_UnconfiguredMethod(t *testing.T) {
 func TestMockClient_CallRecording_AllMethods(t *testing.T) {
 	ctx := context.Background()
 	m := &MockClient{
-		PollReadyTicketsFn: func(_ context.Context, _ string) ([]Ticket, error) { return nil, nil },
+		PollReadyTicketsFn: func(_ context.Context, _, _ string) ([]Ticket, error) { return nil, nil },
 		GetTicketFn:        func(_ context.Context, _ string) (*Ticket, error) { return nil, nil },
 		SetTicketStatusFn:  func(_ context.Context, _, _ string) error { return nil },
 		ApplyLabelFn:       func(_ context.Context, _, _ string) error { return nil },
@@ -79,9 +79,9 @@ func TestMockClient_CallRecording_AllMethods(t *testing.T) {
 	input := CreateTicketInput{TeamID: "team-1", Title: "New ticket"}
 	attach := AttachmentInput{URL: "https://example.com", Title: "Report"}
 
-	m.PollReadyTickets(ctx, "ready")
-	m.GetTicket(ctx, "id-1")
-	m.SetTicketStatus(ctx, "id-2", "Done")
+	_, _ = m.PollReadyTickets(ctx, "ready", "proj-1")
+	_, _ = m.GetTicket(ctx, "id-1")
+	_ = m.SetTicketStatus(ctx, "id-2", "Done")
 	m.ApplyLabel(ctx, "id-3", "bug")
 	m.RemoveLabel(ctx, "id-4", "wontfix")
 	m.CreateTicket(ctx, input)
@@ -93,7 +93,7 @@ func TestMockClient_CallRecording_AllMethods(t *testing.T) {
 		method string
 		args   []any
 	}{
-		{"PollReadyTickets", []any{"ready"}},
+		{"PollReadyTickets", []any{"ready", "proj-1"}},
 		{"GetTicket", []any{"id-1"}},
 		{"SetTicketStatus", []any{"id-2", "Done"}},
 		{"ApplyLabel", []any{"id-3", "bug"}},
@@ -110,8 +110,8 @@ func TestMockClient_CallRecording_AllMethods(t *testing.T) {
 
 func TestMockClient_ErrorPredicates(t *testing.T) {
 	tests := []struct {
-		name      string
-		err       *Error
+		name          string
+		err           *Error
 		isNotFound    bool
 		isRateLimited bool
 		isAPI         bool
@@ -187,21 +187,21 @@ func TestMockClient_ConfiguredError(t *testing.T) {
 
 func TestMockClient_ConsumerWiring(t *testing.T) {
 	m := &MockClient{
-		PollReadyTicketsFn: func(_ context.Context, _ string) ([]Ticket, error) {
+		PollReadyTicketsFn: func(_ context.Context, _, _ string) ([]Ticket, error) {
 			return []Ticket{{ID: "1", Identifier: "DEV-200"}}, nil
 		},
 	}
 
 	// Simulate a consumer that accepts the Client interface.
-	pollAndCount := func(c Client, label string) (int, error) {
-		tickets, err := c.PollReadyTickets(context.Background(), label)
+	pollAndCount := func(c Client, label, projectID string) (int, error) {
+		tickets, err := c.PollReadyTickets(context.Background(), label, projectID)
 		if err != nil {
 			return 0, err
 		}
 		return len(tickets), nil
 	}
 
-	count, err := pollAndCount(m, "ready")
+	count, err := pollAndCount(m, "ready", "proj-1")
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 	assert.Len(t, m.Calls, 1)

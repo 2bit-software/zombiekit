@@ -15,7 +15,7 @@ type Call struct {
 
 // MockClient is a configurable test stub for Client.
 type MockClient struct {
-	PollReadyTicketsFn func(ctx context.Context, label string) ([]Ticket, error)
+	PollReadyTicketsFn func(ctx context.Context, label string, projectID string) ([]Ticket, error)
 	GetTicketFn        func(ctx context.Context, id string) (*Ticket, error)
 	SetTicketStatusFn  func(ctx context.Context, id string, status string) error
 	ApplyLabelFn       func(ctx context.Context, id string, label string) error
@@ -27,10 +27,10 @@ type MockClient struct {
 	Calls []Call
 }
 
-func (m *MockClient) PollReadyTickets(ctx context.Context, label string) ([]Ticket, error) {
-	m.Calls = append(m.Calls, Call{Method: "PollReadyTickets", Args: []any{label}})
+func (m *MockClient) PollReadyTickets(ctx context.Context, label string, projectID string) ([]Ticket, error) {
+	m.Calls = append(m.Calls, Call{Method: "PollReadyTickets", Args: []any{label, projectID}})
 	if m.PollReadyTicketsFn != nil {
-		return m.PollReadyTicketsFn(ctx, label)
+		return m.PollReadyTicketsFn(ctx, label, projectID)
 	}
 	return nil, fmt.Errorf("MockClient.PollReadyTickets not configured")
 }

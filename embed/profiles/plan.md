@@ -34,6 +34,7 @@ Execution steps:
    - Investigate implementation approaches
    - Validate technical assumptions from user preferences
    - Research libraries, APIs, patterns
+   - **Verify state transitions**: If the spec claims a component sets a status, releases a resource, or triggers a side effect, use `codebase-memory-mcp` tools (`search_code`, `trace_call_path`) to verify the actual code path. Search for the specific method call in the handler/router code and confirm which values it passes. Flag any discrepancy between spec claims and actual behavior as a CRITICAL finding.
    - Document findings with alternatives considered
 
 3. **Spike Phase** (where needed)

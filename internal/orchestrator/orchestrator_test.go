@@ -23,7 +23,7 @@ type mockStore struct {
 func (m *mockStore) Migrate(_ context.Context) error { return nil }
 func (m *mockStore) Close() error                    { return nil }
 
-func (m *mockStore) CreateJob(_ context.Context, _, _, _ string) error { return nil }
+func (m *mockStore) CreateJob(_ context.Context, _, _, _, _ string) error { return nil }
 func (m *mockStore) GetJob(_ context.Context, _ string) (*state.Job, error) {
 	return nil, nil
 }
@@ -64,6 +64,10 @@ func (m *mockStore) ResetAllSlots(_ context.Context) (int, error) {
 	m.calls = append(m.calls, "ResetAllSlots")
 	return 0, nil
 }
+
+func (m *mockStore) ListAllJobs(_ context.Context) ([]state.Job, error)           { return nil, nil }
+func (m *mockStore) DeleteJob(_ context.Context, _ string) error                  { return nil }
+func (m *mockStore) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error) { return nil, nil }
 
 func setupLogger(t *testing.T) {
 	t.Helper()
