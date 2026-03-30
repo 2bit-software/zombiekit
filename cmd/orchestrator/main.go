@@ -115,6 +115,12 @@ func main() {
 				Usage:   "GitHub username of the bot account (for filtering self-authored comments)",
 				EnvVars: []string{"ORCH_BOT_USERNAME"},
 			},
+			&cli.StringFlag{
+				Name:    "closed-pr-status",
+				Usage:   "Linear ticket status for PRs closed without merge",
+				Value:   "cancelled",
+				EnvVars: []string{"ORCH_CLOSED_PR_STATUS"},
+			},
 		},
 		Action: run,
 	}
