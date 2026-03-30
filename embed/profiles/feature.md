@@ -65,6 +65,7 @@ Execution steps:
    - Spawn research-codebase agent: Explore existing patterns
    - Spawn research-domain agent: Gather domain knowledge
    - Spawn additional domain-specific agents if specified
+   - **Verify state transitions**: When the feature depends on behavior of existing components (routers, handlers, state machines), use `codebase-memory-mcp` tools (`search_code`, `trace_call_path`) to trace actual code paths — not just interface signatures. For each assumed state transition, verify which values are actually passed (e.g., search for `SetJobStatus` calls to see which statuses are set). Document what the code *does*, not what method names *imply*.
    - Collate and deduplicate findings -> `research-summary.md`
 
 4. **Create Phase** (single agent)
