@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zombiekit/brains/internal/recall"
+	"github.com/2bit-software/zombiekit/internal/recall"
 )
 
 const (

@@ -4,7 +4,7 @@ package memory
 import (
 	"context"
 
-	"github.com/zombiekit/brains/internal/mo"
+	"github.com/2bit-software/zombiekit/internal/mo"
 )
 
 // Storage defines the interface for storing and retrieving memory items.

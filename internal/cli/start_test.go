@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/urfave/cli/v2"
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/version"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/version"
 )
 
 func TestStartCommand_Exists(t *testing.T) {

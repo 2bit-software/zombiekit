@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zombiekit/brains/internal/profile"
-	"github.com/zombiekit/brains/internal/search"
-	"github.com/zombiekit/brains/internal/webplugins/profiles"
+	"github.com/2bit-software/zombiekit/internal/profile"
+	"github.com/2bit-software/zombiekit/internal/search"
+	"github.com/2bit-software/zombiekit/internal/webplugins/profiles"
 )
 
 // mockSource implements profile.ProfileSourceInterface for testing.

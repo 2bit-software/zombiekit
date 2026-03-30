@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/zombiekit/brains/internal/mcp/tools/ghpr"
+	"github.com/2bit-software/zombiekit/internal/mcp/tools/ghpr"
 )
 
 func TestNewToolGracefulError(t *testing.T) {

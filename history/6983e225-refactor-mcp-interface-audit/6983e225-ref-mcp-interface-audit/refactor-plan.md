@@ -17,7 +17,7 @@ Remove from `KnownTools` slice:
 
 **File**: `internal/mcp/server.go`
 
-1. Remove import: `"github.com/zombiekit/brains/internal/mcp/tools/zombiekit"`
+1. Remove import: `"github.com/2bit-software/zombiekit/internal/mcp/tools/zombiekit"`
 2. Remove field: `zombiekitTool *zombiekit.Tool` from Server struct
 3. Remove instantiation: `zombiekitTool := zombiekit.NewTool()`
 4. Remove assignment: `zombiekitTool: zombiekitTool,` in struct literal

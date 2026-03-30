@@ -14,7 +14,7 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/zombiekit/brains/internal/recall"
+	"github.com/2bit-software/zombiekit/internal/recall"
 )
 
 // setupTestStorage creates a PostgreSQL testcontainer with pgvector and returns a connected storage.

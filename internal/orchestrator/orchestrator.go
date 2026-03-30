@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/zombiekit/brains/internal/archival"
-	"github.com/zombiekit/brains/internal/callback"
-	"github.com/zombiekit/brains/internal/cmux"
-	"github.com/zombiekit/brains/internal/friction"
-	"github.com/zombiekit/brains/internal/github"
-	"github.com/zombiekit/brains/internal/linear"
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/shutdown"
-	"github.com/zombiekit/brains/internal/state"
-	"github.com/zombiekit/brains/internal/worktree"
+	"github.com/2bit-software/zombiekit/internal/archival"
+	"github.com/2bit-software/zombiekit/internal/callback"
+	"github.com/2bit-software/zombiekit/internal/cmux"
+	"github.com/2bit-software/zombiekit/internal/friction"
+	"github.com/2bit-software/zombiekit/internal/github"
+	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/shutdown"
+	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/2bit-software/zombiekit/internal/worktree"
 )
 
 // Orchestrator owns the daemon lifecycle: reconciliation, service assembly,

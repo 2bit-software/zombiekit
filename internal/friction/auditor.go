@@ -3,7 +3,7 @@ package friction
 import (
 	"context"
 
-	"github.com/zombiekit/brains/internal/callback"
+	"github.com/2bit-software/zombiekit/internal/callback"
 )
 
 // Auditor defines the interface for post-session friction auditing.

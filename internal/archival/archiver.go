@@ -3,7 +3,7 @@ package archival
 import (
 	"context"
 
-	"github.com/zombiekit/brains/internal/callback"
+	"github.com/2bit-software/zombiekit/internal/callback"
 )
 
 // Archiver defines the interface for post-session conversation archival.

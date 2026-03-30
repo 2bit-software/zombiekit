@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zombiekit/brains/internal/recall"
-	"github.com/zombiekit/brains/internal/recall/claude"
+	"github.com/2bit-software/zombiekit/internal/recall"
+	"github.com/2bit-software/zombiekit/internal/recall/claude"
 )
 
 // ============================================================

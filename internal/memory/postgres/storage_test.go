@@ -12,7 +12,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/zombiekit/brains/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/memory"
 )
 
 // setupTestStorage creates a PostgreSQL testcontainer and returns a connected storage.

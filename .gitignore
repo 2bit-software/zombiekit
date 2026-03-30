@@ -1,7 +1,8 @@
 # Binaries
-brains
-brains-mcp
-zk-server
+/brains
+/brains-mcp
+/zk-server
+/orchestrator
 bin/
 *.exe
 *.exe~

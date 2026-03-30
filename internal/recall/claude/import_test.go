@@ -16,9 +16,9 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/zombiekit/brains/internal/recall"
-	"github.com/zombiekit/brains/internal/recall/claude"
-	"github.com/zombiekit/brains/internal/recall/postgres"
+	"github.com/2bit-software/zombiekit/internal/recall"
+	"github.com/2bit-software/zombiekit/internal/recall/claude"
+	"github.com/2bit-software/zombiekit/internal/recall/postgres"
 )
 
 // testHarness provides a complete test environment for import integration tests.

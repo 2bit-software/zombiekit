@@ -8,7 +8,7 @@ import (
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
-	v1 "github.com/zombiekit/brains/gen/zombiekit/brains/search/v1"
+	v1 "github.com/2bit-software/zombiekit/gen/zombiekit/brains/search/v1"
 	http "net/http"
 	strings "strings"
 )

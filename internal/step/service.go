@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/adrg/frontmatter"
-	zombiekit "github.com/zombiekit/brains"
-	"github.com/zombiekit/brains/internal/initiative"
-	"github.com/zombiekit/brains/internal/profile"
+	zombiekit "github.com/2bit-software/zombiekit"
+	"github.com/2bit-software/zombiekit/internal/initiative"
+	"github.com/2bit-software/zombiekit/internal/profile"
 )
 
 // Compile-time check that fs.FS is still used (for GetWorkflowSteps method).

@@ -7,10 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zombiekit/brains/internal/memory"
-	"github.com/zombiekit/brains/internal/mo"
-	"github.com/zombiekit/brains/internal/search"
-	memoryPlugin "github.com/zombiekit/brains/internal/webplugins/memory"
+	"github.com/2bit-software/zombiekit/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/mo"
+	"github.com/2bit-software/zombiekit/internal/search"
+	memoryPlugin "github.com/2bit-software/zombiekit/internal/webplugins/memory"
 )
 
 // mockStorage implements memory.Storage for testing.

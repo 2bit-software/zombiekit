@@ -14,7 +14,7 @@ Remove orphaned and deprecated MCP tools, consolidate workflow commands, and cle
 **Steps:**
 1. Edit `internal/config/tools.go`: Remove `"feature"` from KnownTools slice
 2. Edit `internal/mcp/server.go`:
-   - Remove import: `"github.com/zombiekit/brains/internal/mcp/tools/zombiekit"`
+   - Remove import: `"github.com/2bit-software/zombiekit/internal/mcp/tools/zombiekit"`
    - Remove field: `zombiekitTool *zombiekit.Tool`
    - Remove instantiation: `zombiekitTool := zombiekit.NewTool()`
    - Remove struct assignment: `zombiekitTool: zombiekitTool,`
@@ -32,7 +32,7 @@ Remove orphaned and deprecated MCP tools, consolidate workflow commands, and cle
 **Steps:**
 1. Edit `internal/config/tools.go`: Remove `"step"` from KnownTools slice
 2. Edit `internal/mcp/server.go`:
-   - Remove import: `steptool "github.com/zombiekit/brains/internal/mcp/tools/step"`
+   - Remove import: `steptool "github.com/2bit-software/zombiekit/internal/mcp/tools/step"`
    - Remove field: `stepTool *steptool.Tool`
    - Remove instantiation: `stepToolInst := steptool.NewTool()`
    - Remove struct assignment: `stepTool: stepToolInst,`

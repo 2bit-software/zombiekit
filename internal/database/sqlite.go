@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite" // SQLite driver
 
-	"github.com/zombiekit/brains/internal/config"
+	"github.com/2bit-software/zombiekit/internal/config"
 )
 
 // SQLiteDB wraps a sql.DB for SQLite connection management.

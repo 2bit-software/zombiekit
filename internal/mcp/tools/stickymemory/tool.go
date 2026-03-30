@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/zombiekit/brains/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/memory"
 )
 
 // Tool implements the stickymemory MCP tool.

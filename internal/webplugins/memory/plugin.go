@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/zombiekit/brains/internal/memory"
-	"github.com/zombiekit/brains/internal/search"
-	"github.com/zombiekit/brains/internal/web"
+	"github.com/2bit-software/zombiekit/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/search"
+	"github.com/2bit-software/zombiekit/internal/web"
 )
 
 //go:embed templates

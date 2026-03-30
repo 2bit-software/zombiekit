@@ -560,8 +560,8 @@ const file_zombiekit_brains_llm_v1_llm_proto_rawDesc = "" +
 	"\n" +
 	"LLMService\x12_\n" +
 	"\bComplete\x12(.zombiekit.brains.llm.v1.CompleteRequest\x1a).zombiekit.brains.llm.v1.CompleteResponse\x12s\n" +
-	"\x0eCompleteStream\x12..zombiekit.brains.llm.v1.CompleteStreamRequest\x1a/.zombiekit.brains.llm.v1.CompleteStreamResponse0\x01B\xe5\x01\n" +
-	"\x1bcom.zombiekit.brains.llm.v1B\bLlmProtoP\x01Z=github.com/zombiekit/brains/gen/zombiekit/brains/llm/v1;llmv1\xa2\x02\x03ZBL\xaa\x02\x17Zombiekit.Brains.Llm.V1\xca\x02\x17Zombiekit\\Brains\\Llm\\V1\xe2\x02#Zombiekit\\Brains\\Llm\\V1\\GPBMetadata\xea\x02\x1aZombiekit::Brains::Llm::V1b\x06proto3"
+	"\x0eCompleteStream\x12..zombiekit.brains.llm.v1.CompleteStreamRequest\x1a/.zombiekit.brains.llm.v1.CompleteStreamResponse0\x01B\xec\x01\n" +
+	"\x1bcom.zombiekit.brains.llm.v1B\bLlmProtoP\x01ZDgithub.com/2bit-software/zombiekit/gen/zombiekit/brains/llm/v1;llmv1\xa2\x02\x03ZBL\xaa\x02\x17Zombiekit.Brains.Llm.V1\xca\x02\x17Zombiekit\\Brains\\Llm\\V1\xe2\x02#Zombiekit\\Brains\\Llm\\V1\\GPBMetadata\xea\x02\x1aZombiekit::Brains::Llm::V1b\x06proto3"
 
 var (
 	file_zombiekit_brains_llm_v1_llm_proto_rawDescOnce sync.Once

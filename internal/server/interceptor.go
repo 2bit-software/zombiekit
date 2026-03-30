@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/zombiekit/brains/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/logging"
 )
 
 func NewLoggingInterceptor() connect.UnaryInterceptorFunc {

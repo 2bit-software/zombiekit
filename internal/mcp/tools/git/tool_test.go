@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	internalgit "github.com/zombiekit/brains/internal/git"
-	gittool "github.com/zombiekit/brains/internal/mcp/tools/git"
+	internalgit "github.com/2bit-software/zombiekit/internal/git"
+	gittool "github.com/2bit-software/zombiekit/internal/mcp/tools/git"
 )
 
 func initTestRepo(t *testing.T) string {

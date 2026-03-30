@@ -3,7 +3,7 @@ package startup
 import (
 	"testing"
 
-	"github.com/zombiekit/brains/internal/config"
+	"github.com/2bit-software/zombiekit/internal/config"
 )
 
 func TestGUIService_Name(t *testing.T) {

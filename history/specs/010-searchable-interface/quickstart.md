@@ -16,7 +16,7 @@ This guide shows how to make a web GUI plugin searchable by implementing the `Se
 ### 1. Import the search package
 
 ```go
-import "github.com/zombiekit/brains/internal/search"
+import "github.com/2bit-software/zombiekit/internal/search"
 ```
 
 ### 2. Add the Search method to your plugin

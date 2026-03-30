@@ -40,7 +40,7 @@ import (
     "net/http"
 
     "github.com/go-chi/chi/v5"
-    "github.com/zombiekit/brains/internal/web"
+    "github.com/2bit-software/zombiekit/internal/web"
 )
 
 //go:embed templates
@@ -137,7 +137,7 @@ func (p *Plugin) viewHandler(w http.ResponseWriter, r *http.Request) {
 ```go
 // internal/cli/serve.go (in setupWebServer function)
 import (
-    "github.com/zombiekit/brains/internal/webplugins/myplugin"
+    "github.com/2bit-software/zombiekit/internal/webplugins/myplugin"
 )
 
 func setupWebServer() (*web.Server, error) {

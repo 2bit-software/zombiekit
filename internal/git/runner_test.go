@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zombiekit/brains/internal/git"
+	"github.com/2bit-software/zombiekit/internal/git"
 )
 
 func initTestRepo(t *testing.T) string {

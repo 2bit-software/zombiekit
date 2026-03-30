@@ -19,7 +19,7 @@
 
 **Purpose**: Initialize Go module and project structure
 
-- [x] T001 Initialize Go module with `go mod init github.com/zombiekit/brains` in go.mod
+- [x] T001 Initialize Go module with `go mod init github.com/2bit-software/zombiekit` in go.mod
 - [x] T002 [P] Create .gitignore with Go-specific patterns
 - [x] T003 [P] Create configs/.golangci.yml with linter configuration
 - [x] T004 [P] Create migrations/.gitkeep placeholder

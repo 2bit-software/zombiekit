@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zombiekit/brains/internal/memory/sqlite"
+	"github.com/2bit-software/zombiekit/internal/memory/sqlite"
 )
 
 func setupTestServer(t *testing.T) *Server {

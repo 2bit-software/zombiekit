@@ -12,15 +12,15 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v2"
 
-	"github.com/zombiekit/brains/internal/config"
-	"github.com/zombiekit/brains/internal/database"
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/mcp"
-	"github.com/zombiekit/brains/internal/memory"
-	"github.com/zombiekit/brains/internal/memory/postgres"
-	"github.com/zombiekit/brains/internal/memory/sqlite"
-	"github.com/zombiekit/brains/internal/recall"
-	recallpostgres "github.com/zombiekit/brains/internal/recall/postgres"
+	"github.com/2bit-software/zombiekit/internal/config"
+	"github.com/2bit-software/zombiekit/internal/database"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/mcp"
+	"github.com/2bit-software/zombiekit/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/memory/postgres"
+	"github.com/2bit-software/zombiekit/internal/memory/sqlite"
+	"github.com/2bit-software/zombiekit/internal/recall"
+	recallpostgres "github.com/2bit-software/zombiekit/internal/recall/postgres"
 )
 
 // newServeCommand creates the serve command for starting the MCP server.

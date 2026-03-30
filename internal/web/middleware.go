@@ -6,7 +6,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/zombiekit/brains/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/logging"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code.

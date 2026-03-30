@@ -3,7 +3,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/zombiekit/brains/gen
+      value: github.com/2bit-software/zombiekit/gen
 plugins:
   - remote: buf.build/protocolbuffers/go
     out: gen

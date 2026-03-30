@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zombiekit/brains/internal/config"
-	"github.com/zombiekit/brains/internal/version"
+	"github.com/2bit-software/zombiekit/internal/config"
+	"github.com/2bit-software/zombiekit/internal/version"
 )
 
 // StatusInfo aggregates all system status information for display.

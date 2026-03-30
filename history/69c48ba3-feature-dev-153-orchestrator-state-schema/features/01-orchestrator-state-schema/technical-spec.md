@@ -2,7 +2,7 @@
 
 ## Package: `internal/state`
 
-Import path: `github.com/zombiekit/brains/internal/state`
+Import path: `github.com/2bit-software/zombiekit/internal/state`
 
 ---
 

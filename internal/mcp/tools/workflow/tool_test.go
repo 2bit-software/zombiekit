@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zombiekit/brains/internal/workflow"
+	"github.com/2bit-software/zombiekit/internal/workflow"
 )
 
 func setupEmbeddedFS(t *testing.T) func() {

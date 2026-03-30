@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/zombiekit/brains/internal/state"
+	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 // Service provides admin operations over orchestrator state.

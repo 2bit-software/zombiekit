@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v2"
 
-	"github.com/zombiekit/brains/internal/memory/sqlite"
+	"github.com/2bit-software/zombiekit/internal/memory/sqlite"
 )
 
 func setupMemoryTest(t *testing.T) (*sqlite.SQLiteStorage, string) {

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/shutdown"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/shutdown"
 )
 
 const (
