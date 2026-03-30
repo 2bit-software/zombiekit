@@ -13,7 +13,7 @@ import (
     "log/slog"
     "sync"
 
-    "github.com/zombiekit/brains/internal/github"
+    "github.com/2bit-software/zombiekit/internal/github"
 )
 
 type SessionResultKind string

@@ -145,9 +145,9 @@ import (
     "io/fs"
 
     "github.com/go-chi/chi/v5"
-    "github.com/zombiekit/brains/internal/recall"
-    "github.com/zombiekit/brains/internal/search"
-    "github.com/zombiekit/brains/internal/web"
+    "github.com/2bit-software/zombiekit/internal/recall"
+    "github.com/2bit-software/zombiekit/internal/search"
+    "github.com/2bit-software/zombiekit/internal/web"
 )
 
 //go:embed templates
@@ -209,8 +209,8 @@ import (
     "time"
 
     "github.com/go-chi/chi/v5"
-    "github.com/zombiekit/brains/internal/recall"
-    "github.com/zombiekit/brains/internal/web"
+    "github.com/2bit-software/zombiekit/internal/recall"
+    "github.com/2bit-software/zombiekit/internal/web"
 )
 
 const (

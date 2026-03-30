@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zombiekit/brains/internal/memory"
-	"github.com/zombiekit/brains/internal/mo"
+	"github.com/2bit-software/zombiekit/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/mo"
 )
 
 // PostgresStorage implements the memory.Storage interface using PostgreSQL.

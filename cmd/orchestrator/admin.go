@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v2"
-	"github.com/zombiekit/brains/internal/admin"
-	"github.com/zombiekit/brains/internal/state"
+	"github.com/2bit-software/zombiekit/internal/admin"
+	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 func openStore(c *cli.Context, mustExist bool) (*state.SQLiteStore, error) {

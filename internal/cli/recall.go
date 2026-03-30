@@ -15,10 +15,10 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/zombiekit/brains/internal/config"
-	"github.com/zombiekit/brains/internal/recall"
-	"github.com/zombiekit/brains/internal/recall/claude"
-	"github.com/zombiekit/brains/internal/recall/postgres"
+	"github.com/2bit-software/zombiekit/internal/config"
+	"github.com/2bit-software/zombiekit/internal/recall"
+	"github.com/2bit-software/zombiekit/internal/recall/claude"
+	"github.com/2bit-software/zombiekit/internal/recall/postgres"
 )
 
 // newRecallCommand creates the recall subcommand for semantic memory operations.

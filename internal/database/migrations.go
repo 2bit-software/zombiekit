@@ -13,7 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zombiekit/brains/internal/config"
+	"github.com/2bit-software/zombiekit/internal/config"
 )
 
 //go:embed migrations/postgres/*.sql

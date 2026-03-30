@@ -1,9 +1,9 @@
 package prompts
 
 import (
-	"github.com/zombiekit/brains/internal/profile"
-	"github.com/zombiekit/brains/internal/step"
-	"github.com/zombiekit/brains/internal/workflow"
+	"github.com/2bit-software/zombiekit/internal/profile"
+	"github.com/2bit-software/zombiekit/internal/step"
+	"github.com/2bit-software/zombiekit/internal/workflow"
 )
 
 // Workflow converters

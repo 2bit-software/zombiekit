@@ -7,7 +7,7 @@
 package searchv1
 
 import (
-	v1 "github.com/zombiekit/brains/gen/zombiekit/brains/common/v1"
+	v1 "github.com/2bit-software/zombiekit/gen/zombiekit/brains/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -643,8 +643,8 @@ const file_zombiekit_brains_search_v1_search_proto_rawDesc = "" +
 	"\rSearchService\x12_\n" +
 	"\x06Search\x12).zombiekit.brains.search.v1.SearchRequest\x1a*.zombiekit.brains.search.v1.SearchResponse\x12z\n" +
 	"\x0fGetConversation\x122.zombiekit.brains.search.v1.GetConversationRequest\x1a3.zombiekit.brains.search.v1.GetConversationResponse\x12\x80\x01\n" +
-	"\x11ListConversations\x124.zombiekit.brains.search.v1.ListConversationsRequest\x1a5.zombiekit.brains.search.v1.ListConversationsResponseB\xfd\x01\n" +
-	"\x1ecom.zombiekit.brains.search.v1B\vSearchProtoP\x01ZCgithub.com/zombiekit/brains/gen/zombiekit/brains/search/v1;searchv1\xa2\x02\x03ZBS\xaa\x02\x1aZombiekit.Brains.Search.V1\xca\x02\x1aZombiekit\\Brains\\Search\\V1\xe2\x02&Zombiekit\\Brains\\Search\\V1\\GPBMetadata\xea\x02\x1dZombiekit::Brains::Search::V1b\x06proto3"
+	"\x11ListConversations\x124.zombiekit.brains.search.v1.ListConversationsRequest\x1a5.zombiekit.brains.search.v1.ListConversationsResponseB\x84\x02\n" +
+	"\x1ecom.zombiekit.brains.search.v1B\vSearchProtoP\x01ZJgithub.com/2bit-software/zombiekit/gen/zombiekit/brains/search/v1;searchv1\xa2\x02\x03ZBS\xaa\x02\x1aZombiekit.Brains.Search.V1\xca\x02\x1aZombiekit\\Brains\\Search\\V1\xe2\x02&Zombiekit\\Brains\\Search\\V1\\GPBMetadata\xea\x02\x1dZombiekit::Brains::Search::V1b\x06proto3"
 
 var (
 	file_zombiekit_brains_search_v1_search_proto_rawDescOnce sync.Once

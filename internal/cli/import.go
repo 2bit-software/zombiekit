@@ -10,7 +10,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/zombiekit/brains/internal/memory/importer"
+	"github.com/2bit-software/zombiekit/internal/memory/importer"
 )
 
 // newImportCommand creates the import subcommand for the db command.

@@ -12,8 +12,8 @@ import (
 
 	_ "modernc.org/sqlite" // SQLite driver
 
-	"github.com/zombiekit/brains/internal/memory"
-	"github.com/zombiekit/brains/internal/mo"
+	"github.com/2bit-software/zombiekit/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/mo"
 )
 
 // SQLiteStorage implements the memory.Storage interface using SQLite.

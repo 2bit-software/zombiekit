@@ -36,8 +36,8 @@ Make MCP `initiative create` command idempotent to prevent data loss when the sa
 
 ### Test Results
 ```
-ok  github.com/zombiekit/brains/internal/initiative              0.178s
-ok  github.com/zombiekit/brains/internal/mcp/tools/initiative    1.434s
+ok  github.com/2bit-software/zombiekit/internal/initiative              0.178s
+ok  github.com/2bit-software/zombiekit/internal/mcp/tools/initiative    1.434s
 ```
 
 ### Notes

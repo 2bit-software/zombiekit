@@ -170,8 +170,8 @@ func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse,
 
 ```go
 import (
-    initiativeTool "github.com/zombiekit/brains/internal/mcp/tools/initiative"
-    stepTool "github.com/zombiekit/brains/internal/mcp/tools/step"
+    initiativeTool "github.com/2bit-software/zombiekit/internal/mcp/tools/initiative"
+    stepTool "github.com/2bit-software/zombiekit/internal/mcp/tools/step"
 )
 
 func (s *Server) registerTools() {

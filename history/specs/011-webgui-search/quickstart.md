@@ -39,7 +39,7 @@ To make your plugin searchable:
 
 1. Import the search package:
    ```go
-   import "github.com/zombiekit/brains/internal/search"
+   import "github.com/2bit-software/zombiekit/internal/search"
    ```
 
 2. Implement the `Searchable` interface on your plugin:

@@ -193,7 +193,7 @@ This service uses a **singleton logger pattern**. Understanding when to use it i
 Use the singleton logger via `logging.Logger()`:
 
 ```go
-import "github.com/zombiekit/brains/internal/logging"
+import "github.com/2bit-software/zombiekit/internal/logging"
 
 // Any code outside MCP tools
 logging.Logger().Info("message", slog.String("key", "value"))

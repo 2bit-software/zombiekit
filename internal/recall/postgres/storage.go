@@ -13,8 +13,8 @@ import (
 	"github.com/pgvector/pgvector-go"
 	pgxvec "github.com/pgvector/pgvector-go/pgx"
 
-	"github.com/zombiekit/brains/internal/config"
-	"github.com/zombiekit/brains/internal/recall"
+	"github.com/2bit-software/zombiekit/internal/config"
+	"github.com/2bit-software/zombiekit/internal/recall"
 )
 
 // Storage implements recall.Storage using PostgreSQL with pgvector.

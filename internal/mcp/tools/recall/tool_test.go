@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zombiekit/brains/internal/recall"
+	"github.com/2bit-software/zombiekit/internal/recall"
 )
 
 // mockStorage implements recall.Storage for testing.

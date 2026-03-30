@@ -3,7 +3,7 @@ package config
 import (
 	"strings"
 
-	"github.com/zombiekit/brains/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/logging"
 )
 
 // KnownTools is the list of known tool names for validation.

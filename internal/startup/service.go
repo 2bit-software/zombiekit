@@ -5,7 +5,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/zombiekit/brains/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/logging"
 )
 
 // Service represents a long-running service that can be started and stopped.

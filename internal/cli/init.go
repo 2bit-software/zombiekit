@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/urfave/cli/v2"
-	"github.com/zombiekit/brains"
-	"github.com/zombiekit/brains/internal/profile"
+	"github.com/2bit-software/zombiekit"
+	"github.com/2bit-software/zombiekit/internal/profile"
 )
 
 // copyResult tracks the outcome of file copying operations.

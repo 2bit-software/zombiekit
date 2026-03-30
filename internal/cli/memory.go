@@ -9,9 +9,9 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/zombiekit/brains/internal/config"
-	"github.com/zombiekit/brains/internal/memory"
-	"github.com/zombiekit/brains/internal/memory/sqlite"
+	"github.com/2bit-software/zombiekit/internal/config"
+	"github.com/2bit-software/zombiekit/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/memory/sqlite"
 )
 
 // newMemoryCommand creates the memory subcommand with all memory operations.

@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/zombiekit/brains/internal/profile"
-	"github.com/zombiekit/brains/internal/step"
-	"github.com/zombiekit/brains/internal/web"
-	"github.com/zombiekit/brains/internal/workflow"
+	"github.com/2bit-software/zombiekit/internal/profile"
+	"github.com/2bit-software/zombiekit/internal/step"
+	"github.com/2bit-software/zombiekit/internal/web"
+	"github.com/2bit-software/zombiekit/internal/workflow"
 )
 
 type handlers struct {

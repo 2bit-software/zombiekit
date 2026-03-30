@@ -842,8 +842,8 @@ const file_zombiekit_brains_profile_v1_profile_proto_rawDesc = "" +
 	"\n" +
 	"GetProfile\x12..zombiekit.brains.profile.v1.GetProfileRequest\x1a/.zombiekit.brains.profile.v1.GetProfileResponse\x12p\n" +
 	"\vSaveProfile\x12/.zombiekit.brains.profile.v1.SaveProfileRequest\x1a0.zombiekit.brains.profile.v1.SaveProfileResponse\x12\x96\x01\n" +
-	"\x17SubscribeProfileUpdates\x12;.zombiekit.brains.profile.v1.SubscribeProfileUpdatesRequest\x1a<.zombiekit.brains.profile.v1.SubscribeProfileUpdatesResponse0\x01B\x85\x02\n" +
-	"\x1fcom.zombiekit.brains.profile.v1B\fProfileProtoP\x01ZEgithub.com/zombiekit/brains/gen/zombiekit/brains/profile/v1;profilev1\xa2\x02\x03ZBP\xaa\x02\x1bZombiekit.Brains.Profile.V1\xca\x02\x1bZombiekit\\Brains\\Profile\\V1\xe2\x02'Zombiekit\\Brains\\Profile\\V1\\GPBMetadata\xea\x02\x1eZombiekit::Brains::Profile::V1b\x06proto3"
+	"\x17SubscribeProfileUpdates\x12;.zombiekit.brains.profile.v1.SubscribeProfileUpdatesRequest\x1a<.zombiekit.brains.profile.v1.SubscribeProfileUpdatesResponse0\x01B\x8c\x02\n" +
+	"\x1fcom.zombiekit.brains.profile.v1B\fProfileProtoP\x01ZLgithub.com/2bit-software/zombiekit/gen/zombiekit/brains/profile/v1;profilev1\xa2\x02\x03ZBP\xaa\x02\x1bZombiekit.Brains.Profile.V1\xca\x02\x1bZombiekit\\Brains\\Profile\\V1\xe2\x02'Zombiekit\\Brains\\Profile\\V1\\GPBMetadata\xea\x02\x1eZombiekit::Brains::Profile::V1b\x06proto3"
 
 var (
 	file_zombiekit_brains_profile_v1_profile_proto_rawDescOnce sync.Once

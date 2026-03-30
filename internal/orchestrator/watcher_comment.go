@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/zombiekit/brains/internal/github"
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/shutdown"
-	"github.com/zombiekit/brains/internal/state"
+	"github.com/2bit-software/zombiekit/internal/github"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/shutdown"
+	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 // NewCommentWatcher returns a ServiceFunc that polls tracked PRs for new

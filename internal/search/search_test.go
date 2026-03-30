@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zombiekit/brains/internal/search"
+	"github.com/2bit-software/zombiekit/internal/search"
 )
 
 // mockSearchable is a test implementation of the Searchable interface.

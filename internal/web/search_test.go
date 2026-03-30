@@ -10,9 +10,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/search"
-	"github.com/zombiekit/brains/internal/web"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/search"
+	"github.com/2bit-software/zombiekit/internal/web"
 )
 
 // mockSearchablePlugin is a test plugin that implements Searchable.

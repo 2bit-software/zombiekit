@@ -488,8 +488,8 @@ const file_zombiekit_brains_artifact_v1_artifact_proto_rawDesc = "" +
 	"\x0fArtifactService\x12r\n" +
 	"\vGetArtifact\x120.zombiekit.brains.artifact.v1.GetArtifactRequest\x1a1.zombiekit.brains.artifact.v1.GetArtifactResponse\x12u\n" +
 	"\fSaveArtifact\x121.zombiekit.brains.artifact.v1.SaveArtifactRequest\x1a2.zombiekit.brains.artifact.v1.SaveArtifactResponse\x12x\n" +
-	"\rListArtifacts\x122.zombiekit.brains.artifact.v1.ListArtifactsRequest\x1a3.zombiekit.brains.artifact.v1.ListArtifactsResponseB\x8d\x02\n" +
-	" com.zombiekit.brains.artifact.v1B\rArtifactProtoP\x01ZGgithub.com/zombiekit/brains/gen/zombiekit/brains/artifact/v1;artifactv1\xa2\x02\x03ZBA\xaa\x02\x1cZombiekit.Brains.Artifact.V1\xca\x02\x1cZombiekit\\Brains\\Artifact\\V1\xe2\x02(Zombiekit\\Brains\\Artifact\\V1\\GPBMetadata\xea\x02\x1fZombiekit::Brains::Artifact::V1b\x06proto3"
+	"\rListArtifacts\x122.zombiekit.brains.artifact.v1.ListArtifactsRequest\x1a3.zombiekit.brains.artifact.v1.ListArtifactsResponseB\x94\x02\n" +
+	" com.zombiekit.brains.artifact.v1B\rArtifactProtoP\x01ZNgithub.com/2bit-software/zombiekit/gen/zombiekit/brains/artifact/v1;artifactv1\xa2\x02\x03ZBA\xaa\x02\x1cZombiekit.Brains.Artifact.V1\xca\x02\x1cZombiekit\\Brains\\Artifact\\V1\xe2\x02(Zombiekit\\Brains\\Artifact\\V1\\GPBMetadata\xea\x02\x1fZombiekit::Brains::Artifact::V1b\x06proto3"
 
 var (
 	file_zombiekit_brains_artifact_v1_artifact_proto_rawDescOnce sync.Once

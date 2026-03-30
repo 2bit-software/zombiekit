@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/zombiekit/brains/internal/recall"
+	"github.com/2bit-software/zombiekit/internal/recall"
 )
 
 type OllamaEmbedderAdapter struct {

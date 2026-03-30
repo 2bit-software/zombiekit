@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zombiekit/brains/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/logging"
 )
 
 type completePayload struct {

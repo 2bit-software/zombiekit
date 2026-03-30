@@ -6,9 +6,9 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	artifactv1 "github.com/zombiekit/brains/gen/zombiekit/brains/artifact/v1"
-	"github.com/zombiekit/brains/gen/zombiekit/brains/artifact/v1/artifactv1connect"
-	"github.com/zombiekit/brains/internal/server/storage"
+	artifactv1 "github.com/2bit-software/zombiekit/gen/zombiekit/brains/artifact/v1"
+	"github.com/2bit-software/zombiekit/gen/zombiekit/brains/artifact/v1/artifactv1connect"
+	"github.com/2bit-software/zombiekit/internal/server/storage"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

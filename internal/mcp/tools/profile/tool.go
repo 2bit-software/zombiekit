@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zombiekit/brains/internal/profile"
+	"github.com/2bit-software/zombiekit/internal/profile"
 )
 
 // Tool implements MCP profile tools.

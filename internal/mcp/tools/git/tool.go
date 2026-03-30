@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	internalgit "github.com/zombiekit/brains/internal/git"
+	internalgit "github.com/2bit-software/zombiekit/internal/git"
 )
 
 // ToolDefinition represents an MCP tool definition.

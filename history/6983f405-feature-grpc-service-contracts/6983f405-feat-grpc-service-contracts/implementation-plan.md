@@ -64,7 +64,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/zombiekit/brains/gen
+      value: github.com/2bit-software/zombiekit/gen
 ```
 
 **Verification**: File exists and is valid YAML

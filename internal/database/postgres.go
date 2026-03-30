@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zombiekit/brains/internal/config"
+	"github.com/2bit-software/zombiekit/internal/config"
 )
 
 // PostgresPool wraps a pgxpool.Pool for connection management.

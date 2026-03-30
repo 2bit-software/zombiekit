@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	internalInit "github.com/zombiekit/brains/internal/initiative"
-	"github.com/zombiekit/brains/internal/step"
+	internalInit "github.com/2bit-software/zombiekit/internal/initiative"
+	"github.com/2bit-software/zombiekit/internal/step"
 )
 
 // Tool implements the MCP initiative tool for managing workflow initiatives.

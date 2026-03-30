@@ -3,7 +3,7 @@ package cli
 
 import (
 	"github.com/urfave/cli/v2"
-	"github.com/zombiekit/brains/internal/version"
+	"github.com/2bit-software/zombiekit/internal/version"
 )
 
 // NewApp creates the root CLI application with all commands and global flags.

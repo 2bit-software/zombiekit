@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "modernc.org/sqlite"
 
-	"github.com/zombiekit/brains/internal/memory/importer"
+	"github.com/2bit-software/zombiekit/internal/memory/importer"
 )
 
 // TestImportE2E_FullWorkflow tests the complete import workflow from SQLite to PostgreSQL.

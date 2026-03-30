@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/web"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/web"
 )
 
 func TestNewServer(t *testing.T) {

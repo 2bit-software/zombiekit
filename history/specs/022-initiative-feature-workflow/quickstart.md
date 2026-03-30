@@ -308,7 +308,7 @@ import (
     "os"
     "path/filepath"
 
-    "github.com/zombiekit/brains/internal/initiative"
+    "github.com/2bit-software/zombiekit/internal/initiative"
 )
 
 // executeFeatureStep handles the feature step workflow.

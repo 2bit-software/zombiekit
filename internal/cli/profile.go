@@ -8,7 +8,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/urfave/cli/v2"
-	"github.com/zombiekit/brains/internal/profile"
+	"github.com/2bit-software/zombiekit/internal/profile"
 )
 
 func newProfileCommand() *cli.Command {

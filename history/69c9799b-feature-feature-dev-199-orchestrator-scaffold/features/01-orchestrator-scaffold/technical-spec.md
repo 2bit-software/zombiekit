@@ -112,8 +112,8 @@ import (
     "log/slog"
     "time"
 
-    "github.com/zombiekit/brains/internal/logging"
-    "github.com/zombiekit/brains/internal/shutdown"
+    "github.com/2bit-software/zombiekit/internal/logging"
+    "github.com/2bit-software/zombiekit/internal/shutdown"
 )
 
 const (
@@ -148,10 +148,10 @@ import (
     "context"
     "fmt"
 
-    "github.com/zombiekit/brains/internal/callback"
-    "github.com/zombiekit/brains/internal/logging"
-    "github.com/zombiekit/brains/internal/shutdown"
-    "github.com/zombiekit/brains/internal/state"
+    "github.com/2bit-software/zombiekit/internal/callback"
+    "github.com/2bit-software/zombiekit/internal/logging"
+    "github.com/2bit-software/zombiekit/internal/shutdown"
+    "github.com/2bit-software/zombiekit/internal/state"
 )
 
 type Orchestrator struct {
@@ -204,10 +204,10 @@ import (
     "time"
 
     "github.com/urfave/cli/v2"
-    "github.com/zombiekit/brains/internal/logging"
-    "github.com/zombiekit/brains/internal/orchestrator"
-    "github.com/zombiekit/brains/internal/state"
-    "github.com/zombiekit/brains/internal/version"
+    "github.com/2bit-software/zombiekit/internal/logging"
+    "github.com/2bit-software/zombiekit/internal/orchestrator"
+    "github.com/2bit-software/zombiekit/internal/state"
+    "github.com/2bit-software/zombiekit/internal/version"
 )
 
 func main() {

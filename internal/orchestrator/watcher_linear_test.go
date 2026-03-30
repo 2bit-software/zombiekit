@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zombiekit/brains/internal/linear"
-	"github.com/zombiekit/brains/internal/state"
+	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 // --- Test doubles ---

@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/zombiekit/brains/internal/workflow"
+	"github.com/2bit-software/zombiekit/internal/workflow"
 )
 
 // Tool implements the MCP workflow-compose tool.

@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "modernc.org/sqlite" // SQLite driver
 
-	"github.com/zombiekit/brains/internal/memory"
+	"github.com/2bit-software/zombiekit/internal/memory"
 )
 
 // Importer handles migration from SQLite to PostgreSQL.

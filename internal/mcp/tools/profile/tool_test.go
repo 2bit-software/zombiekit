@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zombiekit/brains/internal/profile"
+	"github.com/2bit-software/zombiekit/internal/profile"
 )
 
 // Helper to set up embedded profiles for testing

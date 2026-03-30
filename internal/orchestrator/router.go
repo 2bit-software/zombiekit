@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/zombiekit/brains/internal/archival"
-	"github.com/zombiekit/brains/internal/callback"
-	"github.com/zombiekit/brains/internal/friction"
-	"github.com/zombiekit/brains/internal/github"
-	"github.com/zombiekit/brains/internal/linear"
-	"github.com/zombiekit/brains/internal/state"
+	"github.com/2bit-software/zombiekit/internal/archival"
+	"github.com/2bit-software/zombiekit/internal/callback"
+	"github.com/2bit-software/zombiekit/internal/friction"
+	"github.com/2bit-software/zombiekit/internal/github"
+	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 // Router consumes events from the callback server and dispatches them to

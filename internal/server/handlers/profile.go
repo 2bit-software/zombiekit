@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"connectrpc.com/connect"
-	profilev1 "github.com/zombiekit/brains/gen/zombiekit/brains/profile/v1"
-	"github.com/zombiekit/brains/gen/zombiekit/brains/profile/v1/profilev1connect"
-	"github.com/zombiekit/brains/internal/server/storage"
+	profilev1 "github.com/2bit-software/zombiekit/gen/zombiekit/brains/profile/v1"
+	"github.com/2bit-software/zombiekit/gen/zombiekit/brains/profile/v1/profilev1connect"
+	"github.com/2bit-software/zombiekit/internal/server/storage"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

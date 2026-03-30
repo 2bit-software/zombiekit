@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zombiekit/brains/internal/linear"
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/shutdown"
+	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/shutdown"
 )
 
 const (

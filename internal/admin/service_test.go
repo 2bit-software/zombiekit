@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zombiekit/brains/internal/state"
+	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 func setupTestService(t *testing.T) (*Service, *state.SQLiteStore) {

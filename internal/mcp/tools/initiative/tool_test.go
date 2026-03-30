@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	internalInit "github.com/zombiekit/brains/internal/initiative"
+	internalInit "github.com/2bit-software/zombiekit/internal/initiative"
 )
 
 // testEmbeddedFS returns a mock embedded filesystem with templates for testing.

@@ -9,8 +9,8 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/zombiekit/brains/internal/config"
-	"github.com/zombiekit/brains/internal/database"
+	"github.com/2bit-software/zombiekit/internal/config"
+	"github.com/2bit-software/zombiekit/internal/database"
 )
 
 // newDBCommand creates the db subcommand with migration operations.

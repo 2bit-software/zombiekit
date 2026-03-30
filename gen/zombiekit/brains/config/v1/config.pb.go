@@ -474,8 +474,8 @@ const file_zombiekit_brains_config_v1_config_proto_rawDesc = "" +
 	"\rConfigService\x12h\n" +
 	"\tGetConfig\x12,.zombiekit.brains.config.v1.GetConfigRequest\x1a-.zombiekit.brains.config.v1.GetConfigResponse\x12q\n" +
 	"\fUpdateConfig\x12/.zombiekit.brains.config.v1.UpdateConfigRequest\x1a0.zombiekit.brains.config.v1.UpdateConfigResponse\x12\x91\x01\n" +
-	"\x16SubscribeConfigUpdates\x129.zombiekit.brains.config.v1.SubscribeConfigUpdatesRequest\x1a:.zombiekit.brains.config.v1.SubscribeConfigUpdatesResponse0\x01B\xfd\x01\n" +
-	"\x1ecom.zombiekit.brains.config.v1B\vConfigProtoP\x01ZCgithub.com/zombiekit/brains/gen/zombiekit/brains/config/v1;configv1\xa2\x02\x03ZBC\xaa\x02\x1aZombiekit.Brains.Config.V1\xca\x02\x1aZombiekit\\Brains\\Config\\V1\xe2\x02&Zombiekit\\Brains\\Config\\V1\\GPBMetadata\xea\x02\x1dZombiekit::Brains::Config::V1b\x06proto3"
+	"\x16SubscribeConfigUpdates\x129.zombiekit.brains.config.v1.SubscribeConfigUpdatesRequest\x1a:.zombiekit.brains.config.v1.SubscribeConfigUpdatesResponse0\x01B\x84\x02\n" +
+	"\x1ecom.zombiekit.brains.config.v1B\vConfigProtoP\x01ZJgithub.com/2bit-software/zombiekit/gen/zombiekit/brains/config/v1;configv1\xa2\x02\x03ZBC\xaa\x02\x1aZombiekit.Brains.Config.V1\xca\x02\x1aZombiekit\\Brains\\Config\\V1\xe2\x02&Zombiekit\\Brains\\Config\\V1\\GPBMetadata\xea\x02\x1dZombiekit::Brains::Config::V1b\x06proto3"
 
 var (
 	file_zombiekit_brains_config_v1_config_proto_rawDescOnce sync.Once

@@ -5,14 +5,14 @@ import (
 	"log/slog"
 
 	"github.com/urfave/cli/v2"
-	"github.com/zombiekit/brains/internal/cmux"
-	"github.com/zombiekit/brains/internal/github"
-	"github.com/zombiekit/brains/internal/linear"
-	"github.com/zombiekit/brains/internal/logging"
-	"github.com/zombiekit/brains/internal/orchestrator"
-	"github.com/zombiekit/brains/internal/state"
-	"github.com/zombiekit/brains/internal/version"
-	"github.com/zombiekit/brains/internal/worktree"
+	"github.com/2bit-software/zombiekit/internal/cmux"
+	"github.com/2bit-software/zombiekit/internal/github"
+	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/orchestrator"
+	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/2bit-software/zombiekit/internal/version"
+	"github.com/2bit-software/zombiekit/internal/worktree"
 )
 
 func run(c *cli.Context) error {

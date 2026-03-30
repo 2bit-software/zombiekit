@@ -4,12 +4,12 @@ import (
 	"log"
 	"os"
 
-	zombiekit "github.com/zombiekit/brains"
-	internalcli "github.com/zombiekit/brains/internal/cli"
-	"github.com/zombiekit/brains/internal/profile"
-	"github.com/zombiekit/brains/internal/step"
-	"github.com/zombiekit/brains/internal/version"
-	"github.com/zombiekit/brains/internal/workflow"
+	zombiekit "github.com/2bit-software/zombiekit"
+	internalcli "github.com/2bit-software/zombiekit/internal/cli"
+	"github.com/2bit-software/zombiekit/internal/profile"
+	"github.com/2bit-software/zombiekit/internal/step"
+	"github.com/2bit-software/zombiekit/internal/version"
+	"github.com/2bit-software/zombiekit/internal/workflow"
 )
 
 func init() {

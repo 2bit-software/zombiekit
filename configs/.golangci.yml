@@ -20,7 +20,7 @@ linters-settings:
   gofmt:
     simplify: true
   goimports:
-    local-prefixes: github.com/zombiekit/brains
+    local-prefixes: github.com/2bit-software/zombiekit
   gosec:
     excludes:
       - G104  # Unhandled errors (too noisy)

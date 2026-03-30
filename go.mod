@@ -1,4 +1,4 @@
-module github.com/zombiekit/brains
+module github.com/2bit-software/zombiekit
 
 go 1.25.0
 
