@@ -51,6 +51,20 @@ tasks:
         echo ""
         ./bin/brains start
 
+  orch:
+    desc: Build and start the orchestrator daemon
+    dotenv: ['.env.orchestrator']
+    cmds:
+      - task --taskfile Taskfile.dev.yml build:orchestrator
+      - |
+        echo "Starting orchestrator..."
+        echo "  Callback: http://localhost:${ORCH_CALLBACK_PORT:-8666}"
+        echo "  Poll interval: ${ORCH_POLL_INTERVAL:-30s}"
+        echo "  Concurrency: ${ORCH_CONCURRENCY_LIMIT:-1}"
+        echo "  Log level: ${ORCH_LOG_LEVEL:-info}"
+        echo ""
+        ./bin/orchestrator run
+
   down:
     desc: Stop all services
     cmds:
