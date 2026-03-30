@@ -88,8 +88,12 @@ func findByTicketID(entries []workspaceEntry, ticketID string) *workspaceEntry {
 
 var validEnvKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// buildCommand constructs the shell command string with exported env vars.
-// Values are single-quote escaped. Empty env produces just the command.
+// buildCommand constructs a bash -c command string with exported env vars.
+//
+// The inner command uses bash single-quote escaping for values. The outer layer
+// uses double-quote escaping so the command string is valid in any outer shell
+// (bash, zsh, nushell, fish). The '\” single-quote idiom is bash-specific and
+// breaks in nushell; double-quote wrapping is portable.
 func buildCommand(env map[string]string, cmd string) (string, error) {
 	if len(env) == 0 {
 		return cmd, nil
@@ -106,5 +110,7 @@ func buildCommand(env map[string]string, cmd string) (string, error) {
 
 	sort.Strings(exports)
 
-	return "export " + strings.Join(exports, " ") + " && " + cmd, nil
+	inner := "export " + strings.Join(exports, " ") + " && " + cmd
+	outer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`).Replace(inner)
+	return `bash -c "` + outer + `"`, nil
 }

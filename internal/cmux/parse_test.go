@@ -147,7 +147,7 @@ func TestBuildCommand(t *testing.T) {
 	t.Run("single var", func(t *testing.T) {
 		cmd, err := buildCommand(map[string]string{"FOO": "bar"}, "claude")
 		require.NoError(t, err)
-		assert.Equal(t, "export FOO='bar' && claude", cmd)
+		assert.Equal(t, `bash -c "export FOO='bar' && claude"`, cmd)
 	})
 
 	t.Run("multiple vars sorted", func(t *testing.T) {
@@ -156,13 +156,15 @@ func TestBuildCommand(t *testing.T) {
 			"ALPHA": "a",
 		}, "claude")
 		require.NoError(t, err)
-		assert.Equal(t, "export ALPHA='a' ZEBRA='z' && claude", cmd)
+		assert.Equal(t, `bash -c "export ALPHA='a' ZEBRA='z' && claude"`, cmd)
 	})
 
 	t.Run("single quote in value", func(t *testing.T) {
 		cmd, err := buildCommand(map[string]string{"MSG": "it's"}, "claude")
 		require.NoError(t, err)
-		assert.Equal(t, "export MSG='it'\\''s' && claude", cmd)
+		// Inner: export MSG='it'\''s' && claude
+		// Outer escapes \ to \\
+		assert.Equal(t, `bash -c "export MSG='it'\\''s' && claude"`, cmd)
 	})
 
 	t.Run("special characters in value", func(t *testing.T) {
@@ -170,7 +172,13 @@ func TestBuildCommand(t *testing.T) {
 			"URL": "http://localhost:8666/DEV-186?foo=bar&baz=1",
 		}, "claude")
 		require.NoError(t, err)
-		assert.Equal(t, "export URL='http://localhost:8666/DEV-186?foo=bar&baz=1' && claude", cmd)
+		assert.Equal(t, `bash -c "export URL='http://localhost:8666/DEV-186?foo=bar&baz=1' && claude"`, cmd)
+	})
+
+	t.Run("dollar sign in value escaped", func(t *testing.T) {
+		cmd, err := buildCommand(map[string]string{"PATH_VAR": "/home/$USER/bin"}, "claude")
+		require.NoError(t, err)
+		assert.Equal(t, `bash -c "export PATH_VAR='/home/\$USER/bin' && claude"`, cmd)
 	})
 
 	t.Run("invalid key with spaces", func(t *testing.T) {
@@ -188,6 +196,6 @@ func TestBuildCommand(t *testing.T) {
 	t.Run("valid key with underscore and digits", func(t *testing.T) {
 		cmd, err := buildCommand(map[string]string{"_MY_VAR_2": "ok"}, "claude")
 		require.NoError(t, err)
-		assert.Contains(t, cmd, "_MY_VAR_2='ok'")
+		assert.Equal(t, `bash -c "export _MY_VAR_2='ok' && claude"`, cmd)
 	})
 }
