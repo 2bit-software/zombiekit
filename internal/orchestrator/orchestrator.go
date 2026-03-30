@@ -65,7 +65,7 @@ func (o *Orchestrator) Run() error {
 	)
 
 	linearPoller := o.NewLinearPoller()
-	prWatcher := NewWatcherStub(WatcherPRWatcher, o.cfg.PollInterval)
+	prWatcher := o.NewPRWatcher()
 	commentWatcher := o.NewCommentWatcher(dispatcher)
 
 	logger.Info("starting services")

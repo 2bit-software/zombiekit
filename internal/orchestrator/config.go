@@ -16,45 +16,47 @@ var validLogLevels = map[string]bool{
 
 // Config holds all orchestrator daemon settings.
 type Config struct {
-	LinearAPIKey     string
-	GitHubToken      string
-	CallbackPort     int
-	WorktreesRoot    string
-	DBPath           string
-	ConcurrencyLimit int
-	PollInterval     time.Duration
-	LogLevel         string
-	LogJSON          bool
-	ShutdownTimeout  time.Duration
-	ProjectID        string
-	RepoDir          string
-	GitHubOwner      string
-	GitHubRepo       string
-	BaseBranch       string
-	TrackingLabel    string
-	BotUsername      string
+	LinearAPIKey         string
+	GitHubToken          string
+	CallbackPort         int
+	WorktreesRoot        string
+	DBPath               string
+	ConcurrencyLimit     int
+	PollInterval         time.Duration
+	LogLevel             string
+	LogJSON              bool
+	ShutdownTimeout      time.Duration
+	ProjectID            string
+	RepoDir              string
+	GitHubOwner          string
+	GitHubRepo           string
+	BaseBranch           string
+	TrackingLabel        string
+	BotUsername          string
+	ClosedPRTicketStatus string
 }
 
 // NewConfig parses a urfave/cli context into a validated Config.
 func NewConfig(c *cli.Context) (*Config, error) {
 	cfg := &Config{
-		LinearAPIKey:     c.String("linear-api-key"),
-		GitHubToken:      c.String("github-token"),
-		CallbackPort:     c.Int("callback-port"),
-		WorktreesRoot:    c.String("worktrees-root"),
-		DBPath:           c.String("db-path"),
-		ConcurrencyLimit: c.Int("concurrency-limit"),
-		PollInterval:     c.Duration("poll-interval"),
-		LogLevel:         c.String("log-level"),
-		LogJSON:          c.Bool("log-json"),
-		ShutdownTimeout:  c.Duration("shutdown-timeout"),
-		ProjectID:        c.String("project-id"),
-		RepoDir:          c.String("repo-dir"),
-		GitHubOwner:      c.String("github-owner"),
-		GitHubRepo:       c.String("github-repo"),
-		BaseBranch:       c.String("base-branch"),
-		TrackingLabel:    c.String("tracking-label"),
-		BotUsername:      c.String("bot-username"),
+		LinearAPIKey:         c.String("linear-api-key"),
+		GitHubToken:          c.String("github-token"),
+		CallbackPort:         c.Int("callback-port"),
+		WorktreesRoot:        c.String("worktrees-root"),
+		DBPath:               c.String("db-path"),
+		ConcurrencyLimit:     c.Int("concurrency-limit"),
+		PollInterval:         c.Duration("poll-interval"),
+		LogLevel:             c.String("log-level"),
+		LogJSON:              c.Bool("log-json"),
+		ShutdownTimeout:      c.Duration("shutdown-timeout"),
+		ProjectID:            c.String("project-id"),
+		RepoDir:              c.String("repo-dir"),
+		GitHubOwner:          c.String("github-owner"),
+		GitHubRepo:           c.String("github-repo"),
+		BaseBranch:           c.String("base-branch"),
+		TrackingLabel:        c.String("tracking-label"),
+		BotUsername:          c.String("bot-username"),
+		ClosedPRTicketStatus: c.String("closed-pr-status"),
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
