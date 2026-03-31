@@ -11,6 +11,13 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
+### AutoMode Detection
+
+If the user input contains the keyword **automode** (case-insensitive), or if this workflow was invoked automatically by a step running in automode:
+
+- Load the automode profile via `mcp__zombiekit__profile-compose` with `profiles: ["automode"]` and follow its "At the Complete Step" instructions.
+- These instructions override the interactive confirmation prompts below (commit, Linear update, etc.).
+
 ## Complete Initiative Workflow
 
 Goal: Properly close out an initiative, archive artifacts, and clear active state.
