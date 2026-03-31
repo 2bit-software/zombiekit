@@ -8,7 +8,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/2bit-software/zombiekit/internal/cmux"
 	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/2bit-software/zombiekit/internal/worktree"
 )
 
 // Service provides admin operations over orchestrator state.
@@ -28,8 +30,38 @@ type JobFilter struct {
 
 // DeleteResult describes what happened when a job was deleted.
 type DeleteResult struct {
-	Job          state.Job
-	SlotReleased bool
+	Job             state.Job
+	SlotReleased    bool
+	SessionKilled   bool
+	SessionErr      error
+	WorktreeDeleted bool
+	WorktreeErr     error
+}
+
+// DeleteOption controls optional cleanup during job deletion.
+type DeleteOption func(*deleteConfig)
+
+type deleteConfig struct {
+	killSession    bool
+	sessionMgr     cmux.SessionManager
+	deleteWorktree bool
+	worktreeMgr    worktree.Manager
+}
+
+// WithSessionCleanup kills the cmux workspace for the job.
+func WithSessionCleanup(mgr cmux.SessionManager) DeleteOption {
+	return func(c *deleteConfig) {
+		c.killSession = true
+		c.sessionMgr = mgr
+	}
+}
+
+// WithWorktreeCleanup deletes the git worktree and branch for the job.
+func WithWorktreeCleanup(mgr worktree.Manager) DeleteOption {
+	return func(c *deleteConfig) {
+		c.deleteWorktree = true
+		c.worktreeMgr = mgr
+	}
 }
 
 // ListJobs returns jobs matching the filter. An empty Statuses slice returns all jobs.
@@ -54,18 +86,43 @@ func (s *Service) GetJob(ctx context.Context, ticketID string) (*state.Job, erro
 }
 
 // DeleteJob removes a job and releases its concurrency slot if the job has a project ID.
-// Returns state.ErrJobNotFound if the job does not exist.
-func (s *Service) DeleteJob(ctx context.Context, ticketID string) (*DeleteResult, error) {
+//
+// Optional cleanup (cmux session, git worktree) runs before the DB delete so
+// the user can retry on partial failure. Cleanup errors are captured in the
+// result, not returned — the job record is always deleted if reachable.
+func (s *Service) DeleteJob(ctx context.Context, ticketID string, opts ...DeleteOption) (*DeleteResult, error) {
 	job, err := s.GetJob(ctx, ticketID)
 	if err != nil {
 		return nil, err
+	}
+
+	var cfg deleteConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	result := &DeleteResult{Job: *job}
+
+	if cfg.killSession && job.CmuxSession != "" {
+		if err := cfg.sessionMgr.KillSession(ctx, ticketID); err != nil {
+			result.SessionErr = err
+		} else {
+			result.SessionKilled = true
+		}
+	}
+
+	if cfg.deleteWorktree && job.WorktreePath != "" {
+		if err := cfg.worktreeMgr.DeleteWorktree(ctx, job.WorktreePath); err != nil {
+			result.WorktreeErr = err
+		} else {
+			result.WorktreeDeleted = true
+		}
 	}
 
 	if err := s.store.DeleteJob(ctx, ticketID); err != nil {
 		return nil, err
 	}
 
-	result := &DeleteResult{Job: *job}
 	if job.ProjectID != "" {
 		if err := s.store.ReleaseSlot(ctx, job.ProjectID); err != nil {
 			return nil, fmt.Errorf("release slot for %s: %w", job.ProjectID, err)

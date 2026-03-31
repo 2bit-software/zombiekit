@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -10,6 +11,44 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/2bit-software/zombiekit/internal/state"
 )
+
+// stubSessionManager implements cmux.SessionManager for tests.
+type stubSessionManager struct {
+	killErr error
+	killed  []string
+}
+
+func (s *stubSessionManager) SpawnSession(_ context.Context, _, _, _ string, _ map[string]string, _ string) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
+func (s *stubSessionManager) KillSession(_ context.Context, ticketID string) error {
+	s.killed = append(s.killed, ticketID)
+	return s.killErr
+}
+
+func (s *stubSessionManager) SessionExists(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
+
+// stubWorktreeManager implements worktree.Manager for tests.
+type stubWorktreeManager struct {
+	deleteErr error
+	deleted   []string
+}
+
+func (s *stubWorktreeManager) CreateWorktree(_ context.Context, _, _ string) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
+func (s *stubWorktreeManager) DeleteWorktree(_ context.Context, path string) error {
+	s.deleted = append(s.deleted, path)
+	return s.deleteErr
+}
+
+func (s *stubWorktreeManager) CleanBranch(_ context.Context, _ string) error {
+	return nil
+}
 
 func setupTestService(t *testing.T) (*Service, *state.SQLiteStore) {
 	t.Helper()
@@ -219,4 +258,99 @@ func TestResetSlots_AlreadyZero(t *testing.T) {
 	n, err := svc.ResetSlots(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 0, n)
+}
+
+func TestDeleteJob_SessionCleanup(t *testing.T) {
+	svc, store := setupTestService(t)
+	ctx := context.Background()
+	createTestJob(t, store, "DEV-100", "proj-1")
+
+	sm := &stubSessionManager{}
+	result, err := svc.DeleteJob(ctx, "DEV-100", WithSessionCleanup(sm))
+	require.NoError(t, err)
+	assert.True(t, result.SessionKilled)
+	assert.Nil(t, result.SessionErr)
+	assert.Equal(t, []string{"DEV-100"}, sm.killed)
+}
+
+func TestDeleteJob_WorktreeCleanup(t *testing.T) {
+	svc, store := setupTestService(t)
+	ctx := context.Background()
+	createTestJob(t, store, "DEV-100", "proj-1")
+
+	wm := &stubWorktreeManager{}
+	result, err := svc.DeleteJob(ctx, "DEV-100", WithWorktreeCleanup(wm))
+	require.NoError(t, err)
+	assert.True(t, result.WorktreeDeleted)
+	assert.Nil(t, result.WorktreeErr)
+	assert.Equal(t, []string{"/tmp/wt/DEV-100"}, wm.deleted)
+}
+
+func TestDeleteJob_BothCleanups(t *testing.T) {
+	svc, store := setupTestService(t)
+	ctx := context.Background()
+	createTestJob(t, store, "DEV-100", "proj-1")
+
+	sm := &stubSessionManager{}
+	wm := &stubWorktreeManager{}
+	result, err := svc.DeleteJob(ctx, "DEV-100", WithSessionCleanup(sm), WithWorktreeCleanup(wm))
+	require.NoError(t, err)
+	assert.True(t, result.SessionKilled)
+	assert.True(t, result.WorktreeDeleted)
+	assert.Equal(t, []string{"DEV-100"}, sm.killed)
+	assert.Equal(t, []string{"/tmp/wt/DEV-100"}, wm.deleted)
+}
+
+func TestDeleteJob_SessionCleanupFailure(t *testing.T) {
+	svc, store := setupTestService(t)
+	ctx := context.Background()
+	createTestJob(t, store, "DEV-100", "proj-1")
+
+	sm := &stubSessionManager{killErr: errors.New("cmux not running")}
+	result, err := svc.DeleteJob(ctx, "DEV-100", WithSessionCleanup(sm))
+	require.NoError(t, err)
+	assert.False(t, result.SessionKilled)
+	assert.EqualError(t, result.SessionErr, "cmux not running")
+
+	// Job should still be deleted
+	job, err := store.GetJob(ctx, "DEV-100")
+	require.NoError(t, err)
+	assert.Nil(t, job)
+}
+
+func TestDeleteJob_WorktreeCleanupFailure(t *testing.T) {
+	svc, store := setupTestService(t)
+	ctx := context.Background()
+	createTestJob(t, store, "DEV-100", "proj-1")
+
+	wm := &stubWorktreeManager{deleteErr: errors.New("worktree not found")}
+	result, err := svc.DeleteJob(ctx, "DEV-100", WithWorktreeCleanup(wm))
+	require.NoError(t, err)
+	assert.False(t, result.WorktreeDeleted)
+	assert.EqualError(t, result.WorktreeErr, "worktree not found")
+
+	// Job should still be deleted
+	job, err := store.GetJob(ctx, "DEV-100")
+	require.NoError(t, err)
+	assert.Nil(t, job)
+}
+
+func TestDeleteJob_SkipsCleanupWhenFieldsEmpty(t *testing.T) {
+	svc, store := setupTestService(t)
+	ctx := context.Background()
+
+	// Create job with empty worktree path and cmux session
+	err := store.CreateJob(ctx, "DEV-100", "", "", "proj-1")
+	require.NoError(t, err)
+
+	sm := &stubSessionManager{}
+	wm := &stubWorktreeManager{}
+	result, err := svc.DeleteJob(ctx, "DEV-100", WithSessionCleanup(sm), WithWorktreeCleanup(wm))
+	require.NoError(t, err)
+
+	// Cleanup should be skipped — managers never called
+	assert.False(t, result.SessionKilled)
+	assert.False(t, result.WorktreeDeleted)
+	assert.Empty(t, sm.killed)
+	assert.Empty(t, wm.deleted)
 }
