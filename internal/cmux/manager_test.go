@@ -37,7 +37,7 @@ func TestNew_CmuxAvailable(t *testing.T) {
 	mgr, err := New()
 	require.NoError(t, err)
 	require.NotNil(t, mgr)
-	assert.Equal(t, "claude", mgr.command)
+	assert.Equal(t, "claude --permission-mode auto", mgr.command)
 }
 
 func TestNew_WithCommand(t *testing.T) {
@@ -54,7 +54,7 @@ func TestSpawnSession_Success(t *testing.T) {
 	mgr, err := New(WithCommand("echo test-session"))
 	require.NoError(t, err)
 
-	ref, err := mgr.SpawnSession(context.Background(), "TEST-SPAWN-001", "spawn test", "/tmp", nil)
+	ref, err := mgr.SpawnSession(context.Background(), "TEST-SPAWN-001", "spawn test", "/tmp", nil, "")
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(ref, "workspace:"))
 	cleanupWorkspace(t, ref)
@@ -70,11 +70,11 @@ func TestSpawnSession_Duplicate(t *testing.T) {
 	mgr, err := New(WithCommand("echo test-dup"))
 	require.NoError(t, err)
 
-	ref, err := mgr.SpawnSession(context.Background(), "TEST-DUP-001", "dup test", "/tmp", nil)
+	ref, err := mgr.SpawnSession(context.Background(), "TEST-DUP-001", "dup test", "/tmp", nil, "")
 	require.NoError(t, err)
 	cleanupWorkspace(t, ref)
 
-	_, err = mgr.SpawnSession(context.Background(), "TEST-DUP-001", "dup test again", "/tmp", nil)
+	_, err = mgr.SpawnSession(context.Background(), "TEST-DUP-001", "dup test again", "/tmp", nil, "")
 	assert.Error(t, err)
 	assert.True(t, IsSessionExists(err))
 }
@@ -88,7 +88,7 @@ func TestSpawnSession_WithEnv(t *testing.T) {
 	env := map[string]string{
 		"WORK_CALLBACK_URL": "http://localhost:8666/TEST-ENV-001",
 	}
-	ref, err := mgr.SpawnSession(context.Background(), "TEST-ENV-001", "env test", "/tmp", env)
+	ref, err := mgr.SpawnSession(context.Background(), "TEST-ENV-001", "env test", "/tmp", env, "")
 	require.NoError(t, err)
 	cleanupWorkspace(t, ref)
 }
@@ -99,7 +99,7 @@ func TestKillSession_Success(t *testing.T) {
 	mgr, err := New(WithCommand("echo test-kill"))
 	require.NoError(t, err)
 
-	ref, err := mgr.SpawnSession(context.Background(), "TEST-KILL-001", "kill test", "/tmp", nil)
+	ref, err := mgr.SpawnSession(context.Background(), "TEST-KILL-001", "kill test", "/tmp", nil, "")
 	require.NoError(t, err)
 	// Don't use cleanupWorkspace here -- we're testing KillSession itself
 	_ = ref
@@ -129,7 +129,7 @@ func TestSessionExists_Running(t *testing.T) {
 	mgr, err := New(WithCommand("echo test-exists"))
 	require.NoError(t, err)
 
-	ref, err := mgr.SpawnSession(context.Background(), "TEST-EXISTS-001", "exists test", "/tmp", nil)
+	ref, err := mgr.SpawnSession(context.Background(), "TEST-EXISTS-001", "exists test", "/tmp", nil, "")
 	require.NoError(t, err)
 	cleanupWorkspace(t, ref)
 
@@ -155,7 +155,7 @@ func TestSessionExists_StaleTracking(t *testing.T) {
 	mgr, err := New(WithCommand("echo test-stale"))
 	require.NoError(t, err)
 
-	ref, err := mgr.SpawnSession(context.Background(), "TEST-STALE-001", "stale test", "/tmp", nil)
+	ref, err := mgr.SpawnSession(context.Background(), "TEST-STALE-001", "stale test", "/tmp", nil, "")
 	require.NoError(t, err)
 
 	// Close workspace directly via cmux (simulating manual close)
@@ -168,7 +168,7 @@ func TestSessionExists_StaleTracking(t *testing.T) {
 	assert.False(t, exists)
 
 	// Internal tracking should be cleaned up -- SpawnSession should work now
-	ref2, err := mgr.SpawnSession(context.Background(), "TEST-STALE-001", "stale respawn", "/tmp", nil)
+	ref2, err := mgr.SpawnSession(context.Background(), "TEST-STALE-001", "stale respawn", "/tmp", nil, "")
 	require.NoError(t, err)
 	cleanupWorkspace(t, ref2)
 }
@@ -188,7 +188,7 @@ func TestConcurrent_DifferentTickets(t *testing.T) {
 		wg.Add(1)
 		go func(idx int, tid string) {
 			defer wg.Done()
-			refs[idx], errs[idx] = mgr.SpawnSession(context.Background(), tid, "concurrent "+tid, "/tmp", nil)
+			refs[idx], errs[idx] = mgr.SpawnSession(context.Background(), tid, "concurrent "+tid, "/tmp", nil, "")
 		}(i, ticket)
 	}
 	wg.Wait()
@@ -216,7 +216,7 @@ func TestConcurrent_SameTicket(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			refs[idx], errs[idx] = mgr.SpawnSession(context.Background(), ticketID, "race test", "/tmp", nil)
+			refs[idx], errs[idx] = mgr.SpawnSession(context.Background(), ticketID, "race test", "/tmp", nil, "")
 		}(i)
 	}
 	wg.Wait()

@@ -134,7 +134,7 @@ func (s *stubSession) getCalls() []string {
 	return out
 }
 
-func (s *stubSession) SpawnSession(_ context.Context, ticketID, _, _ string, _ map[string]string) (string, error) {
+func (s *stubSession) SpawnSession(_ context.Context, ticketID, _, _ string, _ map[string]string, _ string) (string, error) {
 	s.record("SpawnSession")
 	if s.spawnErr != nil {
 		return "", s.spawnErr
@@ -227,12 +227,12 @@ func (s *stubState) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error
 // capturingSessionManager captures SpawnSession args for assertion.
 type capturingSessionManager struct {
 	stubSession
-	onSpawn func(env map[string]string)
+	onSpawn func(env map[string]string, prompt string)
 }
 
-func (c *capturingSessionManager) SpawnSession(_ context.Context, ticketID, _, _ string, env map[string]string) (string, error) {
+func (c *capturingSessionManager) SpawnSession(_ context.Context, ticketID, _, _ string, env map[string]string, prompt string) (string, error) {
 	if c.onSpawn != nil {
-		c.onSpawn(env)
+		c.onSpawn(env, prompt)
 	}
 	return "session-" + ticketID, nil
 }
@@ -303,7 +303,7 @@ func TestLinearPoller_CallbackURL(t *testing.T) {
 	// Use a capturing session manager to verify the env map
 	var capturedEnv map[string]string
 	cs := &capturingSessionManager{
-		onSpawn: func(env map[string]string) {
+		onSpawn: func(env map[string]string, _ string) {
 			capturedEnv = env
 		},
 	}

@@ -88,15 +88,28 @@ func findByTicketID(entries []workspaceEntry, ticketID string) *workspaceEntry {
 
 var validEnvKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// buildCommand constructs a bash -c command string with exported env vars.
+// bashQuote wraps a string in bash single quotes, escaping embedded single
+// quotes with the '\'' idiom.
+func bashQuote(s string) string {
+	escaped := strings.ReplaceAll(s, `'`, `'\''`)
+	return `'` + escaped + `'`
+}
+
+// buildCommand constructs a bash -c command string with exported env vars and
+// an optional prompt appended as a positional argument.
 //
 // The inner command uses bash single-quote escaping for values. The outer layer
 // uses double-quote escaping so the command string is valid in any outer shell
-// (bash, zsh, nushell, fish). The '\” single-quote idiom is bash-specific and
+// (bash, zsh, nushell, fish). The '\" single-quote idiom is bash-specific and
 // breaks in nushell; double-quote wrapping is portable.
-func buildCommand(env map[string]string, cmd string) (string, error) {
+func buildCommand(env map[string]string, cmd, prompt string) (string, error) {
+	effective := cmd
+	if len(prompt) > 0 {
+		effective = cmd + ` ` + bashQuote(prompt)
+	}
+
 	if len(env) == 0 {
-		return cmd, nil
+		return effective, nil
 	}
 
 	var exports []string
@@ -104,13 +117,12 @@ func buildCommand(env map[string]string, cmd string) (string, error) {
 		if !validEnvKey.MatchString(k) {
 			return "", newErrorf(ErrInvalidEnvKey, nil, "invalid env key: %q", k)
 		}
-		escaped := "'" + strings.ReplaceAll(v, "'", "'\\''") + "'"
-		exports = append(exports, k+"="+escaped)
+		exports = append(exports, k+"="+bashQuote(v))
 	}
 
 	sort.Strings(exports)
 
-	inner := "export " + strings.Join(exports, " ") + " && " + cmd
+	inner := "export " + strings.Join(exports, " ") + " && " + effective
 	outer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`).Replace(inner)
 	return `bash -c "` + outer + `"`, nil
 }

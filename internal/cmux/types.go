@@ -7,7 +7,7 @@ import (
 
 // SessionManager manages cmux workspace lifecycles for agent sessions.
 type SessionManager interface {
-	SpawnSession(ctx context.Context, ticketID, title, worktreePath string, env map[string]string) (workspaceRef string, err error)
+	SpawnSession(ctx context.Context, ticketID, title, worktreePath string, env map[string]string, prompt string) (workspaceRef string, err error)
 	KillSession(ctx context.Context, ticketID string) error
 	SessionExists(ctx context.Context, ticketID string) (bool, error)
 }

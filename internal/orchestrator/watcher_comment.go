@@ -296,7 +296,8 @@ func (o *Orchestrator) processComment(
 
 	done := dispatcher.RegisterSession(job.TicketID, prNumber)
 
-	_, err := o.sessions.SpawnSession(ctx, job.TicketID, "comment-resolution", job.WorktreePath, nil)
+	prompt := "Read .ai/comment.json — this is a PR review comment to resolve. Address the feedback."
+	_, err := o.sessions.SpawnSession(ctx, job.TicketID, "comment-resolution", job.WorktreePath, nil, prompt)
 	if err != nil {
 		logger.Error("failed to spawn session", slog.String("err", err.Error()))
 		o.releaseSlotLogError(ctx, logger, "failed to release slot after spawn error")

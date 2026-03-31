@@ -120,7 +120,7 @@ func (s *commentStubSession) record(method string) {
 	s.calls = append(s.calls, method)
 }
 
-func (s *commentStubSession) SpawnSession(_ context.Context, ticketID, _, _ string, _ map[string]string) (string, error) {
+func (s *commentStubSession) SpawnSession(_ context.Context, ticketID, _, _ string, _ map[string]string, _ string) (string, error) {
 	s.record("SpawnSession")
 	if s.spawnErr != nil {
 		return "", s.spawnErr
@@ -392,7 +392,7 @@ type serialTestSession struct {
 	spawnMu     *sync.Mutex
 }
 
-func (s *serialTestSession) SpawnSession(_ context.Context, ticketID, _, _ string, _ map[string]string) (string, error) {
+func (s *serialTestSession) SpawnSession(_ context.Context, ticketID, _, _ string, _ map[string]string, _ string) (string, error) {
 	s.spawnMu.Lock()
 	*s.spawnCount++
 	s.spawnMu.Unlock()
