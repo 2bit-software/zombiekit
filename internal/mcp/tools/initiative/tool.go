@@ -51,7 +51,7 @@ func (t *Tool) Definition() ToolDefinition {
 				},
 				"dir": map[string]any{
 					"type":        "string",
-					"description": "Working directory containing the .brains folder",
+					"description": "Working directory for the project",
 				},
 				"type": map[string]any{
 					"type":        "string",
@@ -88,17 +88,7 @@ func (t *Tool) Execute(ctx context.Context, args map[string]any) (string, error)
 		return "", &ToolError{
 			Code:    "MISSING_REQUIRED_PARAM",
 			Message: "missing required parameter: dir",
-			Hint:    "Provide dir (working directory with .brains folder)",
-		}
-	}
-
-	// Check if directory is initialized
-	brainsDir := filepath.Join(dir, ".brains")
-	if _, err := os.Stat(brainsDir); os.IsNotExist(err) {
-		return "", &ToolError{
-			Code:    "NOT_INITIALIZED",
-			Message: "directory does not contain a .brains folder",
-			Hint:    "Run 'brains init' in the project directory first",
+			Hint:    "Provide dir (project working directory)",
 		}
 	}
 

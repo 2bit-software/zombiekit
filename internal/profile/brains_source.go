@@ -156,9 +156,9 @@ func (s *BrainsSource) CreateProfile(name string, global bool) (string, error) {
 		targetDir = filepath.Join(s.workingDir, ".brains", "profiles")
 	}
 
-	// Check if directory exists
-	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
-		return "", &NotInitializedError{Path: targetDir}
+	// Ensure directory exists
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return "", fmt.Errorf("creating profile directory %s: %w", targetDir, err)
 	}
 
 	// Check if profile already exists
