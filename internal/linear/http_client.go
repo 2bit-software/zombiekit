@@ -32,11 +32,6 @@ func WithEndpoint(url string) Option {
 	return func(c *httpClient) { c.endpoint = url }
 }
 
-// WithHTTPClient overrides the default HTTP client.
-func WithHTTPClient(hc *http.Client) Option {
-	return func(c *httpClient) { c.httpClient = hc }
-}
-
 type httpClient struct {
 	apiKey         string
 	endpoint       string
@@ -100,15 +95,11 @@ type graphqlError struct {
 	} `json:"extensions"`
 }
 
-func (c *httpClient) do(ctx context.Context, query string, variables map[string]any, target any) error {
-	body, err := json.Marshal(graphqlRequest{Query: query, Variables: variables})
-	if err != nil {
-		return NewNetworkError(fmt.Sprintf("linear: marshal request: %s", err), err)
-	}
-
+// sendRequest creates and executes an HTTP request, returning the response status, headers, and body.
+func (c *httpClient) sendRequest(ctx context.Context, body []byte) (int, http.Header, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return NewNetworkError(fmt.Sprintf("linear: create request: %s", err), err)
+		return 0, nil, nil, NewNetworkError(fmt.Sprintf("linear: create request: %s", err), err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", c.apiKey)
@@ -116,41 +107,54 @@ func (c *httpClient) do(ctx context.Context, query string, variables map[string]
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return NewNetworkError("linear: request cancelled", ctx.Err())
+			return 0, nil, nil, NewNetworkError("linear: request cancelled", ctx.Err())
 		}
-		return NewNetworkError(fmt.Sprintf("linear: request failed: %s", err), err)
+		return 0, nil, nil, NewNetworkError(fmt.Sprintf("linear: request failed: %s", err), err)
 	}
 	defer resp.Body.Close()
 
-	c.lastHeaders = resp.Header
-
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return NewNetworkError(fmt.Sprintf("linear: read response: %s", err), err)
+		return 0, nil, nil, NewNetworkError(fmt.Sprintf("linear: read response: %s", err), err)
 	}
 
-	if resp.StatusCode == http.StatusUnauthorized {
+	return resp.StatusCode, resp.Header, respBody, nil
+}
+
+// classifyHTTPStatus returns an error for non-OK HTTP status codes that don't need further parsing.
+func classifyHTTPStatus(statusCode int) error {
+	if statusCode == http.StatusUnauthorized {
 		return NewAPIError("linear: unauthorized (invalid or revoked API key)", nil)
 	}
+	if statusCode >= 500 {
+		return NewNetworkError(fmt.Sprintf("linear: server error (HTTP %d)", statusCode), nil)
+	}
+	return nil
+}
 
-	if resp.StatusCode >= 500 {
-		return NewNetworkError(fmt.Sprintf("linear: server error (HTTP %d)", resp.StatusCode), nil)
+func (c *httpClient) do(ctx context.Context, query string, variables map[string]any, target any) error {
+	body, err := json.Marshal(graphqlRequest{Query: query, Variables: variables})
+	if err != nil {
+		return NewNetworkError(fmt.Sprintf("linear: marshal request: %s", err), err)
+	}
+
+	statusCode, headers, respBody, err := c.sendRequest(ctx, body)
+	if err != nil {
+		return err
+	}
+	c.lastHeaders = headers
+
+	if err := classifyHTTPStatus(statusCode); err != nil {
+		return err
 	}
 
 	var gqlResp graphqlResponse
 	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
-		return NewNetworkError(fmt.Sprintf("linear: invalid JSON response (HTTP %d)", resp.StatusCode), err)
+		return NewNetworkError(fmt.Sprintf("linear: invalid JSON response (HTTP %d)", statusCode), err)
 	}
 
-	if len(gqlResp.Errors) > 0 {
-		first := gqlResp.Errors[0]
-		if first.Extensions.Code == "RATELIMITED" {
-			return NewRateLimitedError(fmt.Sprintf("linear: rate limited: %s", first.Message), nil)
-		}
-		if strings.Contains(strings.ToLower(first.Message), "not found") {
-			return NewNotFoundError(fmt.Sprintf("linear: %s", first.Message), nil)
-		}
-		return NewAPIError(fmt.Sprintf("linear: API error: %s", first.Message), nil)
+	if err := classifyGraphQLError(gqlResp); err != nil {
+		return err
 	}
 
 	if target != nil && gqlResp.Data != nil {
@@ -160,6 +164,22 @@ func (c *httpClient) do(ctx context.Context, query string, variables map[string]
 	}
 
 	return nil
+}
+
+// classifyGraphQLError inspects a GraphQL response for application-level errors
+// (rate limiting, not-found, generic API) and returns a typed error or nil.
+func classifyGraphQLError(gqlResp graphqlResponse) error {
+	if len(gqlResp.Errors) == 0 {
+		return nil
+	}
+	first := gqlResp.Errors[0]
+	if first.Extensions.Code == "RATELIMITED" {
+		return NewRateLimitedError(fmt.Sprintf("linear: rate limited: %s", first.Message), nil)
+	}
+	if strings.Contains(strings.ToLower(first.Message), "not found") {
+		return NewNotFoundError(fmt.Sprintf("linear: %s", first.Message), nil)
+	}
+	return NewAPIError(fmt.Sprintf("linear: API error: %s", first.Message), nil)
 }
 
 func (c *httpClient) doWithRetry(ctx context.Context, query string, variables map[string]any, target any) error {

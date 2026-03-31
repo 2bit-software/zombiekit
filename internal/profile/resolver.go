@@ -53,10 +53,20 @@ func NewResolver(workingDir string) (*Resolver, error) {
 // Returns directories in precedence order: local first, parent directories,
 // then global last.
 func (r *Resolver) FindProfileDirs() ([]ResolvedDirectory, error) {
+	dirs := r.walkAncestorProfileDirs()
+
+	if globalDir, ok := r.globalProfileDir(); ok {
+		dirs = append(dirs, globalDir)
+	}
+
+	return dirs, nil
+}
+
+// walkAncestorProfileDirs walks from the working directory up to the git root
+// (or filesystem root), collecting any .brains/profiles/ directories found.
+func (r *Resolver) walkAncestorProfileDirs() []ResolvedDirectory {
 	var dirs []ResolvedDirectory
 	gitRoot := r.findGitRoot()
-
-	// Walk from CWD up to git root (or filesystem root)
 	current := r.workingDir
 	isFirst := true
 
@@ -74,32 +84,31 @@ func (r *Resolver) FindProfileDirs() ([]ResolvedDirectory, error) {
 		}
 		isFirst = false
 
-		// Stop at git root
 		if gitRoot != "" && current == gitRoot {
 			break
 		}
 
-		// Move to parent
 		parent := filepath.Dir(current)
 		if parent == current {
-			// Reached filesystem root
 			break
 		}
 		current = parent
 	}
 
-	// Add global directory last (lowest precedence)
-	if r.homeDir != "" {
-		globalPath := filepath.Join(r.homeDir, ".brains", "profiles")
-		if info, err := os.Stat(globalPath); err == nil && info.IsDir() {
-			dirs = append(dirs, ResolvedDirectory{
-				Path:   globalPath,
-				Source: SourceGlobal,
-			})
-		}
-	}
+	return dirs
+}
 
-	return dirs, nil
+// globalProfileDir returns the global profiles directory if it exists.
+func (r *Resolver) globalProfileDir() (ResolvedDirectory, bool) {
+	if r.homeDir == "" {
+		return ResolvedDirectory{}, false
+	}
+	globalPath := filepath.Join(r.homeDir, ".brains", "profiles")
+	info, err := os.Stat(globalPath)
+	if err != nil || !info.IsDir() {
+		return ResolvedDirectory{}, false
+	}
+	return ResolvedDirectory{Path: globalPath, Source: SourceGlobal}, true
 }
 
 // findGitRoot finds the git repository root by looking for .git directory.

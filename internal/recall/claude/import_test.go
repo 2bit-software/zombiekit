@@ -44,10 +44,6 @@ func (m *mockEmbedder) Embed(ctx context.Context, text string, purpose recall.Em
 	return embedding, nil
 }
 
-func (m *mockEmbedder) CheckAvailable(ctx context.Context) error {
-	return nil
-}
-
 func setupTestHarness(t *testing.T) *testHarness {
 	t.Helper()
 

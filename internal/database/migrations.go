@@ -30,16 +30,56 @@ type MigrationStatus struct {
 	AppliedAt time.Time `json:"applied_at,omitempty"`
 }
 
-// RunPostgresMigrations runs all pending PostgreSQL migrations.
-func RunPostgresMigrations(ctx context.Context, pool *pgxpool.Pool) error {
-	entries, err := postgresMigrationsFS.ReadDir("migrations/postgres")
+// migrationRunner abstracts the database-specific operations needed to run migrations.
+type migrationRunner struct {
+	fs       embed.FS
+	dir      string
+	isApplied func(version int) (bool, error)
+	readSQL   func(filename string) ([]byte, error)
+	apply     func(version int, name string, sqlBytes []byte) error
+}
+
+// runPendingMigrations iterates over migration files and applies any that haven't been run.
+func runPendingMigrations(runner migrationRunner) error {
+	entries, err := runner.fs.ReadDir(runner.dir)
 	if err != nil {
 		return fmt.Errorf("read migrations directory: %w", err)
 	}
 
-	// Ensure migrations table exists (using schema_migrations from 001 migration)
-	// This bootstraps the migrations table if it doesn't exist
-	_, err = pool.Exec(ctx, `
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+
+		version, name := parseMigrationFilename(entry.Name())
+		if version == 0 {
+			continue
+		}
+
+		exists, err := runner.isApplied(version)
+		if err != nil {
+			return fmt.Errorf("check migration %d: %w", version, err)
+		}
+		if exists {
+			continue
+		}
+
+		sqlBytes, err := runner.readSQL(entry.Name())
+		if err != nil {
+			return fmt.Errorf("read migration %s: %w", entry.Name(), err)
+		}
+
+		if err := runner.apply(version, name, sqlBytes); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// RunPostgresMigrations runs all pending PostgreSQL migrations.
+func RunPostgresMigrations(ctx context.Context, pool *pgxpool.Pool) error {
+	_, err := pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version INTEGER PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,
@@ -50,73 +90,47 @@ func RunPostgresMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("create migrations table: %w", err)
 	}
 
-	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name(), ".sql") {
-			continue
-		}
+	return runPendingMigrations(migrationRunner{
+		fs:  postgresMigrationsFS,
+		dir: "migrations/postgres",
+		isApplied: func(version int) (bool, error) {
+			var exists bool
+			err := pool.QueryRow(ctx,
+				"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)",
+				version,
+			).Scan(&exists)
+			return exists, err
+		},
+		readSQL: func(filename string) ([]byte, error) {
+			return postgresMigrationsFS.ReadFile("migrations/postgres/" + filename)
+		},
+		apply: func(version int, name string, sqlBytes []byte) error {
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				return fmt.Errorf("begin transaction for migration %d: %w", version, err)
+			}
+			defer tx.Rollback(ctx)
 
-		version, name := parseMigrationFilename(entry.Name())
-		if version == 0 {
-			continue
-		}
-
-		// Check if already applied
-		var exists bool
-		err := pool.QueryRow(ctx,
-			"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)",
-			version,
-		).Scan(&exists)
-		if err != nil {
-			return fmt.Errorf("check migration %d: %w", version, err)
-		}
-
-		if exists {
-			continue
-		}
-
-		// Read and apply migration
-		sqlBytes, err := postgresMigrationsFS.ReadFile("migrations/postgres/" + entry.Name())
-		if err != nil {
-			return fmt.Errorf("read migration %s: %w", entry.Name(), err)
-		}
-
-		// Apply migration in a transaction
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			return fmt.Errorf("begin transaction for migration %d: %w", version, err)
-		}
-		defer tx.Rollback(ctx)
-
-		_, err = tx.Exec(ctx, string(sqlBytes))
-		if err != nil {
-			return fmt.Errorf("apply migration %d: %w", version, err)
-		}
-
-		_, err = tx.Exec(ctx,
-			"INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, NOW())",
-			version, name,
-		)
-		if err != nil {
-			return fmt.Errorf("record migration %d: %w", version, err)
-		}
-
-		if err := tx.Commit(ctx); err != nil {
-			return fmt.Errorf("commit migration %d: %w", version, err)
-		}
-	}
-
-	return nil
+			if _, err = tx.Exec(ctx, string(sqlBytes)); err != nil {
+				return fmt.Errorf("apply migration %d: %w", version, err)
+			}
+			if _, err = tx.Exec(ctx,
+				"INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, NOW())",
+				version, name,
+			); err != nil {
+				return fmt.Errorf("record migration %d: %w", version, err)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return fmt.Errorf("commit migration %d: %w", version, err)
+			}
+			return nil
+		},
+	})
 }
 
 // RunSQLiteMigrations runs all pending SQLite migrations.
 func RunSQLiteMigrations(ctx context.Context, db *sql.DB) error {
-	entries, err := sqliteMigrationsFS.ReadDir("migrations/sqlite")
-	if err != nil {
-		return fmt.Errorf("read migrations directory: %w", err)
-	}
-
-	// Ensure migrations table exists
-	_, err = db.ExecContext(ctx, `
+	_, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version INTEGER PRIMARY KEY,
 			name TEXT NOT NULL,
@@ -127,62 +141,42 @@ func RunSQLiteMigrations(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("create migrations table: %w", err)
 	}
 
-	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name(), ".sql") {
-			continue
-		}
+	return runPendingMigrations(migrationRunner{
+		fs:  sqliteMigrationsFS,
+		dir: "migrations/sqlite",
+		isApplied: func(version int) (bool, error) {
+			var exists bool
+			err := db.QueryRowContext(ctx,
+				"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = ?)",
+				version,
+			).Scan(&exists)
+			return exists, err
+		},
+		readSQL: func(filename string) ([]byte, error) {
+			return sqliteMigrationsFS.ReadFile("migrations/sqlite/" + filename)
+		},
+		apply: func(version int, name string, sqlBytes []byte) error {
+			tx, err := db.BeginTx(ctx, nil)
+			if err != nil {
+				return fmt.Errorf("begin transaction for migration %d: %w", version, err)
+			}
+			defer tx.Rollback()
 
-		version, name := parseMigrationFilename(entry.Name())
-		if version == 0 {
-			continue
-		}
-
-		// Check if already applied
-		var exists bool
-		err := db.QueryRowContext(ctx,
-			"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = ?)",
-			version,
-		).Scan(&exists)
-		if err != nil {
-			return fmt.Errorf("check migration %d: %w", version, err)
-		}
-
-		if exists {
-			continue
-		}
-
-		// Read and apply migration
-		sqlBytes, err := sqliteMigrationsFS.ReadFile("migrations/sqlite/" + entry.Name())
-		if err != nil {
-			return fmt.Errorf("read migration %s: %w", entry.Name(), err)
-		}
-
-		// Apply migration in a transaction
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("begin transaction for migration %d: %w", version, err)
-		}
-		defer tx.Rollback()
-
-		_, err = tx.ExecContext(ctx, string(sqlBytes))
-		if err != nil {
-			return fmt.Errorf("apply migration %d: %w", version, err)
-		}
-
-		_, err = tx.ExecContext(ctx,
-			"INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
-			version, name, time.Now(),
-		)
-		if err != nil {
-			return fmt.Errorf("record migration %d: %w", version, err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit migration %d: %w", version, err)
-		}
-	}
-
-	return nil
+			if _, err = tx.ExecContext(ctx, string(sqlBytes)); err != nil {
+				return fmt.Errorf("apply migration %d: %w", version, err)
+			}
+			if _, err = tx.ExecContext(ctx,
+				"INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+				version, name, time.Now(),
+			); err != nil {
+				return fmt.Errorf("record migration %d: %w", version, err)
+			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("commit migration %d: %w", version, err)
+			}
+			return nil
+		},
+	})
 }
 
 // GetPostgresMigrationStatus returns the status of all PostgreSQL migrations.

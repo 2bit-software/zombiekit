@@ -101,85 +101,93 @@ func (s *Service) ListSteps() ([]*Step, error) {
 // The response includes the directive, history folder, files to read, and composed prompt.
 // All steps now require an active initiative (created via the initiative tool).
 func (s *Service) Execute(stepName string, opts *ExecuteOptions) (*StepResponse, error) {
-	// Load the step definition first to validate the step name
 	step, err := s.loader.Get(stepName)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the initiative context - ALL steps require an active initiative
-	var historyFolder string
+	historyFolder, err := s.resolveInitiativeFolder(opts)
+	if err != nil {
+		return nil, err
+	}
 
-	// Check for initiative override
+	if err := s.checkPrerequisite(stepName, historyFolder); err != nil {
+		return nil, err
+	}
+
+	return s.buildResponse(step, historyFolder, stepName), nil
+}
+
+// buildResponse assembles a StepResponse from the resolved step, initiative
+// folder, and step name. It handles profile composition, workflow phases, and
+// next-task detection for the implement step.
+func (s *Service) buildResponse(step *Step, historyFolder, stepName string) *StepResponse {
+	resp := &StepResponse{
+		Directive:        step.Directive,
+		HistoryFolder:    historyFolder,
+		InitiativeFolder: historyFolder,
+		FilesToRead:      s.resolveFiles(step.Files, historyFolder),
+		ComposedPrompt:   s.composeProfiles(step.Profiles),
+		Prerequisites:    PrerequisiteInfo{Met: true},
+	}
+
+	if stepName == "feature" || stepName == "bug" || stepName == "refactor" {
+		resp.WorkflowPhases = buildWorkflowPhases()
+	}
+
+	if stepName == "implement" {
+		resp.NextTask = s.findNextTask(historyFolder)
+		if resp.NextTask == nil {
+			resp.Directive = "All tasks complete! Run 'initiative complete' to finish."
+		}
+	}
+
+	return resp
+}
+
+// composeProfiles runs profile composition and returns the composed content,
+// or an empty string if composition is unavailable or fails.
+func (s *Service) composeProfiles(profiles []string) string {
+	if s.profileSvc == nil || len(profiles) == 0 {
+		return ""
+	}
+	result, err := s.profileSvc.Compose(profiles)
+	if err != nil {
+		return ""
+	}
+	return result.Content
+}
+
+// resolveInitiativeFolder determines the initiative folder path from an explicit
+// override or the active initiative state. Returns the absolute path to the
+// history folder for the resolved initiative.
+func (s *Service) resolveInitiativeFolder(opts *ExecuteOptions) (string, error) {
 	if opts != nil && opts.Initiative != "" {
-		historyFolder = filepath.Join(s.workDir, "history", opts.Initiative)
-		if _, err := os.Stat(historyFolder); os.IsNotExist(err) {
-			return nil, &StepError{
+		folder := filepath.Join(s.workDir, "history", opts.Initiative)
+		if _, err := os.Stat(folder); os.IsNotExist(err) {
+			return "", &StepError{
 				Code:    "INITIATIVE_NOT_FOUND",
 				Message: fmt.Sprintf("initiative '%s' not found in history/", opts.Initiative),
 				Hint:    "Check the initiative path or use 'initiative create' to create a new one",
 			}
 		}
-	} else {
-		// Load active initiative from state
-		state, err := s.stateManager.Load()
-		if err != nil {
-			return nil, fmt.Errorf("loading initiative state: %w", err)
-		}
-
-		if state.IsEmpty() {
-			return nil, &StepError{
-				Code:    "NO_ACTIVE_INITIATIVE",
-				Message: "no active initiative",
-				Hint:    "Use 'initiative create' to start a new initiative first",
-			}
-		}
-
-		historyFolder = filepath.Join(s.workDir, state.Initiative)
+		return folder, nil
 	}
 
-	// Check prerequisites for steps that require them
-	if err := s.checkPrerequisite(stepName, historyFolder); err != nil {
-		return nil, err
+	state, err := s.stateManager.Load()
+	if err != nil {
+		return "", fmt.Errorf("loading initiative state: %w", err)
 	}
 
-	// Resolve file patterns to actual files
-	filesToRead := s.resolveFiles(step.Files, historyFolder)
-
-	// Compose profiles
-	composedPrompt := ""
-	if s.profileSvc != nil && len(step.Profiles) > 0 {
-		result, err := s.profileSvc.Compose(step.Profiles)
-		if err == nil {
-			composedPrompt = result.Content
+	if state.IsEmpty() {
+		return "", &StepError{
+			Code:    "NO_ACTIVE_INITIATIVE",
+			Message: "no active initiative",
+			Hint:    "Use 'initiative create' to start a new initiative first",
 		}
 	}
 
-	// Build the response
-	resp := &StepResponse{
-		Directive:        step.Directive,
-		HistoryFolder:    historyFolder,
-		InitiativeFolder: historyFolder,
-		FilesToRead:      filesToRead,
-		ComposedPrompt:   composedPrompt,
-		Prerequisites:    PrerequisiteInfo{Met: true},
-	}
-
-	// Add workflow phases for feature/bug/refactor steps
-	if stepName == "feature" || stepName == "bug" || stepName == "refactor" {
-		resp.WorkflowPhases = buildWorkflowPhases()
-	}
-
-	// For implement step, find the next incomplete task
-	if stepName == "implement" {
-		nextTask := s.findNextTask(historyFolder)
-		resp.NextTask = nextTask
-		if nextTask == nil {
-			resp.Directive = "All tasks complete! Run 'initiative complete' to finish."
-		}
-	}
-
-	return resp, nil
+	return filepath.Join(s.workDir, state.Initiative), nil
 }
 
 // resolveFiles expands glob patterns relative to the history folder.

@@ -2,16 +2,16 @@
 package logging
 
 import (
-	"context"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 )
 
-// ctxKey is the context key for storing loggers.
-type ctxKey struct{}
+// Factory creates configured loggers.
+type Factory interface {
+	CreateLogger(level string, jsonOutput bool) *slog.Logger
+}
 
 // logLevel holds the current log level, allowing runtime changes.
 var logLevel = new(slog.LevelVar)
@@ -82,68 +82,4 @@ func Logger() *slog.Logger {
 // Should only be called from tests.
 func ResetLogger() {
 	singleton = nil
-}
-
-// SetLevel changes the log level at runtime.
-func SetLevel(level string) {
-	switch strings.ToLower(level) {
-	case "debug":
-		logLevel.Set(slog.LevelDebug)
-	case "info":
-		logLevel.Set(slog.LevelInfo)
-	case "warn", "warning":
-		logLevel.Set(slog.LevelWarn)
-	case "error":
-		logLevel.Set(slog.LevelError)
-	}
-}
-
-// WithLogger adds a logger to the context.
-func WithLogger(ctx context.Context, logger *slog.Logger) context.Context {
-	return context.WithValue(ctx, ctxKey{}, logger)
-}
-
-// FromContext retrieves the logger from the context.
-// Returns the default logger if none is set.
-func FromContext(ctx context.Context) *slog.Logger {
-	if l, ok := ctx.Value(ctxKey{}).(*slog.Logger); ok {
-		return l
-	}
-	return slog.Default()
-}
-
-// LogToolCall logs an MCP tool invocation with timing and error information.
-func LogToolCall(toolName string, start time.Time, err error) {
-	duration := time.Since(start)
-
-	if err != nil {
-		Logger().Error("tool call failed",
-			slog.String("tool", toolName),
-			slog.Duration("duration", duration),
-			slog.String("error", err.Error()),
-		)
-	} else {
-		Logger().Info("tool call completed",
-			slog.String("tool", toolName),
-			slog.Duration("duration", duration),
-		)
-	}
-}
-
-// LogDBOperation logs a database operation with timing information.
-func LogDBOperation(op string, start time.Time, err error) {
-	duration := time.Since(start)
-
-	if err != nil {
-		Logger().Error("database operation failed",
-			slog.String("operation", op),
-			slog.Duration("duration", duration),
-			slog.String("error", err.Error()),
-		)
-	} else {
-		Logger().Debug("database operation completed",
-			slog.String("operation", op),
-			slog.Duration("duration", duration),
-		)
-	}
 }

@@ -37,24 +37,5 @@ func isValidNameChar(r rune) bool {
 		r == '.'
 }
 
-// MaxNameLength is the maximum allowed length for a memory name.
-const MaxNameLength = 255
-
 // MaxContentSize is the maximum allowed size for memory content in bytes.
 const MaxContentSize = 1048576 // 1MB
-
-// ValidateName checks if a name is valid after sanitization.
-func ValidateName(name string) error {
-	if len(name) > MaxNameLength {
-		return ErrNameTooLong
-	}
-	return nil
-}
-
-// ValidateContent checks if content is valid.
-func ValidateContent(content string) error {
-	if len(content) > MaxContentSize {
-		return ErrContentTooLarge
-	}
-	return nil
-}

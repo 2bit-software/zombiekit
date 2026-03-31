@@ -8,6 +8,25 @@ import (
 	"strings"
 )
 
+// ProfileComposer abstracts profile composition.
+// Dependents that only need to merge profiles into a single prompt
+// can accept this interface instead of the concrete Service.
+type ProfileComposer interface {
+	Compose(profileNames []string) (*CompositionResult, error)
+}
+
+// ProfileLister abstracts read-only enumeration and inspection of profiles.
+type ProfileLister interface {
+	List() ([]ListEntry, error)
+	Show(name string, raw bool) (*ShowResult, error)
+}
+
+// ProfileStore abstracts write operations for profiles.
+type ProfileStore interface {
+	Create(name string, global bool) (string, error)
+	Write(name, content, location string, overwrite bool) (string, error)
+}
+
 // Service provides the core profile operations.
 type Service struct {
 	source ProfileSourceInterface
@@ -134,34 +153,40 @@ func (s *Service) Show(name string, raw bool) (*ShowResult, error) {
 	if raw {
 		result.Content = string(profile.RawContent)
 	} else {
-		// Resolve inheritance if applicable
-		if profile.Inherits {
-			chain, err := s.source.GetInheritanceChain(name)
-			if err == nil && len(chain) > 1 {
-				var parts []string
-				var inherited []InheritedFrom
-				for _, p := range chain {
-					if p.Body != "" {
-						parts = append(parts, p.Body)
-					}
-					if p.Path != profile.Path {
-						inherited = append(inherited, InheritedFrom{
-							Source: p.Source,
-							Path:   p.Path,
-						})
-					}
-				}
-				result.Content = strings.Join(parts, "\n\n")
-				result.InheritedFrom = inherited
-			} else {
-				result.Content = profile.Body
-			}
-		} else {
-			result.Content = profile.Body
-		}
+		s.resolveContent(result, profile, name)
 	}
 
 	return result, nil
+}
+
+// resolveContent populates result.Content, applying inheritance when applicable.
+func (s *Service) resolveContent(result *ShowResult, p *Profile, name string) {
+	if !p.Inherits {
+		result.Content = p.Body
+		return
+	}
+
+	chain, err := s.source.GetInheritanceChain(name)
+	if err != nil || len(chain) <= 1 {
+		result.Content = p.Body
+		return
+	}
+
+	var parts []string
+	var inherited []InheritedFrom
+	for _, cp := range chain {
+		if cp.Body != "" {
+			parts = append(parts, cp.Body)
+		}
+		if cp.Path != p.Path {
+			inherited = append(inherited, InheritedFrom{
+				Source: cp.Source,
+				Path:   cp.Path,
+			})
+		}
+	}
+	result.Content = strings.Join(parts, "\n\n")
+	result.InheritedFrom = inherited
 }
 
 // Create creates a new profile with the given name.
@@ -188,46 +213,35 @@ func (s *Service) GetInitDir(global bool) (string, error) {
 // Creates the target directory if it doesn't exist.
 // Uses atomic write (temp file + rename) for safety.
 func (s *Service) Write(name, content, location string, overwrite bool) (string, error) {
-	// Normalize name
 	normalizedName := s.normalizeName(name)
 	if err := s.validateName(normalizedName); err != nil {
 		return "", err
 	}
 
-	// Validate location
 	if location != "local" && location != "global" {
 		return "", fmt.Errorf("invalid location %q: must be 'local' or 'global'", location)
 	}
 
-	// Get target directory
 	targetDir, err := s.source.GetInitDir(location == "global")
 	if err != nil {
 		return "", fmt.Errorf("getting target directory: %w", err)
 	}
-
-	// Create directory if it doesn't exist
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return "", fmt.Errorf("creating directory %s: %w", targetDir, err)
 	}
 
-	// Build file path
 	filePath := filepath.Join(targetDir, normalizedName+".md")
-
-	// Check if file exists
 	if !overwrite {
 		if _, err := os.Stat(filePath); err == nil {
 			return "", &ProfileExistsError{Name: normalizedName, Path: filePath}
 		}
 	}
 
-	// Write atomically: temp file + rename
 	tempFile := filePath + ".tmp"
 	if err := os.WriteFile(tempFile, []byte(content), 0o644); err != nil {
 		return "", fmt.Errorf("writing temp file: %w", err)
 	}
-
 	if err := os.Rename(tempFile, filePath); err != nil {
-		// Clean up temp file on rename failure
 		os.Remove(tempFile)
 		return "", fmt.Errorf("renaming temp file: %w", err)
 	}

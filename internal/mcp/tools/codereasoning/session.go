@@ -44,58 +44,62 @@ func (s *Session) AddThought(req ThoughtRequest) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.completed {
-		return ErrSessionCompleted
+	if err := s.validateRequest(req); err != nil {
+		return err
 	}
 
-	// Validate thought number
-	if req.IsRevision && req.BranchID != "" {
-		return ErrCannotReviseAndBranch
-	}
+	s.adjustTotalThoughts(req.TotalThoughts)
 
-	// Set total thoughts on first thought
-	if len(s.thoughts) == 0 && s.totalThoughts == 0 {
-		s.totalThoughts = req.TotalThoughts
-	}
-
-	// Update total thoughts if adjusted
-	if req.TotalThoughts > s.totalThoughts {
-		s.totalThoughts = req.TotalThoughts
-	}
-
-	// Handle branching
 	if req.BranchID != "" {
 		return s.addBranchThought(req)
 	}
-
-	// Handle revision
 	if req.IsRevision {
 		return s.addRevisionThought(req)
 	}
 
-	// Normal thought - must be sequential
+	return s.addSequentialThought(req)
+}
+
+// validateRequest checks preconditions that apply to all thought types.
+func (s *Session) validateRequest(req ThoughtRequest) error {
+	if s.completed {
+		return ErrSessionCompleted
+	}
+	if req.IsRevision && req.BranchID != "" {
+		return ErrCannotReviseAndBranch
+	}
+	return nil
+}
+
+// adjustTotalThoughts initializes or grows the expected thought count.
+func (s *Session) adjustTotalThoughts(total int) {
+	if len(s.thoughts) == 0 && s.totalThoughts == 0 {
+		s.totalThoughts = total
+	}
+	if total > s.totalThoughts {
+		s.totalThoughts = total
+	}
+}
+
+// addSequentialThought appends a normal (non-branch, non-revision) thought.
+func (s *Session) addSequentialThought(req ThoughtRequest) error {
 	expectedNumber := len(s.thoughts) + 1
 	if req.ThoughtNumber != expectedNumber {
 		return fmt.Errorf("%w: expected %d, got %d", ErrInvalidThoughtNumber, expectedNumber, req.ThoughtNumber)
 	}
-
 	if req.ThoughtNumber > s.totalThoughts {
 		return fmt.Errorf("%w: thought %d exceeds declared total %d", ErrExceedsTotalThoughts, req.ThoughtNumber, s.totalThoughts)
 	}
 
-	thought := Thought{
+	s.thoughts = append(s.thoughts, Thought{
 		Number:    req.ThoughtNumber,
 		Content:   req.Thought,
 		CreatedAt: time.Now(),
-	}
+	})
 
-	s.thoughts = append(s.thoughts, thought)
-
-	// Mark completed if this is the final thought
 	if !req.NextThoughtNeeded {
 		s.completed = true
 	}
-
 	return nil
 }
 

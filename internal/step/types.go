@@ -3,6 +3,19 @@
 // executed within an initiative context.
 package step
 
+// Executor abstracts step execution within an initiative context.
+// Dependents that trigger steps can accept this interface instead of
+// the concrete Service.
+type Executor interface {
+	Execute(stepName string, opts *ExecuteOptions) (*StepResponse, error)
+}
+
+// Resolver abstracts read-only access to step definitions.
+type Resolver interface {
+	GetStep(name string) (*Step, error)
+	ListSteps() ([]*Step, error)
+}
+
 // StepSource represents where a step definition was loaded from.
 type StepSource int
 

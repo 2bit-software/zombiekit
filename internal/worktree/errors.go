@@ -34,28 +34,30 @@ func newError(kind ErrorKind, msg string, cause error) *Error {
 	return &Error{Kind: kind, Message: msg, Err: cause}
 }
 
+// stderrClassifications maps git stderr substrings to ErrorKinds.
+// Order matters: first match wins (e.g. "already used by worktree" before "already exists").
+var stderrClassifications = []struct {
+	substr string
+	kind   ErrorKind
+}{
+	{"already used by worktree", ErrBranchExists},
+	{"a branch named", ErrBranchExists},
+	{"already exists", ErrPathExists},
+	{"is not a working tree", ErrNotAWorktree},
+	{"cannot remove a locked", ErrWorktreeLocked},
+	{"contains modified or untracked", ErrGitCommand},
+	{"cannot delete branch", ErrBranchInUse},
+	{"not found", ErrBranchNotFound},
+}
+
 // classifyError maps git stderr output to an ErrorKind.
 func classifyError(stderr string) ErrorKind {
-	switch {
-	case strings.Contains(stderr, "already used by worktree"):
-		return ErrBranchExists
-	case strings.Contains(stderr, "a branch named") && strings.Contains(stderr, "already exists"):
-		return ErrBranchExists
-	case strings.Contains(stderr, "already exists"):
-		return ErrPathExists
-	case strings.Contains(stderr, "is not a working tree"):
-		return ErrNotAWorktree
-	case strings.Contains(stderr, "cannot remove a locked"):
-		return ErrWorktreeLocked
-	case strings.Contains(stderr, "contains modified or untracked"):
-		return ErrGitCommand
-	case strings.Contains(stderr, "cannot delete branch"):
-		return ErrBranchInUse
-	case strings.Contains(stderr, "not found"):
-		return ErrBranchNotFound
-	default:
-		return ErrGitCommand
+	for _, c := range stderrClassifications {
+		if strings.Contains(stderr, c.substr) {
+			return c.kind
+		}
 	}
+	return ErrGitCommand
 }
 
 // IsPathExists reports whether err is a worktree path-already-exists error.
@@ -94,20 +96,9 @@ func IsBranchNotFound(err error) bool {
 	return errors.As(err, &e) && e.Kind == ErrBranchNotFound
 }
 
-// IsGitUnavailable reports whether err indicates git is not on PATH.
-func IsGitUnavailable(err error) bool {
-	var e *Error
-	return errors.As(err, &e) && e.Kind == ErrGitUnavailable
-}
-
 // IsNotARepository reports whether err indicates the dir is not a git repo.
 func IsNotARepository(err error) bool {
 	var e *Error
 	return errors.As(err, &e) && e.Kind == ErrNotARepository
 }
 
-// IsGitCommand reports whether err is an unclassified git failure.
-func IsGitCommand(err error) bool {
-	var e *Error
-	return errors.As(err, &e) && e.Kind == ErrGitCommand
-}

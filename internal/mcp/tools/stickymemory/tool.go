@@ -23,7 +23,7 @@ func NewTool(storage memory.Storage) *Tool {
 type ToolDefinition struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
+	InputSchema map[string]any `json:"inputSchema"`
 }
 
 // Definition returns the tool definition for MCP registration.
@@ -31,26 +31,26 @@ func (t *Tool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "stickymemory",
 		Description: "Persistent memory storage for saving and retrieving information between sessions",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"operation": map[string]interface{}{
+			"properties": map[string]any{
+				"operation": map[string]any{
 					"type":        "string",
 					"description": "The operation to perform",
 					"enum":        []string{"get", "set", "list", "delete", "search", "clear"},
 				},
-				"name": map[string]interface{}{
+				"name": map[string]any{
 					"type":        "string",
 					"description": "The name/key of the memory item",
 					"pattern":     "^[a-zA-Z0-9._-]+$",
 					"maxLength":   255,
 				},
-				"content": map[string]interface{}{
+				"content": map[string]any{
 					"type":        "string",
 					"description": "The content to store (required for 'set' operation)",
 					"maxLength":   1048576,
 				},
-				"limit": map[string]interface{}{
+				"limit": map[string]any{
 					"type":        "number",
 					"description": "Maximum number of items to return (for 'list' and 'search' operations)",
 					"minimum":     1,
@@ -64,7 +64,7 @@ func (t *Tool) Definition() ToolDefinition {
 }
 
 // Execute runs the tool with the given arguments.
-func (t *Tool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) Execute(ctx context.Context, args map[string]any) (string, error) {
 	operation, ok := args["operation"].(string)
 	if !ok {
 		return "", fmt.Errorf("operation is required")
@@ -88,7 +88,7 @@ func (t *Tool) Execute(ctx context.Context, args map[string]interface{}) (string
 	}
 }
 
-func (t *Tool) handleGet(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) handleGet(ctx context.Context, args map[string]any) (string, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
 		return "", fmt.Errorf("name is required for get operation")
@@ -104,7 +104,7 @@ func (t *Tool) handleGet(ctx context.Context, args map[string]interface{}) (stri
 	}
 
 	item := result.Value()
-	response := map[string]interface{}{
+	response := map[string]any{
 		"name":       item.Name,
 		"content":    item.Content,
 		"version":    item.Version,
@@ -115,7 +115,7 @@ func (t *Tool) handleGet(ctx context.Context, args map[string]interface{}) (stri
 	return toJSON(response)
 }
 
-func (t *Tool) handleSet(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) handleSet(ctx context.Context, args map[string]any) (string, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
 		return "", fmt.Errorf("name is required for set operation")
@@ -146,7 +146,7 @@ func (t *Tool) handleSet(ctx context.Context, args map[string]interface{}) (stri
 		version = result.Value().Version
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"success": true,
 		"name":    memory.SanitizeName(name),
 		"version": version,
@@ -155,7 +155,7 @@ func (t *Tool) handleSet(ctx context.Context, args map[string]interface{}) (stri
 	return toJSON(response)
 }
 
-func (t *Tool) handleList(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) handleList(ctx context.Context, args map[string]any) (string, error) {
 	limit := 10
 	if l, ok := args["limit"].(float64); ok && l > 0 {
 		limit = int(l)
@@ -174,9 +174,9 @@ func (t *Tool) handleList(ctx context.Context, args map[string]interface{}) (str
 		items = items[:limit]
 	}
 
-	response := make([]map[string]interface{}, len(items))
+	response := make([]map[string]any, len(items))
 	for i, item := range items {
-		response[i] = map[string]interface{}{
+		response[i] = map[string]any{
 			"name":       item.Name,
 			"size":       item.Size,
 			"version":    item.Version,
@@ -187,7 +187,7 @@ func (t *Tool) handleList(ctx context.Context, args map[string]interface{}) (str
 	return toJSON(response)
 }
 
-func (t *Tool) handleDelete(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) handleDelete(ctx context.Context, args map[string]any) (string, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
 		return "", fmt.Errorf("name is required for delete operation")
@@ -197,7 +197,7 @@ func (t *Tool) handleDelete(ctx context.Context, args map[string]interface{}) (s
 		return "", fmt.Errorf("failed to delete memory: %w", err)
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"success": true,
 		"name":    memory.SanitizeName(name),
 	}
@@ -205,7 +205,7 @@ func (t *Tool) handleDelete(ctx context.Context, args map[string]interface{}) (s
 	return toJSON(response)
 }
 
-func (t *Tool) handleSearch(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) handleSearch(ctx context.Context, args map[string]any) (string, error) {
 	query, ok := args["name"].(string)
 	if !ok || query == "" {
 		return "", fmt.Errorf("name (search query) is required for search operation")
@@ -229,9 +229,9 @@ func (t *Tool) handleSearch(ctx context.Context, args map[string]interface{}) (s
 		items = items[:limit]
 	}
 
-	response := make([]map[string]interface{}, len(items))
+	response := make([]map[string]any, len(items))
 	for i, item := range items {
-		response[i] = map[string]interface{}{
+		response[i] = map[string]any{
 			"name":       item.Name,
 			"size":       item.Size,
 			"version":    item.Version,
@@ -248,7 +248,7 @@ func (t *Tool) handleClear(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to clear memories: %w", err)
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"success": true,
 		"count":   count,
 	}
@@ -256,7 +256,7 @@ func (t *Tool) handleClear(ctx context.Context) (string, error) {
 	return toJSON(response)
 }
 
-func toJSON(v interface{}) (string, error) {
+func toJSON(v any) (string, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal response: %w", err)

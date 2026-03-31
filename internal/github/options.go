@@ -28,10 +28,3 @@ func WithRetryTiming(base, maxJitter time.Duration) Option {
 		c.retryMaxJitter = maxJitter
 	}
 }
-
-// WithRateLimitThreshold sets the low-water mark for pre-emptive rate limit
-// delay. When X-RateLimit-Remaining drops below this value, the client sleeps
-// before the next request. Default: 10.
-func WithRateLimitThreshold(n int) Option {
-	return func(c *httpClient) { c.rateLimitThreshold = n }
-}

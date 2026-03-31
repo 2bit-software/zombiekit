@@ -10,8 +10,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/2bit-software/zombiekit/gen/zombiekit/brains/artifact/v1/artifactv1connect"
+"github.com/2bit-software/zombiekit/gen/zombiekit/brains/artifact/v1/artifactv1connect"
 	"github.com/2bit-software/zombiekit/gen/zombiekit/brains/config/v1/configv1connect"
 	"github.com/2bit-software/zombiekit/gen/zombiekit/brains/llm/v1/llmv1connect"
 	"github.com/2bit-software/zombiekit/gen/zombiekit/brains/profile/v1/profilev1connect"
@@ -22,7 +21,6 @@ import (
 	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/2bit-software/zombiekit/internal/recall"
 	recallpg "github.com/2bit-software/zombiekit/internal/recall/postgres"
-	"github.com/2bit-software/zombiekit/internal/server/handlers"
 	"github.com/2bit-software/zombiekit/internal/server/storage"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -89,13 +87,6 @@ func (s *Server) initDB(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) DB() *pgxpool.Pool {
-	if s.db == nil {
-		return nil
-	}
-	return s.db.Pool()
-}
-
 func (s *Server) Run(ctx context.Context) error {
 	if err := s.initDB(ctx); err != nil {
 		return err
@@ -106,21 +97,25 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 	}()
 
+	if err := s.buildHTTPServer(); err != nil {
+		return err
+	}
+
+	return s.serveAndWait(ctx)
+}
+
+// buildHTTPServer creates the HTTP server with all routes, interceptors, and
+// optional TLS configuration.
+func (s *Server) buildHTTPServer() error {
 	mux := http.NewServeMux()
 
-	interceptors := connect.WithInterceptors(
-		NewLoggingInterceptor(),
-	)
-
+	interceptors := connect.WithInterceptors(NewLoggingInterceptor())
 	s.registerServices(mux, interceptors)
-
 	mux.HandleFunc("/healthz", s.healthHandler)
-
-	handler := h2c.NewHandler(mux, &http2.Server{})
 
 	s.httpServer = &http.Server{
 		Addr:              s.cfg.ListenAddr,
-		Handler:           handler,
+		Handler:           h2c.NewHandler(mux, &http2.Server{}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -136,6 +131,12 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+// serveAndWait starts the listener, launches the serve goroutine, and blocks
+// until the context is cancelled or the server returns an error.
+func (s *Server) serveAndWait(ctx context.Context) error {
 	ln, err := net.Listen("tcp", s.cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
@@ -178,38 +179,38 @@ func (s *Server) registerServices(mux *http.ServeMux, opts ...connect.HandlerOpt
 	if s.db != nil {
 		profileStorage = storage.NewPostgresProfileStorage(s.db.Pool())
 	}
-	path, handler := profilev1connect.NewProfileServiceHandler(handlers.NewProfileService(profileStorage), opts...)
+	path, handler := profilev1connect.NewProfileServiceHandler(NewProfileService(profileStorage), opts...)
 	mux.Handle(path, handler)
 
 	var initStorage storage.InitiativeStorage
 	if s.db != nil {
 		initStorage = storage.NewPostgresInitiativeStorage(s.db.Pool())
 	}
-	path, handler = workflowv1connect.NewWorkflowServiceHandler(handlers.NewWorkflowService(initStorage), opts...)
+	path, handler = workflowv1connect.NewWorkflowServiceHandler(NewWorkflowService(initStorage), opts...)
 	mux.Handle(path, handler)
 
-	var embedder handlers.Embedder
+	var embedder Embedder
 	if s.embedder != nil {
 		embedder = s.embedder
 	}
-	path, handler = searchv1connect.NewSearchServiceHandler(handlers.NewSearchService(s.recallStore, embedder), opts...)
+	path, handler = searchv1connect.NewSearchServiceHandler(NewSearchService(s.recallStore, embedder), opts...)
 	mux.Handle(path, handler)
 
 	var cfgStorage storage.ConfigStorage
 	if s.db != nil {
 		cfgStorage = storage.NewPostgresConfigStorage(s.db.Pool())
 	}
-	path, handler = configv1connect.NewConfigServiceHandler(handlers.NewConfigService(cfgStorage), opts...)
+	path, handler = configv1connect.NewConfigServiceHandler(NewConfigService(cfgStorage), opts...)
 	mux.Handle(path, handler)
 
-	path, handler = llmv1connect.NewLLMServiceHandler(&handlers.LLMService{}, opts...)
+	path, handler = llmv1connect.NewLLMServiceHandler(&LLMService{}, opts...)
 	mux.Handle(path, handler)
 
 	var artStorage storage.ArtifactStorage
 	if s.db != nil {
 		artStorage = storage.NewPostgresArtifactStorage(s.db.Pool())
 	}
-	path, handler = artifactv1connect.NewArtifactServiceHandler(handlers.NewArtifactService(artStorage), opts...)
+	path, handler = artifactv1connect.NewArtifactServiceHandler(NewArtifactService(artStorage), opts...)
 	mux.Handle(path, handler)
 }
 

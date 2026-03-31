@@ -18,11 +18,6 @@ const (
 	TypeRefactor InitiativeType = "refactor"
 )
 
-// ValidTypes returns all valid initiative types.
-func ValidTypes() []InitiativeType {
-	return []InitiativeType{TypeFeature, TypeBug, TypeRefactor}
-}
-
 // IsValid returns true if the initiative type is valid.
 func (t InitiativeType) IsValid() bool {
 	switch t {

@@ -113,6 +113,18 @@ func mapError(err error) error {
 		return NewNetworkError("github: "+err.Error(), err)
 	}
 
+	if mapped := mapRateLimitErrors(err); mapped != nil {
+		return mapped
+	}
+
+	if mapped := mapErrorResponse(err); mapped != nil {
+		return mapped
+	}
+
+	return NewNetworkError(fmt.Sprintf("github: %s", err.Error()), err)
+}
+
+func mapRateLimitErrors(err error) error {
 	var rateLimitErr *gh.RateLimitError
 	if errors.As(err, &rateLimitErr) {
 		return NewRateLimitedError(
@@ -130,21 +142,27 @@ func mapError(err error) error {
 		return NewRateLimitedError(msg, err)
 	}
 
+	return nil
+}
+
+func mapErrorResponse(err error) error {
 	var ghErr *gh.ErrorResponse
-	if errors.As(err, &ghErr) {
-		switch {
-		case ghErr.Response.StatusCode == http.StatusNotFound:
-			return NewNotFoundError(fmt.Sprintf("github: %s", ghErr.Message), err)
-		case ghErr.Response.StatusCode == http.StatusTooManyRequests:
-			return NewRateLimitedError(fmt.Sprintf("github: rate limited: %s", ghErr.Message), err)
-		case ghErr.Response.StatusCode == http.StatusForbidden && ghErr.Response.Header.Get("Retry-After") != "":
-			return NewRateLimitedError(fmt.Sprintf("github: rate limited: %s", ghErr.Message), err)
-		default:
-			return NewAPIError(fmt.Sprintf("github: %s (HTTP %d)", ghErr.Message, ghErr.Response.StatusCode), err)
-		}
+	if !errors.As(err, &ghErr) {
+		return nil
 	}
 
-	return NewNetworkError(fmt.Sprintf("github: %s", err.Error()), err)
+	code := ghErr.Response.StatusCode
+
+	switch {
+	case code == http.StatusNotFound:
+		return NewNotFoundError(fmt.Sprintf("github: %s", ghErr.Message), err)
+	case code == http.StatusTooManyRequests:
+		return NewRateLimitedError(fmt.Sprintf("github: rate limited: %s", ghErr.Message), err)
+	case code == http.StatusForbidden && ghErr.Response.Header.Get("Retry-After") != "":
+		return NewRateLimitedError(fmt.Sprintf("github: rate limited: %s", ghErr.Message), err)
+	default:
+		return NewAPIError(fmt.Sprintf("github: %s (HTTP %d)", ghErr.Message, code), err)
+	}
 }
 
 func (c *httpClient) doWithRetry(ctx context.Context, op func() error) error {

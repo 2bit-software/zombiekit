@@ -28,57 +28,13 @@ func copyEmbeddedFiles(fsys fs.FS, srcPrefix, destDir string, force bool) copyRe
 	err := fs.WalkDir(fsys, srcPrefix, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			result.errors = append(result.errors, fmt.Errorf("walking %s: %w", path, err))
-			return nil // continue walking
+			return nil
 		}
-
-		// Skip directories
 		if d.IsDir() {
 			return nil
 		}
 
-		// Get the filename (strip the prefix)
-		relPath, err := filepath.Rel(srcPrefix, path)
-		if err != nil {
-			result.errors = append(result.errors, fmt.Errorf("getting relative path for %s: %w", path, err))
-			return nil
-		}
-
-		destPath := filepath.Join(destDir, relPath)
-
-		// Check if file exists
-		exists := false
-		if _, err := os.Stat(destPath); err == nil {
-			exists = true
-		}
-
-		// Handle existing files
-		if exists && !force {
-			fmt.Printf("  Skipped %s (exists)\n", relPath)
-			result.skipped++
-			return nil
-		}
-
-		// Read from embedded filesystem
-		content, err := fs.ReadFile(fsys, path)
-		if err != nil {
-			result.errors = append(result.errors, fmt.Errorf("reading %s: %w", path, err))
-			return nil
-		}
-
-		// Write to destination
-		if err := os.WriteFile(destPath, content, 0o644); err != nil {
-			result.errors = append(result.errors, fmt.Errorf("writing %s: %w", destPath, err))
-			return nil
-		}
-
-		if exists && force {
-			fmt.Printf("  Overwrote %s\n", relPath)
-			result.overwritten++
-		} else {
-			fmt.Printf("  Copied %s\n", relPath)
-			result.copied++
-		}
-
+		copyOneEmbeddedFile(fsys, path, srcPrefix, destDir, force, &result)
 		return nil
 	})
 
@@ -87,6 +43,51 @@ func copyEmbeddedFiles(fsys fs.FS, srcPrefix, destDir string, force bool) copyRe
 	}
 
 	return result
+}
+
+// copyOneEmbeddedFile copies a single file from the embedded FS to destDir,
+// updating result counters. Errors are appended to result.errors rather than
+// returned so the walk can continue.
+func copyOneEmbeddedFile(fsys fs.FS, path, srcPrefix, destDir string, force bool, result *copyResult) {
+	relPath, err := filepath.Rel(srcPrefix, path)
+	if err != nil {
+		result.errors = append(result.errors, fmt.Errorf("getting relative path for %s: %w", path, err))
+		return
+	}
+
+	destPath := filepath.Join(destDir, relPath)
+	exists := fileExists(destPath)
+
+	if exists && !force {
+		fmt.Printf("  Skipped %s (exists)\n", relPath)
+		result.skipped++
+		return
+	}
+
+	content, err := fs.ReadFile(fsys, path)
+	if err != nil {
+		result.errors = append(result.errors, fmt.Errorf("reading %s: %w", path, err))
+		return
+	}
+
+	if err := os.WriteFile(destPath, content, 0o644); err != nil {
+		result.errors = append(result.errors, fmt.Errorf("writing %s: %w", destPath, err))
+		return
+	}
+
+	if exists && force {
+		fmt.Printf("  Overwrote %s\n", relPath)
+		result.overwritten++
+	} else {
+		fmt.Printf("  Copied %s\n", relPath)
+		result.copied++
+	}
+}
+
+// fileExists reports whether a file exists at the given path.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // initGlobal implements the --global flag behavior (existing functionality).
@@ -138,6 +139,50 @@ func initGlobal(c *cli.Context) error {
 	return nil
 }
 
+// validateEmbeddedFS checks that the embedded filesystem contains entries at the given path.
+func validateEmbeddedFS(fsys fs.FS, path, label string) error {
+	entries, err := fs.ReadDir(fsys, path)
+	if err != nil || len(entries) == 0 {
+		return fmt.Errorf("embedded %s filesystem is empty - binary may be corrupted, please reinstall", label)
+	}
+	return nil
+}
+
+// copyToDir creates the directory tree and copies embedded files, accumulating into total.
+func copyToDir(total *copyResult, fsys fs.FS, srcPrefix string, dirs []string, force bool) error {
+	for _, dir := range dirs {
+		if err := createDirIfNeeded(dir); err != nil {
+			return err
+		}
+	}
+
+	result := copyEmbeddedFiles(fsys, srcPrefix, dirs[len(dirs)-1], force)
+	total.copied += result.copied
+	total.skipped += result.skipped
+	total.overwritten += result.overwritten
+	total.errors = append(total.errors, result.errors...)
+	return nil
+}
+
+// printInitSummary prints the final init result.
+func printInitSummary(total copyResult) {
+	fmt.Println()
+	if total.overwritten > 0 {
+		fmt.Printf("Initialized ZombieKit: %d files copied, %d skipped, %d overwritten\n",
+			total.copied, total.skipped, total.overwritten)
+	} else {
+		fmt.Printf("Initialized ZombieKit: %d files copied, %d skipped\n",
+			total.copied, total.skipped)
+	}
+
+	if len(total.errors) > 0 {
+		fmt.Println("\nWarnings:")
+		for _, e := range total.errors {
+			fmt.Printf("  - %v\n", e)
+		}
+	}
+}
+
 // initLocal performs full ZombieKit setup in the current directory.
 // Creates .claude/commands/ with embedded commands and .brains/templates/ with templates.
 func initLocal(force bool) error {
@@ -146,78 +191,33 @@ func initLocal(force bool) error {
 		return fmt.Errorf("getting current directory: %w", err)
 	}
 
-	// Validate embedded filesystems are not empty
-	commandEntries, err := fs.ReadDir(zombiekit.EmbeddedCommands, "integrations/claude/commands")
-	if err != nil || len(commandEntries) == 0 {
-		return fmt.Errorf("embedded commands filesystem is empty - binary may be corrupted, please reinstall")
+	if err := validateEmbeddedFS(zombiekit.EmbeddedCommands, "integrations/claude/commands", "commands"); err != nil {
+		return err
+	}
+	if err := validateEmbeddedFS(zombiekit.EmbeddedTemplates, "templates", "templates"); err != nil {
+		return err
 	}
 
-	templateEntries, err := fs.ReadDir(zombiekit.EmbeddedTemplates, "templates")
-	if err != nil || len(templateEntries) == 0 {
-		return fmt.Errorf("embedded templates filesystem is empty - binary may be corrupted, please reinstall")
-	}
+	total := copyResult{}
 
-	// Aggregate results
-	totalResult := copyResult{}
-
-	// Create .claude/commands/ directory and copy commands
 	claudeDir := filepath.Join(cwd, ".claude")
 	commandsDir := filepath.Join(claudeDir, "commands")
-
-	if err := createDirIfNeeded(claudeDir); err != nil {
-		return err
-	}
-	if err := createDirIfNeeded(commandsDir); err != nil {
+	if err := copyToDir(&total, zombiekit.EmbeddedCommands, "integrations/claude/commands", []string{claudeDir, commandsDir}, force); err != nil {
 		return err
 	}
 
-	cmdResult := copyEmbeddedFiles(zombiekit.EmbeddedCommands, "integrations/claude/commands", commandsDir, force)
-	totalResult.copied += cmdResult.copied
-	totalResult.skipped += cmdResult.skipped
-	totalResult.overwritten += cmdResult.overwritten
-	totalResult.errors = append(totalResult.errors, cmdResult.errors...)
-
-	// Create .brains/templates/ directory and copy templates
 	brainsDir := filepath.Join(cwd, ".brains")
 	templatesDir := filepath.Join(brainsDir, "templates")
-
-	if err := createDirIfNeeded(brainsDir); err != nil {
-		return err
-	}
-	if err := createDirIfNeeded(templatesDir); err != nil {
+	if err := copyToDir(&total, zombiekit.EmbeddedTemplates, "templates", []string{brainsDir, templatesDir}, force); err != nil {
 		return err
 	}
 
-	tplResult := copyEmbeddedFiles(zombiekit.EmbeddedTemplates, "templates", templatesDir, force)
-	totalResult.copied += tplResult.copied
-	totalResult.skipped += tplResult.skipped
-	totalResult.overwritten += tplResult.overwritten
-	totalResult.errors = append(totalResult.errors, tplResult.errors...)
-
-	// Register .brains directory in profile registry (best effort)
 	rm, err := profile.NewRegistryManager()
 	if err == nil {
 		_ = rm.Register(brainsDir)
 	}
 
-	// Print summary
-	fmt.Println()
-	if totalResult.overwritten > 0 {
-		fmt.Printf("Initialized ZombieKit: %d files copied, %d skipped, %d overwritten\n",
-			totalResult.copied, totalResult.skipped, totalResult.overwritten)
-	} else {
-		fmt.Printf("Initialized ZombieKit: %d files copied, %d skipped\n",
-			totalResult.copied, totalResult.skipped)
-	}
-
-	// Report any errors
-	if len(totalResult.errors) > 0 {
-		fmt.Println("\nWarnings:")
-		for _, e := range totalResult.errors {
-			fmt.Printf("  - %v\n", e)
-		}
-	}
-
+	printInitSummary(total)
 	return nil
 }
 

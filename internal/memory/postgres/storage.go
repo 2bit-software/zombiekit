@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/2bit-software/zombiekit/internal/memory"
-	"github.com/2bit-software/zombiekit/internal/mo"
 )
 
 // PostgresStorage implements the memory.Storage interface using PostgreSQL.
@@ -102,7 +101,7 @@ func (s *PostgresStorage) Set(ctx context.Context, name, content string) error {
 }
 
 // Get retrieves the latest non-deleted version of a memory item.
-func (s *PostgresStorage) Get(ctx context.Context, name string) (mo.Maybe[memory.MemoryItem], error) {
+func (s *PostgresStorage) Get(ctx context.Context, name string) (memory.Maybe[memory.MemoryItem], error) {
 	name = memory.SanitizeName(name)
 
 	query := `
@@ -120,13 +119,13 @@ func (s *PostgresStorage) Get(ctx context.Context, name string) (mo.Maybe[memory
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return mo.Nothing[memory.MemoryItem](), nil
+		return memory.Nothing[memory.MemoryItem](), nil
 	}
 	if err != nil {
-		return mo.Nothing[memory.MemoryItem](), fmt.Errorf("query memory: %w", err)
+		return memory.Nothing[memory.MemoryItem](), fmt.Errorf("query memory: %w", err)
 	}
 
-	return mo.Just(item), nil
+	return memory.Just(item), nil
 }
 
 // Delete soft-deletes all versions of a memory item.
@@ -148,7 +147,7 @@ func (s *PostgresStorage) Delete(ctx context.Context, name string) error {
 // List returns all items, optionally filtered by search query.
 func (s *PostgresStorage) List(ctx context.Context, search string) ([]memory.MemoryMetadata, error) {
 	var query string
-	var args []interface{}
+	var args []any
 
 	if search == "" {
 		query = `
@@ -166,7 +165,7 @@ func (s *PostgresStorage) List(ctx context.Context, search string) ([]memory.Mem
 			AND (name ILIKE $1 OR content ILIKE $1)
 			ORDER BY name, version DESC
 		`
-		args = []interface{}{searchParam}
+		args = []any{searchParam}
 	}
 
 	rows, err := s.pool.Query(ctx, query, args...)

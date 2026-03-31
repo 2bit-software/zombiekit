@@ -309,7 +309,7 @@ func handleProfileError(c *cli.Context, err error) error {
 // JSON output helpers
 
 func outputComposeJSON(result *profile.CompositionResult) error {
-	output := map[string]interface{}{
+	output := map[string]any{
 		"content":          result.Content,
 		"profiles_used":    result.ProfilesUsed,
 		"character_count":  result.CharacterCount,
@@ -323,10 +323,10 @@ func outputComposeJSON(result *profile.CompositionResult) error {
 	return enc.Encode(output)
 }
 
-func formatResolutionLog(log []profile.ResolutionEntry) []map[string]interface{} {
-	var result []map[string]interface{}
+func formatResolutionLog(log []profile.ResolutionEntry) []map[string]any {
+	var result []map[string]any
 	for _, entry := range log {
-		result = append(result, map[string]interface{}{
+		result = append(result, map[string]any{
 			"name":   entry.Name,
 			"source": entry.Source.String(),
 			"path":   entry.Path,
@@ -336,7 +336,7 @@ func formatResolutionLog(log []profile.ResolutionEntry) []map[string]interface{}
 }
 
 func outputListJSON(entries []profile.ListEntry) error {
-	output := map[string]interface{}{
+	output := map[string]any{
 		"profiles": entries,
 	}
 
@@ -368,7 +368,7 @@ func outputListText(entries []profile.ListEntry) error {
 }
 
 func outputShowJSON(result *profile.ShowResult) error {
-	output := map[string]interface{}{
+	output := map[string]any{
 		"name":        result.Name,
 		"source":      result.SourceStr,
 		"path":        result.Path,
@@ -407,7 +407,7 @@ func outputShowJSON(result *profile.ShowResult) error {
 }
 
 func outputValidateJSON(result *profile.ValidationResult) error {
-	output := map[string]interface{}{
+	output := map[string]any{
 		"valid":            result.Valid,
 		"profiles_checked": result.ProfilesChecked,
 		"errors":           formatValidationErrors(result.Errors),
@@ -418,10 +418,10 @@ func outputValidateJSON(result *profile.ValidationResult) error {
 	return enc.Encode(output)
 }
 
-func formatValidationErrors(errors []profile.ValidationError) []map[string]interface{} {
-	var result []map[string]interface{}
+func formatValidationErrors(errors []profile.ValidationError) []map[string]any {
+	var result []map[string]any
 	for _, err := range errors {
-		item := map[string]interface{}{
+		item := map[string]any{
 			"profile": err.Profile,
 			"code":    err.Code,
 			"message": err.Message,
@@ -465,27 +465,27 @@ func outputValidateText(result *profile.ValidationResult) error {
 }
 
 func outputErrorJSON(err error) error {
-	output := map[string]interface{}{
-		"error": map[string]interface{}{
+	output := map[string]any{
+		"error": map[string]any{
 			"message": err.Error(),
 		},
 	}
 
 	switch e := err.(type) {
 	case *profile.ProfileNotFoundError:
-		output["error"].(map[string]interface{})["code"] = "PROFILE_NOT_FOUND"
+		output["error"].(map[string]any)["code"] = "PROFILE_NOT_FOUND"
 		if len(e.Suggestions) > 0 {
-			output["error"].(map[string]interface{})["suggestions"] = e.Suggestions
+			output["error"].(map[string]any)["suggestions"] = e.Suggestions
 		}
 	case *profile.CycleError:
-		output["error"].(map[string]interface{})["code"] = "CIRCULAR_DEPENDENCY"
-		output["error"].(map[string]interface{})["cycle"] = e.Cycle
+		output["error"].(map[string]any)["code"] = "CIRCULAR_DEPENDENCY"
+		output["error"].(map[string]any)["cycle"] = e.Cycle
 	case *profile.NotInitializedError:
-		output["error"].(map[string]interface{})["code"] = "NOT_INITIALIZED"
+		output["error"].(map[string]any)["code"] = "NOT_INITIALIZED"
 	case *profile.ProfileExistsError:
-		output["error"].(map[string]interface{})["code"] = "PROFILE_EXISTS"
+		output["error"].(map[string]any)["code"] = "PROFILE_EXISTS"
 	default:
-		output["error"].(map[string]interface{})["code"] = "UNKNOWN_ERROR"
+		output["error"].(map[string]any)["code"] = "UNKNOWN_ERROR"
 	}
 
 	enc := json.NewEncoder(os.Stdout)
@@ -557,45 +557,49 @@ func outputImportText(result *profile.ImportResult) error {
 		return nil
 	}
 
-	// Header
-	if result.DryRun {
+	printImportHeader(result.DryRun, total)
+	printImportCounts(result)
+	printPathList("Created", result.CreatedPaths)
+	printPathList("Overwritten", result.OverwrittenPaths)
+	printFailedAgents(result.FailedAgents)
+
+	return nil
+}
+
+func printImportHeader(dryRun bool, total int) {
+	if dryRun {
 		fmt.Printf("Dry run: Would import %d profiles from claude source:\n", total)
 	} else {
 		fmt.Printf("Imported %d profiles from claude source:\n", total)
 	}
+}
 
-	// Summary counts
+func printImportCounts(result *profile.ImportResult) {
 	fmt.Printf("  Created:     %d profiles\n", result.Created)
 	fmt.Printf("  Overwritten: %d profiles\n", result.Overwritten)
 	if result.Failed > 0 {
 		fmt.Printf("  Failed:      %d agents\n", result.Failed)
 	}
+}
 
-	// Created paths
-	if len(result.CreatedPaths) > 0 {
-		fmt.Println("\nCreated:")
-		for _, path := range result.CreatedPaths {
-			fmt.Printf("  %s\n", path)
-		}
+func printPathList(label string, paths []string) {
+	if len(paths) == 0 {
+		return
 	}
-
-	// Overwritten paths
-	if len(result.OverwrittenPaths) > 0 {
-		fmt.Println("\nOverwritten:")
-		for _, path := range result.OverwrittenPaths {
-			fmt.Printf("  %s\n", path)
-		}
+	fmt.Printf("\n%s:\n", label)
+	for _, path := range paths {
+		fmt.Printf("  %s\n", path)
 	}
+}
 
-	// Failed agents
-	if len(result.FailedAgents) > 0 {
-		fmt.Println("\nFailed:")
-		for _, fail := range result.FailedAgents {
-			fmt.Printf("  %s: %s\n", fail.AgentName, fail.Error)
-		}
+func printFailedAgents(agents []profile.ImportFailure) {
+	if len(agents) == 0 {
+		return
 	}
-
-	return nil
+	fmt.Println("\nFailed:")
+	for _, fail := range agents {
+		fmt.Printf("  %s: %s\n", fail.AgentName, fail.Error)
+	}
 }
 
 func outputImportJSON(result *profile.ImportResult) error {

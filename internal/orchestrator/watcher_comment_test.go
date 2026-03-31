@@ -41,14 +41,6 @@ func (s *commentStubState) record(method string) {
 	s.calls = append(s.calls, method)
 }
 
-func (s *commentStubState) getCalls() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]string, len(s.calls))
-	copy(out, s.calls)
-	return out
-}
-
 func (s *commentStubState) Migrate(_ context.Context) error { return nil }
 func (s *commentStubState) Close() error                    { return nil }
 func (s *commentStubState) CreateJob(_ context.Context, _, _, _, _ string) error {
@@ -126,14 +118,6 @@ func (s *commentStubSession) record(method string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls = append(s.calls, method)
-}
-
-func (s *commentStubSession) getCalls() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]string, len(s.calls))
-	copy(out, s.calls)
-	return out
 }
 
 func (s *commentStubSession) SpawnSession(_ context.Context, ticketID, _, _ string, _ map[string]string) (string, error) {

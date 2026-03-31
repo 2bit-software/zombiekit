@@ -13,7 +13,6 @@ import (
 	_ "modernc.org/sqlite" // SQLite driver
 
 	"github.com/2bit-software/zombiekit/internal/memory"
-	"github.com/2bit-software/zombiekit/internal/mo"
 )
 
 // SQLiteStorage implements the memory.Storage interface using SQLite.
@@ -116,7 +115,7 @@ func (s *SQLiteStorage) Set(ctx context.Context, name, content string) error {
 }
 
 // Get retrieves the latest non-deleted version of a memory item.
-func (s *SQLiteStorage) Get(ctx context.Context, name string) (mo.Maybe[memory.MemoryItem], error) {
+func (s *SQLiteStorage) Get(ctx context.Context, name string) (memory.Maybe[memory.MemoryItem], error) {
 	name = memory.SanitizeName(name)
 
 	query := `
@@ -134,13 +133,13 @@ func (s *SQLiteStorage) Get(ctx context.Context, name string) (mo.Maybe[memory.M
 	)
 
 	if err == sql.ErrNoRows {
-		return mo.Nothing[memory.MemoryItem](), nil
+		return memory.Nothing[memory.MemoryItem](), nil
 	}
 	if err != nil {
-		return mo.Nothing[memory.MemoryItem](), fmt.Errorf("query memory: %w", err)
+		return memory.Nothing[memory.MemoryItem](), fmt.Errorf("query memory: %w", err)
 	}
 
-	return mo.Just(item), nil
+	return memory.Just(item), nil
 }
 
 // Delete soft-deletes all versions of a memory item.
@@ -162,7 +161,7 @@ func (s *SQLiteStorage) Delete(ctx context.Context, name string) error {
 // List returns all items, optionally filtered by search query.
 func (s *SQLiteStorage) List(ctx context.Context, search string) ([]memory.MemoryMetadata, error) {
 	var query string
-	var args []interface{}
+	var args []any
 
 	if search == "" {
 		query = `
@@ -190,7 +189,7 @@ func (s *SQLiteStorage) List(ctx context.Context, search string) ([]memory.Memor
 			AND (LOWER(name) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?))
 			ORDER BY updated_at DESC
 		`
-		args = []interface{}{searchParam, searchParam}
+		args = []any{searchParam, searchParam}
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)

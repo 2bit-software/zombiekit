@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/2bit-software/zombiekit/internal/logging"
-	"github.com/2bit-software/zombiekit/internal/search"
 )
 
 // PluginSearchResult groups search results with their source plugin metadata.
@@ -14,7 +13,7 @@ type PluginSearchResult struct {
 	// PluginName is the human-readable label from SidebarItems()[0].Label.
 	PluginName string
 	// Items contains up to 3 results from this plugin.
-	Items []search.SearchResult
+	Items []SearchResult
 }
 
 // SearchResponse is the aggregated response for the search endpoint.
@@ -51,12 +50,12 @@ func (s *Server) searchPlugins(query string, maxResultsPerPlugin int) SearchResp
 	}
 
 	for _, rp := range s.registry.All() {
-		searchable, ok := rp.Plugin().(search.Searchable)
+		searchable, ok := rp.Plugin().(Searchable)
 		if !ok {
 			continue
 		}
 
-		items, err := searchable.Search(query, maxResultsPerPlugin, search.SortRelevance)
+		items, err := searchable.Search(query, maxResultsPerPlugin, SortRelevance)
 		if err != nil {
 			logging.Logger().Error("search failed", "plugin", rp.Name(), "error", err)
 			continue

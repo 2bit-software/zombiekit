@@ -122,20 +122,17 @@ func (_m *GitManager) resolveBranch(ctx context.Context, path string) (string, e
 	absPath, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		absPath, err = filepath.Abs(path)
-		if err != nil {
-			return "", fmt.Errorf("resolving worktree path: %w", err)
-		}
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolving worktree path: %w", err)
 	}
 
-	blocks := strings.Split(output, "\n\n")
-	for _, block := range blocks {
-		lines := strings.Split(strings.TrimSpace(block), "\n")
+	for _, block := range strings.Split(output, "\n\n") {
 		var wtPath, branch string
-		for _, line := range lines {
+		for _, line := range strings.Split(strings.TrimSpace(block), "\n") {
 			if after, ok := strings.CutPrefix(line, "worktree "); ok {
 				wtPath = after
-			}
-			if after, ok := strings.CutPrefix(line, "branch refs/heads/"); ok {
+			} else if after, ok := strings.CutPrefix(line, "branch refs/heads/"); ok {
 				branch = after
 			}
 		}

@@ -16,10 +16,6 @@ import (
 	"github.com/2bit-software/zombiekit/internal/recall/postgres"
 	"github.com/2bit-software/zombiekit/internal/step"
 	"github.com/2bit-software/zombiekit/internal/web"
-	"github.com/2bit-software/zombiekit/internal/webplugins/memory"
-	"github.com/2bit-software/zombiekit/internal/webplugins/profiles"
-	"github.com/2bit-software/zombiekit/internal/webplugins/prompts"
-	recallweb "github.com/2bit-software/zombiekit/internal/webplugins/recall"
 	"github.com/2bit-software/zombiekit/internal/workflow"
 )
 
@@ -46,87 +42,80 @@ func newGUICommand() *cli.Command {
 	}
 }
 
-func runGUI(c *cli.Context) error {
-	// Set up logging
-	logLevel := c.String("log-level")
-	logging.InitLogger(logLevel, false, os.Stderr)
-
-	// Create profile service
-	profileService, err := profile.NewService("")
-	if err != nil {
-		logging.Logger().Warn("failed to initialize profile service, profiles plugin will show errors",
-			"error", err,
-		)
-		// Continue anyway - the plugin will handle the error gracefully
-	}
-
-	// Create plugin registry
-	registry := web.NewPluginRegistry()
-
-	// Register plugins
-	if profileService != nil {
-		profilesPlugin := profiles.NewPlugin(profileService)
-		registry.Register("profiles", profilesPlugin)
-	}
-
-	// Register prompts plugin (unified view of workflows, profiles, and steps)
-	workflowSvc, _ := workflow.NewService("")
-	stepSvc, _ := step.NewService("")
-	promptsPlugin := prompts.NewPlugin(profileService, stepSvc, workflowSvc)
-	registry.Register("prompts", promptsPlugin)
-
-	// Create memory storage (SQLite default)
-	// Use BRAINS_DATA_DIR if set (for containerized environments), otherwise default to ~/.brains
+// guiMemoryDBPath returns the path to the memory SQLite database for the GUI.
+func guiMemoryDBPath() string {
 	dataDir := os.Getenv("BRAINS_DATA_DIR")
 	if dataDir == "" {
 		homeDir, _ := os.UserHomeDir()
 		dataDir = filepath.Join(homeDir, ".brains")
 	}
-	memoryDBPath := filepath.Join(dataDir, "memory.db")
-	memoryStorage, err := sqlite.NewSQLiteStorage(context.Background(), memoryDBPath)
+	return filepath.Join(dataDir, "memory.db")
+}
+
+// registerGUIRecallPlugin creates and registers the recall plugin if PostgreSQL is configured.
+func registerGUIRecallPlugin(ctx context.Context, registry *web.PluginRegistry, cfg config.StorageConfig) {
+	if cfg.Backend != config.BackendPostgres {
+		return
+	}
+	recallStorage, err := postgres.New(ctx, cfg)
+	if err != nil {
+		logging.Logger().Warn("failed to initialize recall storage, conversations plugin will be unavailable",
+			"error", err,
+		)
+		return
+	}
+
+	var embedder recall.Embedder
+	if cfg.OllamaURL != "" {
+		e, err := recall.NewOllamaEmbedder(cfg.OllamaURL, cfg.EmbeddingModel)
+		if err != nil {
+			logging.Logger().Warn("recall embedder unavailable, search disabled", "error", err)
+		} else {
+			embedder = e
+		}
+	}
+	registry.Register("recall", web.NewRecallPlugin(recallStorage, embedder))
+}
+
+func runGUI(c *cli.Context) error {
+	logLevel := c.String("log-level")
+	logging.InitLogger(logLevel, false, os.Stderr)
+
+	profileService, err := profile.NewService("")
+	if err != nil {
+		logging.Logger().Warn("failed to initialize profile service, profiles plugin will show errors",
+			"error", err,
+		)
+	}
+
+	registry := web.NewPluginRegistry()
+
+	if profileService != nil {
+		registry.Register("profiles", web.NewProfilesPlugin(profileService))
+	}
+
+	workflowSvc, _ := workflow.NewService("")
+	stepSvc, _ := step.NewService("")
+	registry.Register("prompts", web.NewPromptsPlugin(profileService, stepSvc, workflowSvc))
+
+	dbPath := guiMemoryDBPath()
+	memoryStorage, err := sqlite.NewSQLiteStorage(context.Background(), dbPath)
 	if err != nil {
 		logging.Logger().Warn("failed to initialize memory storage, memory plugin will show errors",
 			"error", err,
 		)
 	}
 	if memoryStorage != nil {
-		memoryPlugin := memory.NewPlugin(memoryStorage)
-		registry.Register("memory", memoryPlugin)
+		registry.Register("memory", web.NewMemoryPlugin(memoryStorage))
 	}
 
-	// Load storage config for status display and recall plugin
 	storageConfig := config.LoadStorageConfigFromEnv()
+	registerGUIRecallPlugin(context.Background(), registry, storageConfig)
 
-	// Register recall plugin (requires PostgreSQL for semantic search)
-	if storageConfig.Backend == config.BackendPostgres {
-		recallStorage, err := postgres.New(context.Background(), storageConfig)
-		if err != nil {
-			logging.Logger().Warn("failed to initialize recall storage, conversations plugin will be unavailable",
-				"error", err,
-			)
-		} else {
-			// Try to create embedder for semantic search (optional)
-			var embedder recall.Embedder
-			if storageConfig.OllamaURL != "" {
-				e, err := recall.NewOllamaEmbedder(storageConfig.OllamaURL, storageConfig.EmbeddingModel)
-				if err != nil {
-					logging.Logger().Warn("recall embedder unavailable, search disabled",
-						"error", err,
-					)
-				} else {
-					embedder = e
-				}
-			}
-			recallPlugin := recallweb.NewPlugin(recallStorage, embedder)
-			registry.Register("recall", recallPlugin)
-		}
-	}
-	// Override SQLite path if using default local storage
 	if storageConfig.Backend == config.BackendSQLite && storageConfig.SQLitePath == config.DefaultSQLitePath() {
-		storageConfig.SQLitePath = memoryDBPath
+		storageConfig.SQLitePath = dbPath
 	}
 
-	// Create server config
 	serverConfig := web.ServerConfig{
 		Port: c.Int("port"),
 		StatusConfig: web.StatusConfig{
@@ -136,13 +125,11 @@ func runGUI(c *cli.Context) error {
 		},
 	}
 
-	// Create server
 	server, err := web.NewServer(registry, serverConfig)
 	if err != nil {
 		return err
 	}
 
-	// Set up graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

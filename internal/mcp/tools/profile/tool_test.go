@@ -143,7 +143,7 @@ func TestMCPTool_HandleSave(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "location is required")
+		assert.Contains(t, err.Error(), "location must be 'local' or 'global'")
 	})
 
 	t.Run("returns error for invalid location", func(t *testing.T) {

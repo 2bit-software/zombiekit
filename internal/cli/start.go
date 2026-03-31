@@ -12,7 +12,6 @@ import (
 	"github.com/2bit-software/zombiekit/internal/config"
 	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/2bit-software/zombiekit/internal/shutdown"
-	"github.com/2bit-software/zombiekit/internal/startup"
 	"github.com/2bit-software/zombiekit/internal/state"
 )
 
@@ -54,7 +53,7 @@ func runStart(c *cli.Context) error {
 	var services []shutdown.ServiceFunc
 
 	if cfg.Services.GUI.Enabled {
-		guiService := startup.NewGUIService(cfg.Services.GUI)
+		guiService := NewGUIService(cfg.Services.GUI)
 		services = append(services, func(ctx context.Context) error {
 			return guiService.Run(ctx)
 		})
@@ -62,7 +61,7 @@ func runStart(c *cli.Context) error {
 	}
 
 	if cfg.Services.Recall.Enabled {
-		recallService := startup.NewRecallService(cfg.Services.Recall)
+		recallService := NewRecallService(cfg.Services.Recall)
 		services = append(services, func(ctx context.Context) error {
 			return recallService.Run(ctx)
 		})

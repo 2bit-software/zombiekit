@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -67,7 +68,6 @@ func (o *Orchestrator) pollAndProcess(ctx context.Context) {
 func (o *Orchestrator) processTicket(ctx context.Context, ticket linear.Ticket) error {
 	logger := logging.Logger()
 
-	// FR-012: skip tickets that already have a job
 	existing, err := o.store.GetJob(ctx, ticket.Identifier)
 	if err != nil {
 		return fmt.Errorf("check existing job: %w", err)
@@ -77,7 +77,6 @@ func (o *Orchestrator) processTicket(ctx context.Context, ticket linear.Ticket) 
 		return nil
 	}
 
-	// FR-002: acquire concurrency slot
 	acquired, err := o.store.TryAcquireSlot(ctx, o.cfg.ProjectID, o.cfg.ConcurrencyLimit)
 	if err != nil {
 		return fmt.Errorf("acquire slot: %w", err)
@@ -87,79 +86,91 @@ func (o *Orchestrator) processTicket(ctx context.Context, ticket linear.Ticket) 
 		return nil
 	}
 
-	// Track what we've created for rollback
-	var worktreePath string
-	var sessionRef string
-	succeeded := false
-
-	defer func() {
-		if succeeded {
-			return
-		}
-		// Rollback in reverse order
-		if sessionRef != "" {
-			if killErr := o.sessions.KillSession(ctx, ticket.Identifier); killErr != nil {
-				logger.Error("rollback: failed to kill session", "ticket", ticket.Identifier, "error", killErr)
-			}
-		}
-		if worktreePath != "" {
-			if delErr := o.worktrees.DeleteWorktree(ctx, worktreePath); delErr != nil {
-				logger.Error("rollback: failed to delete worktree", "ticket", ticket.Identifier, "error", delErr)
-			}
-		}
-		if releaseErr := o.store.ReleaseSlot(ctx, o.cfg.ProjectID); releaseErr != nil {
-			logger.Error("rollback: failed to release slot", "ticket", ticket.Identifier, "error", releaseErr)
-		}
-
-		// FR-013: mark ticket as needs-attention
-		o.markNeedsAttention(ctx, ticket)
-	}()
-
-	// FR-003: create worktree
-	worktreePath, err = o.worktrees.CreateWorktree(ctx, ticket.Identifier, shortTitle(ticket.Title))
+	sessionRef, worktreePath, err := o.runTicketPipeline(ctx, ticket)
 	if err != nil {
-		return fmt.Errorf("create worktree: %w", err)
+		o.rollbackTicket(ctx, ticket, sessionRef, worktreePath, logger)
+		return err
 	}
 
-	// FR-004: write ticket content to .ai/ticket.md
-	aiDir := filepath.Join(worktreePath, ".ai")
-	if err := os.MkdirAll(aiDir, 0o755); err != nil {
-		return fmt.Errorf("create .ai directory: %w", err)
-	}
-	ticketFile := filepath.Join(aiDir, "ticket.md")
-	if err := os.WriteFile(ticketFile, []byte(ticket.Description), 0o644); err != nil {
-		return fmt.Errorf("write ticket file: %w", err)
+	o.updateLinearAfterPickup(ctx, ticket, logger)
+	logger.Info("ticket picked up successfully", "ticket", ticket.Identifier, "worktree", worktreePath, "session", sessionRef)
+	return nil
+}
+
+// runTicketPipeline performs the core pickup sequence: worktree creation,
+// session spawn, and job recording. Returns the session ref and worktree path
+// so the caller can roll back on failure.
+func (o *Orchestrator) runTicketPipeline(ctx context.Context, ticket linear.Ticket) (sessionRef, worktreePath string, err error) {
+	worktreePath, err = o.setupWorktree(ctx, ticket)
+	if err != nil {
+		return "", worktreePath, err
 	}
 
-	// FR-005 + FR-006: spawn session with callback URL
 	env := map[string]string{
 		"WORK_CALLBACK_URL": fmt.Sprintf("http://localhost:%d/%s", o.cfg.CallbackPort, ticket.Identifier),
 	}
 	sessionRef, err = o.sessions.SpawnSession(ctx, ticket.Identifier, ticket.Title, worktreePath, env)
 	if err != nil {
-		return fmt.Errorf("spawn session: %w", err)
+		return "", worktreePath, fmt.Errorf("spawn session: %w", err)
 	}
 
-	// FR-007: record job in state
 	if err := o.store.CreateJob(ctx, ticket.Identifier, worktreePath, sessionRef, o.cfg.ProjectID); err != nil {
-		return fmt.Errorf("create job: %w", err)
+		return sessionRef, worktreePath, fmt.Errorf("create job: %w", err)
 	}
 
-	// Pipeline complete — mark as succeeded before Linear updates
-	succeeded = true
+	return sessionRef, worktreePath, nil
+}
 
-	// FR-008 + FR-014: update ticket status (log on failure, don't roll back)
+// rollbackTicket reverses a partially-completed pipeline in reverse order,
+// then marks the ticket as needs-attention.
+func (o *Orchestrator) rollbackTicket(ctx context.Context, ticket linear.Ticket, sessionRef, worktreePath string, logger *slog.Logger) {
+	if sessionRef != "" {
+		if killErr := o.sessions.KillSession(ctx, ticket.Identifier); killErr != nil {
+			logger.Error("rollback: failed to kill session", "ticket", ticket.Identifier, "error", killErr)
+		}
+	}
+	if worktreePath != "" {
+		if delErr := o.worktrees.DeleteWorktree(ctx, worktreePath); delErr != nil {
+			logger.Error("rollback: failed to delete worktree", "ticket", ticket.Identifier, "error", delErr)
+		}
+	}
+	if releaseErr := o.store.ReleaseSlot(ctx, o.cfg.ProjectID); releaseErr != nil {
+		logger.Error("rollback: failed to release slot", "ticket", ticket.Identifier, "error", releaseErr)
+	}
+	o.markNeedsAttention(ctx, ticket)
+}
+
+// updateLinearAfterPickup sets the ticket status and removes the ai-ready
+// label. These are best-effort -- the job is already running, so failures are
+// logged but not propagated.
+func (o *Orchestrator) updateLinearAfterPickup(ctx context.Context, ticket linear.Ticket, logger *slog.Logger) {
 	if err := o.linear.SetTicketStatus(ctx, ticket.ID, statusInProgress); err != nil {
 		logger.Error("failed to set ticket status (job is running)", "ticket", ticket.Identifier, "error", err)
 	}
-
-	// FR-009 + FR-014: remove ai-ready label (log on failure, don't roll back)
 	if err := o.linear.RemoveLabel(ctx, ticket.ID, labelAIReady); err != nil {
 		logger.Error("failed to remove ai-ready label (job is running)", "ticket", ticket.Identifier, "error", err)
 	}
+}
 
-	logger.Info("ticket picked up successfully", "ticket", ticket.Identifier, "worktree", worktreePath, "session", sessionRef)
-	return nil
+// setupWorktree creates a git worktree for the ticket and writes the ticket
+// description to .ai/ticket.md inside it.
+func (o *Orchestrator) setupWorktree(ctx context.Context, ticket linear.Ticket) (string, error) {
+	worktreePath, err := o.worktrees.CreateWorktree(ctx, ticket.Identifier, shortTitle(ticket.Title))
+	if err != nil {
+		return "", fmt.Errorf("create worktree: %w", err)
+	}
+
+	aiDir := filepath.Join(worktreePath, ".ai")
+	if err := os.MkdirAll(aiDir, 0o755); err != nil {
+		return worktreePath, fmt.Errorf("create .ai directory: %w", err)
+	}
+
+	ticketFile := filepath.Join(aiDir, "ticket.md")
+	if err := os.WriteFile(ticketFile, []byte(ticket.Description), 0o644); err != nil {
+		return worktreePath, fmt.Errorf("write ticket file: %w", err)
+	}
+
+	return worktreePath, nil
 }
 
 // markNeedsAttention applies the needs-attention label and removes ai-ready.

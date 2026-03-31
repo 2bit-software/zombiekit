@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/2bit-software/zombiekit/internal/archival"
 	"github.com/2bit-software/zombiekit/internal/callback"
 	"github.com/2bit-software/zombiekit/internal/cmux"
-	"github.com/2bit-software/zombiekit/internal/friction"
 	"github.com/2bit-software/zombiekit/internal/github"
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/logging"
@@ -59,7 +57,7 @@ func (o *Orchestrator) Run() error {
 	router := NewRouter(
 		callbackSrv.Events(),
 		o.store, o.github, o.linear,
-		archival.NoopArchiver{}, friction.NoopAuditor{},
+		NoopArchiver{}, NoopAuditor{},
 		dispatcher,
 		o.cfg, logger,
 	)

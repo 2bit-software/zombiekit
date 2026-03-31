@@ -116,11 +116,19 @@ func (t *Tool) handleView(ctx context.Context) (string, error) {
 	})
 }
 
-// handleCreate creates a new PR.
-func (t *Tool) handleCreate(ctx context.Context, args map[string]any) (string, error) {
+// createArgs holds validated arguments for PR creation.
+type createArgs struct {
+	title string
+	body  string
+	base  string
+	draft bool
+}
+
+// parseCreateArgs validates and extracts the arguments needed for PR creation.
+func parseCreateArgs(args map[string]any) (createArgs, error) {
 	title := getStringArg(args, "title")
 	if strings.TrimSpace(title) == "" {
-		return "", &ToolError{
+		return createArgs{}, &ToolError{
 			Code:    "VALIDATION_ERROR",
 			Message: "title is required and must not be empty",
 		}
@@ -128,7 +136,7 @@ func (t *Tool) handleCreate(ctx context.Context, args map[string]any) (string, e
 
 	body := getStringArg(args, "body")
 	if strings.TrimSpace(body) == "" {
-		return "", &ToolError{
+		return createArgs{}, &ToolError{
 			Code:    "VALIDATION_ERROR",
 			Message: "body is required and must not be empty",
 		}
@@ -139,20 +147,41 @@ func (t *Tool) handleCreate(ctx context.Context, args map[string]any) (string, e
 		base = "main"
 	}
 
-	draft := getBoolArg(args, "draft")
+	return createArgs{
+		title: title,
+		body:  body,
+		base:  base,
+		draft: getBoolArg(args, "draft"),
+	}, nil
+}
 
-	// Check if PR already exists
+// checkExistingPR returns an error if a PR already exists for the current branch.
+func (t *Tool) checkExistingPR(ctx context.Context) error {
 	existing, _ := t.run(ctx, "pr", "view", "--json", "url")
-	if existing != "" {
-		var prData struct {
-			URL string `json:"url"`
+	if existing == "" {
+		return nil
+	}
+	var prData struct {
+		URL string `json:"url"`
+	}
+	if json.Unmarshal([]byte(existing), &prData) == nil && prData.URL != "" {
+		return &ToolError{
+			Code:    "PR_EXISTS",
+			Message: fmt.Sprintf("PR already exists for this branch: %s", prData.URL),
 		}
-		if json.Unmarshal([]byte(existing), &prData) == nil && prData.URL != "" {
-			return "", &ToolError{
-				Code:    "PR_EXISTS",
-				Message: fmt.Sprintf("PR already exists for this branch: %s", prData.URL),
-			}
-		}
+	}
+	return nil
+}
+
+// handleCreate creates a new PR.
+func (t *Tool) handleCreate(ctx context.Context, args map[string]any) (string, error) {
+	ca, err := parseCreateArgs(args)
+	if err != nil {
+		return "", err
+	}
+
+	if err := t.checkExistingPR(ctx); err != nil {
+		return "", err
 	}
 
 	// Write body to temp file to avoid shell escaping issues
@@ -163,14 +192,14 @@ func (t *Tool) handleCreate(ctx context.Context, args map[string]any) (string, e
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	if _, err := tmpFile.WriteString(body); err != nil {
+	if _, err := tmpFile.WriteString(ca.body); err != nil {
 		tmpFile.Close()
 		return "", fmt.Errorf("writing PR body: %w", err)
 	}
 	tmpFile.Close()
 
-	ghArgs := []string{"pr", "create", "--base", base, "--title", title, "--body-file", tmpPath}
-	if draft {
+	ghArgs := []string{"pr", "create", "--base", ca.base, "--title", ca.title, "--body-file", tmpPath}
+	if ca.draft {
 		ghArgs = append(ghArgs, "--draft")
 	}
 
@@ -179,8 +208,7 @@ func (t *Tool) handleCreate(ctx context.Context, args map[string]any) (string, e
 		return "", fmt.Errorf("creating PR: %w", err)
 	}
 
-	// gh pr create returns the PR URL on success
-	// Try to get structured data
+	// Try to get structured data from the newly created PR
 	prInfo, infoErr := t.run(ctx, "pr", "view", "--json", "url,title,number")
 	if infoErr == nil {
 		var prData struct {
@@ -198,11 +226,10 @@ func (t *Tool) handleCreate(ctx context.Context, args map[string]any) (string, e
 		}
 	}
 
-	// Fallback: return the URL from the create output
 	return marshalResponse(CreateResponse{
 		Action: "create",
 		URL:    out,
-		Title:  title,
+		Title:  ca.title,
 	})
 }
 

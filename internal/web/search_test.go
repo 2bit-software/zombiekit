@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/2bit-software/zombiekit/internal/logging"
-	"github.com/2bit-software/zombiekit/internal/search"
 	"github.com/2bit-software/zombiekit/internal/web"
 )
 
@@ -19,7 +18,7 @@ import (
 type mockSearchablePlugin struct {
 	name    string
 	label   string
-	results []search.SearchResult
+	results []web.SearchResult
 }
 
 func (p *mockSearchablePlugin) SidebarItems() []web.SidebarItem {
@@ -34,13 +33,13 @@ func (p *mockSearchablePlugin) MountRoutes(r chi.Router) {
 	})
 }
 
-func (p *mockSearchablePlugin) Search(query string, maxResults int, sortOrder search.SortOrder) ([]search.SearchResult, error) {
+func (p *mockSearchablePlugin) Search(query string, maxResults int, sortOrder web.SortOrder) ([]web.SearchResult, error) {
 	if query == "" {
-		return []search.SearchResult{}, nil
+		return []web.SearchResult{}, nil
 	}
 
 	// Filter and limit results
-	var filtered []search.SearchResult
+	var filtered []web.SearchResult
 	for _, r := range p.results {
 		if strings.Contains(strings.ToLower(r.Title), strings.ToLower(query)) {
 			filtered = append(filtered, r)
@@ -115,7 +114,7 @@ func TestSearchHandler_WithResults(t *testing.T) {
 	registry.Register("memory", &mockSearchablePlugin{
 		name:  "memory",
 		label: "Memory",
-		results: []search.SearchResult{
+		results: []web.SearchResult{
 			{Title: "config-test", URL: "/config-test"},
 			{Title: "test-notes", URL: "/test-notes"},
 		},
@@ -146,14 +145,14 @@ func TestSearchHandler_MultiplePlugins(t *testing.T) {
 	registry.Register("memory", &mockSearchablePlugin{
 		name:  "memory",
 		label: "Memory",
-		results: []search.SearchResult{
+		results: []web.SearchResult{
 			{Title: "memory-config", URL: "/memory-config"},
 		},
 	})
 	registry.Register("profiles", &mockSearchablePlugin{
 		name:  "profiles",
 		label: "Profiles",
-		results: []search.SearchResult{
+		results: []web.SearchResult{
 			{Title: "profile-config", URL: "/profile-config"},
 		},
 	})
@@ -184,7 +183,7 @@ func TestSearchHandler_LimitsToThreeResults(t *testing.T) {
 	registry.Register("memory", &mockSearchablePlugin{
 		name:  "memory",
 		label: "Memory",
-		results: []search.SearchResult{
+		results: []web.SearchResult{
 			{Title: "item1", URL: "/item1"},
 			{Title: "item2", URL: "/item2"},
 			{Title: "item3", URL: "/item3"},
@@ -220,7 +219,7 @@ func TestSearchHandler_URLPrefixing(t *testing.T) {
 	registry.Register("memory", &mockSearchablePlugin{
 		name:  "memory",
 		label: "Memory",
-		results: []search.SearchResult{
+		results: []web.SearchResult{
 			{Title: "config-item", URL: "/config-item"},
 		},
 	})
