@@ -236,22 +236,3 @@ func (s *ClaudeSource) SourceName() string {
 	return "claude"
 }
 
-// findSimilar finds agent names similar to the given name.
-func (s *ClaudeSource) findSimilar(profiles map[string]*Profile, name string) []string {
-	var suggestions []string
-	nameLower := strings.ToLower(name)
-
-	for profileName := range profiles {
-		profileLower := strings.ToLower(profileName)
-		if strings.Contains(profileLower, nameLower) ||
-			strings.Contains(nameLower, profileLower) ||
-			(len(nameLower) >= 3 && strings.HasPrefix(profileLower, nameLower[:3])) {
-			suggestions = append(suggestions, profileName)
-		}
-	}
-
-	if len(suggestions) > 3 {
-		suggestions = suggestions[:3]
-	}
-	return suggestions
-}

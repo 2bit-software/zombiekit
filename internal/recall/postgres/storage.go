@@ -149,31 +149,13 @@ func (s *Storage) Search(ctx context.Context, embedding []float32, limit int) ([
 			&result.Chunk.ID,
 			&result.Chunk.Content,
 			&result.Chunk.CreatedAt,
-			&source,
-			&sourceID,
-			&convID,
-			&metadataJSON,
+			&source, &sourceID, &convID, &metadataJSON,
 			&result.Similarity,
 		); err != nil {
 			return nil, fmt.Errorf("scan result: %w", err)
 		}
 
-		if source != nil {
-			result.Chunk.Source = *source
-		}
-		if sourceID != nil {
-			result.Chunk.SourceID = *sourceID
-		}
-		if convID != nil {
-			result.Chunk.ConversationID = *convID
-		}
-		if len(metadataJSON) > 0 {
-			var meta recall.Metadata
-			if err := json.Unmarshal(metadataJSON, &meta); err == nil {
-				result.Chunk.Metadata = &meta
-			}
-		}
-
+		populateChunkNullables(&result.Chunk, source, sourceID, convID, metadataJSON)
 		results = append(results, result)
 	}
 
@@ -260,6 +242,13 @@ func (s *Storage) GetByConversation(ctx context.Context, conversationID string) 
 	}
 	defer rows.Close()
 
+	return scanChunkRows(rows)
+}
+
+// scanChunkRows iterates rows containing standard chunk columns
+// (id, content, created_at, source, source_id, conversation_id, metadata)
+// and returns the collected chunks.
+func scanChunkRows(rows pgx.Rows) ([]recall.Chunk, error) {
 	var chunks []recall.Chunk
 	for rows.Next() {
 		var chunk recall.Chunk
@@ -271,30 +260,33 @@ func (s *Storage) GetByConversation(ctx context.Context, conversationID string) 
 			return nil, fmt.Errorf("scan chunk: %w", err)
 		}
 
-		if source != nil {
-			chunk.Source = *source
-		}
-		if sourceID != nil {
-			chunk.SourceID = *sourceID
-		}
-		if convID != nil {
-			chunk.ConversationID = *convID
-		}
-		if len(metadataJSON) > 0 {
-			var meta recall.Metadata
-			if err := json.Unmarshal(metadataJSON, &meta); err == nil {
-				chunk.Metadata = &meta
-			}
-		}
-
+		populateChunkNullables(&chunk, source, sourceID, convID, metadataJSON)
 		chunks = append(chunks, chunk)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chunks: %w", err)
 	}
-
 	return chunks, nil
+}
+
+// populateChunkNullables fills optional chunk fields from nullable scan results.
+func populateChunkNullables(chunk *recall.Chunk, source, sourceID, convID *string, metadataJSON []byte) {
+	if source != nil {
+		chunk.Source = *source
+	}
+	if sourceID != nil {
+		chunk.SourceID = *sourceID
+	}
+	if convID != nil {
+		chunk.ConversationID = *convID
+	}
+	if len(metadataJSON) > 0 {
+		var meta recall.Metadata
+		if err := json.Unmarshal(metadataJSON, &meta); err == nil {
+			chunk.Metadata = &meta
+		}
+	}
 }
 
 // nullableString returns nil for empty strings, or a pointer to the string.
@@ -484,41 +476,7 @@ func (s *Storage) GetConversationChunks(ctx context.Context, conversationID stri
 	}
 	defer rows.Close()
 
-	var chunks []recall.Chunk
-	for rows.Next() {
-		var chunk recall.Chunk
-		var source, sourceID, convID *string
-		var metadataJSON []byte
-
-		if err := rows.Scan(&chunk.ID, &chunk.Content, &chunk.CreatedAt,
-			&source, &sourceID, &convID, &metadataJSON); err != nil {
-			return nil, fmt.Errorf("scan chunk: %w", err)
-		}
-
-		if source != nil {
-			chunk.Source = *source
-		}
-		if sourceID != nil {
-			chunk.SourceID = *sourceID
-		}
-		if convID != nil {
-			chunk.ConversationID = *convID
-		}
-		if len(metadataJSON) > 0 {
-			var meta recall.Metadata
-			if err := json.Unmarshal(metadataJSON, &meta); err == nil {
-				chunk.Metadata = &meta
-			}
-		}
-
-		chunks = append(chunks, chunk)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate chunks: %w", err)
-	}
-
-	return chunks, nil
+	return scanChunkRows(rows)
 }
 
 // ConversationExists checks if any chunks exist for the given conversation ID.

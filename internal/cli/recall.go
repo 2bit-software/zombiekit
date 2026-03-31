@@ -119,42 +119,44 @@ func getEmbedder(cfg config.StorageConfig) (*recall.OllamaEmbedder, error) {
 	return recall.NewOllamaEmbedder(cfg.OllamaURL, cfg.EmbeddingModel)
 }
 
+// readContentFromArgs reads content from CLI arguments or stdin.
+// Returns empty string if no content is available.
+func readContentFromArgs(c *cli.Context) (string, error) {
+	if c.NArg() >= 1 {
+		arg := c.Args().Get(0)
+		if arg != "-" {
+			return arg, nil
+		}
+		return readStdin(os.Stdin)
+	}
+
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		return "", nil
+	}
+	return readStdin(os.Stdin)
+}
+
+func readStdin(r io.Reader) (string, error) {
+	data, err := io.ReadAll(bufio.NewReader(r))
+	if err != nil {
+		return "", fmt.Errorf("failed to read stdin: %w", err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
 func recallSaveAction(c *cli.Context) error {
 	ctx := context.Background()
 	cfg := config.LoadStorageConfigFromEnv()
 
-	// Read content from args or stdin
-	var content string
-	if c.NArg() >= 1 {
-		arg := c.Args().Get(0)
-		if arg == "-" {
-			// Read from stdin
-			data, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				return fmt.Errorf("failed to read stdin: %w", err)
-			}
-			content = strings.TrimSpace(string(data))
-		} else {
-			content = arg
-		}
-	} else {
-		// Try reading from stdin if piped
-		stat, _ := os.Stdin.Stat()
-		if (stat.Mode() & os.ModeCharDevice) == 0 {
-			reader := bufio.NewReader(os.Stdin)
-			data, err := io.ReadAll(reader)
-			if err != nil {
-				return fmt.Errorf("failed to read stdin: %w", err)
-			}
-			content = strings.TrimSpace(string(data))
-		}
+	content, err := readContentFromArgs(c)
+	if err != nil {
+		return err
 	}
-
 	if content == "" {
 		return fmt.Errorf("content is required\nUsage: brains recall save <text> or echo 'text' | brains recall save -")
 	}
 
-	// Initialize embedder and check availability
 	embedder, err := getEmbedder(cfg)
 	if err != nil {
 		return err
@@ -164,28 +166,23 @@ func recallSaveAction(c *cli.Context) error {
 		return fmt.Errorf("cannot connect to Ollama at %s\nMake sure Ollama is running: ollama serve", cfg.OllamaURL)
 	}
 
-	// Initialize storage
 	storage, err := getRecallStorage(ctx, cfg)
 	if err != nil {
 		return err
 	}
 	defer storage.Close()
 
-	// Generate embedding
 	embedding, err := embedder.Embed(ctx, content, recall.PurposeDocument)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	// Save to database
 	id, created, err := storage.Save(ctx, content, embedding)
 	if err != nil {
 		return fmt.Errorf("failed to save content: %w", err)
 	}
 
-	// Output only if new content was created (silent on duplicate per spec)
 	if created {
-		// Truncate content for display
 		displayContent := content
 		if len(displayContent) > 60 {
 			displayContent = displayContent[:57] + "..."
@@ -315,10 +312,8 @@ func recallWatchClaudeAction(c *cli.Context) error {
 	projectPath := c.String("project")
 	verbose := c.Bool("verbose")
 	force := c.Bool("force")
-	once := c.Bool("once")
 	interval := c.Duration("interval")
 
-	// Initialize embedder and check availability
 	embedder, err := getEmbedder(cfg)
 	if err != nil {
 		return err
@@ -328,28 +323,37 @@ func recallWatchClaudeAction(c *cli.Context) error {
 		return fmt.Errorf("cannot connect to Ollama at %s\nMake sure Ollama is running: ollama serve", cfg.OllamaURL)
 	}
 
-	// Initialize storage
 	storage, err := getRecallStorage(ctx, cfg)
 	if err != nil {
 		return err
 	}
 	defer storage.Close()
 
-	// Initial import
 	result, err := importClaudeHistory(ctx, c.App.Writer, storage, embedder, claudePath, projectPath, verbose, force)
 	if err != nil {
 		return err
 	}
-
-	// Summary output
 	result.printSummary(c.App.Writer, verbose)
 
-	if once {
+	if c.Bool("once") {
 		return nil
 	}
 
-	// Watch mode - set up signal handling
-	fmt.Fprintf(c.App.Writer, "Watching for new conversations (interval: %s)...\n", interval)
+	return watchClaudeHistory(ctx, c.App.Writer, storage, embedder, claudePath, projectPath, verbose, force, interval)
+}
+
+// watchClaudeHistory polls for new Claude conversations on an interval until
+// interrupted by SIGINT/SIGTERM.
+func watchClaudeHistory(
+	ctx context.Context,
+	w io.Writer,
+	storage recall.Storage,
+	embedder *recall.OllamaEmbedder,
+	claudePath, projectPath string,
+	verbose, force bool,
+	interval time.Duration,
+) error {
+	fmt.Fprintf(w, "Watching for new conversations (interval: %s)...\n", interval)
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
@@ -360,16 +364,16 @@ func recallWatchClaudeAction(c *cli.Context) error {
 	for {
 		select {
 		case <-ticker.C:
-			result, err := importClaudeHistory(ctx, c.App.Writer, storage, embedder, claudePath, projectPath, verbose, force)
+			result, err := importClaudeHistory(ctx, w, storage, embedder, claudePath, projectPath, verbose, force)
 			if err != nil {
-				fmt.Fprintf(c.App.Writer, "Error during import: %v\n", err)
+				fmt.Fprintf(w, "Error during import: %v\n", err)
 				continue
 			}
 			if result.newCount > 0 || result.divergenceCount > 0 {
-				result.printSummary(c.App.Writer, verbose)
+				result.printSummary(w, verbose)
 			}
 		case <-done:
-			fmt.Fprintln(c.App.Writer, "\nShutting down...")
+			fmt.Fprintln(w, "\nShutting down...")
 			return nil
 		}
 	}
@@ -458,28 +462,46 @@ func importClaudeHistory(
 	}
 
 	// Process each file
+	processFiles(ctx, w, storage, embedder, files, verbose, force, result)
+
+	return result, nil
+}
+
+// processFiles iterates over history files, processes each, and accumulates
+// results into the provided claudeImportResult.
+func processFiles(
+	ctx context.Context,
+	w io.Writer,
+	storage recall.Storage,
+	embedder *recall.OllamaEmbedder,
+	files []string,
+	verbose, force bool,
+	result *claudeImportResult,
+) {
 	for _, filePath := range files {
-		fileResult, err := processFile(ctx, w, storage, embedder, filePath, verbose, force)
+		fr, err := processFile(ctx, w, storage, embedder, filePath, verbose, force)
 		if err != nil {
 			if verbose {
 				fmt.Fprintf(w, "Warning: failed to process %s: %v\n", filePath, err)
 			}
 			continue
 		}
-
-		result.newCount += fileResult.newCount
-		result.skipCount += fileResult.skipCount
-		if fileResult.unchanged {
-			result.unchangedFiles++
-		} else {
-			result.changedFiles++
-		}
-		if fileResult.divergence {
-			result.divergenceCount++
-		}
+		accumulateFileResult(result, fr)
 	}
+}
 
-	return result, nil
+// accumulateFileResult merges a single file's import stats into the aggregate result.
+func accumulateFileResult(result *claudeImportResult, fr *fileResult) {
+	result.newCount += fr.newCount
+	result.skipCount += fr.skipCount
+	if fr.unchanged {
+		result.unchangedFiles++
+	} else {
+		result.changedFiles++
+	}
+	if fr.divergence {
+		result.divergenceCount++
+	}
 }
 
 // fileResult contains statistics from processing a single file.
@@ -488,6 +510,122 @@ type fileResult struct {
 	skipCount  int
 	unchanged  bool // File was skipped via mtime check
 	divergence bool // Sync point not found, history_gap was set
+}
+
+// checkImportState determines whether a file needs re-importing by comparing
+// its mtime against previously stored state. Returns the last known UUID for
+// incremental parsing and whether the file is unchanged.
+func checkImportState(
+	ctx context.Context,
+	storage recall.Storage,
+	filePath string,
+	fileMtime int64,
+	force bool,
+) (lastKnownUUID string, unchanged bool, err error) {
+	if force {
+		return "", false, nil
+	}
+
+	state, err := storage.GetImportState(ctx, filePath)
+	if err != nil {
+		return "", false, fmt.Errorf("get import state: %w", err)
+	}
+	if state == nil {
+		return "", false, nil
+	}
+
+	if state.FileMtime == fileMtime {
+		return "", true, nil
+	}
+	return state.LastEntryUUID, false, nil
+}
+
+// importEntries embeds and saves parsed history entries as chunks, returning
+// counts of new and skipped records.
+func importEntries(
+	ctx context.Context,
+	storage recall.Storage,
+	embedder *recall.OllamaEmbedder,
+	entries []claude.HistoryEntry,
+	divergence, verbose bool,
+	w io.Writer,
+) (newCount, skipCount int, err error) {
+	firstEntry := true
+	for _, entry := range entries {
+		content := claude.ExtractContent(entry)
+		if content == "" {
+			continue
+		}
+
+		n, s, err := importChunks(ctx, storage, embedder, entry, content, divergence && firstEntry, verbose, w)
+		if err != nil {
+			return newCount, skipCount, err
+		}
+		newCount += n
+		skipCount += s
+		if n > 0 {
+			firstEntry = false
+		}
+	}
+	return newCount, skipCount, nil
+}
+
+// importChunks splits a single entry's content into chunks, embeds each, and
+// saves them. Returns new/skip counts for the entry.
+func importChunks(
+	ctx context.Context,
+	storage recall.Storage,
+	embedder *recall.OllamaEmbedder,
+	entry claude.HistoryEntry,
+	content string,
+	historyGap, verbose bool,
+	w io.Writer,
+) (newCount, skipCount int, err error) {
+	var parentID string
+	if entry.ParentUUID != nil {
+		parentID = *entry.ParentUUID
+	}
+	metadata := &recall.Metadata{
+		Role:      entry.Message.Role,
+		Timestamp: entry.Timestamp,
+		GitBranch: entry.GitBranch,
+		CWD:       entry.CWD,
+		ParentID:  parentID,
+	}
+
+	chunks := claude.ChunkMessage(content)
+	gapApplied := false
+	for i, chunkContent := range chunks {
+		embedding, err := embedder.Embed(ctx, chunkContent, recall.PurposeDocument)
+		if err != nil {
+			return newCount, skipCount, fmt.Errorf("generate embedding: %w", err)
+		}
+
+		input := recall.ChunkInput{
+			Content:        chunkContent,
+			Source:         "claude",
+			SourceID:       claude.ChunkSourceID(entry.UUID, i, len(chunks)),
+			ConversationID: entry.SessionID,
+			Metadata:       metadata,
+			HistoryGap:     historyGap && !gapApplied,
+		}
+
+		_, created, err := storage.SaveWithSource(ctx, input, embedding)
+		if err != nil {
+			return newCount, skipCount, fmt.Errorf("save chunk: %w", err)
+		}
+
+		if created {
+			newCount++
+			gapApplied = true
+			if verbose {
+				fmt.Fprintf(w, "    [%s] %s... (imported)\n", entry.Message.Role, truncate(chunkContent, 40))
+			}
+		} else {
+			skipCount++
+		}
+	}
+	return newCount, skipCount, nil
 }
 
 // processFile handles the import of a single JSONL file.
@@ -501,126 +639,76 @@ func processFile(
 ) (*fileResult, error) {
 	result := &fileResult{}
 
-	// Get file info for mtime check
 	stat, err := os.Stat(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("stat file: %w", err)
 	}
 	fileMtime := stat.ModTime().UnixNano()
 
-	// Check import state (skip if unchanged and not forcing)
-	var lastKnownUUID string
-	if !force {
-		state, err := storage.GetImportState(ctx, filePath)
-		if err != nil {
-			return nil, fmt.Errorf("get import state: %w", err)
+	lastKnownUUID, unchanged, err := checkImportState(ctx, storage, filePath, fileMtime, force)
+	if err != nil {
+		return nil, err
+	}
+	if unchanged {
+		result.unchanged = true
+		if verbose {
+			fmt.Fprintf(w, "  %s: unchanged (skipped)\n", filePath)
 		}
-
-		if state != nil {
-			// File has been imported before - check if unchanged
-			if state.FileMtime == fileMtime {
-				result.unchanged = true
-				if verbose {
-					fmt.Fprintf(w, "  %s: unchanged (skipped)\n", filePath)
-				}
-				return result, nil
-			}
-			lastKnownUUID = state.LastEntryUUID
-		}
+		return result, nil
 	}
 
-	// Parse file from sync point
-	entries, lastUUID, err := claude.ParseFileFromUUID(filePath, lastKnownUUID)
-	if errors.Is(err, claude.ErrSyncPointNotFound) {
-		// Divergence detected - import all and mark with history_gap
-		result.divergence = true
-		fmt.Fprintf(w, "Warning: sync point not found in %s - importing with history_gap marker\n", filePath)
-
-		entries, lastUUID, err = claude.ParseFileFromUUID(filePath, "") // Full import
-		if err != nil {
-			return nil, fmt.Errorf("parse file: %w", err)
-		}
-	} else if err != nil {
-		return nil, fmt.Errorf("parse file: %w", err)
+	entries, lastUUID, divergence, err := parseWithDivergenceFallback(filePath, lastKnownUUID, w)
+	if err != nil {
+		return nil, err
 	}
+	result.divergence = divergence
 
 	if verbose && len(entries) > 0 {
 		fmt.Fprintf(w, "  %s: %d new entries\n", filePath, len(entries))
 	}
 
-	// Import entries
-	firstEntry := true
-	for _, entry := range entries {
-		// Extract content
-		content := claude.ExtractContent(entry)
-		if content == "" {
-			continue
-		}
+	newCount, skipCount, err := importEntries(ctx, storage, embedder, entries, result.divergence, verbose, w)
+	if err != nil {
+		return nil, err
+	}
+	result.newCount = newCount
+	result.skipCount = skipCount
 
-		// Chunk message if needed
-		chunks := claude.ChunkMessage(content)
-		for i, chunkContent := range chunks {
-			sourceID := claude.ChunkSourceID(entry.UUID, i, len(chunks))
-
-			// Generate embedding
-			embedding, err := embedder.Embed(ctx, chunkContent, recall.PurposeDocument)
-			if err != nil {
-				return nil, fmt.Errorf("generate embedding: %w", err)
-			}
-
-			// Build metadata
-			var parentID string
-			if entry.ParentUUID != nil {
-				parentID = *entry.ParentUUID
-			}
-			metadata := &recall.Metadata{
-				Role:      entry.Message.Role,
-				Timestamp: entry.Timestamp,
-				GitBranch: entry.GitBranch,
-				CWD:       entry.CWD,
-				ParentID:  parentID,
-			}
-
-			// Save with source tracking
-			input := recall.ChunkInput{
-				Content:        chunkContent,
-				Source:         "claude",
-				SourceID:       sourceID,
-				ConversationID: entry.SessionID,
-				Metadata:       metadata,
-				HistoryGap:     result.divergence && firstEntry,
-			}
-
-			_, created, err := storage.SaveWithSource(ctx, input, embedding)
-			if err != nil {
-				return nil, fmt.Errorf("save chunk: %w", err)
-			}
-
-			if created {
-				result.newCount++
-				if verbose {
-					fmt.Fprintf(w, "    [%s] %s... (imported)\n", entry.Message.Role, truncate(chunkContent, 40))
-				}
-				firstEntry = false // Only mark first successfully imported chunk with history_gap
-			} else {
-				result.skipCount++
-			}
-		}
+	if lastUUID == "" || force {
+		return result, nil
 	}
 
-	// Update import state if we have a last UUID
-	if lastUUID != "" && !force {
-		state := &recall.ImportState{
-			FilePath:      filePath,
-			LastEntryUUID: lastUUID,
-			FileMtime:     fileMtime,
-		}
-		if err := storage.SaveImportState(ctx, state); err != nil {
-			return nil, fmt.Errorf("save import state: %w", err)
-		}
+	state := &recall.ImportState{
+		FilePath:      filePath,
+		LastEntryUUID: lastUUID,
+		FileMtime:     fileMtime,
+	}
+	if err := storage.SaveImportState(ctx, state); err != nil {
+		return nil, fmt.Errorf("save import state: %w", err)
 	}
 
 	return result, nil
+}
+
+// parseWithDivergenceFallback attempts incremental parsing from lastKnownUUID.
+// On sync-point-not-found, it falls back to a full re-parse and flags a
+// divergence so the caller can apply history_gap markers.
+func parseWithDivergenceFallback(filePath, lastKnownUUID string, w io.Writer) (entries []claude.HistoryEntry, lastUUID string, divergence bool, err error) {
+	entries, lastUUID, err = claude.ParseFileFromUUID(filePath, lastKnownUUID)
+	if !errors.Is(err, claude.ErrSyncPointNotFound) {
+		if err != nil {
+			return nil, "", false, fmt.Errorf("parse file: %w", err)
+		}
+		return entries, lastUUID, false, nil
+	}
+
+	fmt.Fprintf(w, "Warning: sync point not found in %s - importing with history_gap marker\n", filePath)
+
+	entries, lastUUID, err = claude.ParseFileFromUUID(filePath, "")
+	if err != nil {
+		return nil, "", false, fmt.Errorf("parse file: %w", err)
+	}
+	return entries, lastUUID, true, nil
 }
 
 // recallConversationAction displays all messages in a conversation.

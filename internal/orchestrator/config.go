@@ -64,51 +64,35 @@ func NewConfig(c *cli.Context) (*Config, error) {
 	return cfg, nil
 }
 
+type configRule struct {
+	msg   string
+	check func(*Config) bool
+}
+
+var configRules = []configRule{
+	{"--linear-api-key/ORCH_LINEAR_API_KEY is required", func(c *Config) bool { return c.LinearAPIKey == "" }},
+	{"--github-token/ORCH_GITHUB_TOKEN is required", func(c *Config) bool { return c.GitHubToken == "" }},
+	{"--callback-port/ORCH_CALLBACK_PORT must be 1-65535", func(c *Config) bool { return c.CallbackPort < 1 || c.CallbackPort > 65535 }},
+	{"--worktrees-root/ORCH_WORKTREES_ROOT is required", func(c *Config) bool { return c.WorktreesRoot == "" }},
+	{"--db-path/ORCH_DB_PATH is required", func(c *Config) bool { return c.DBPath == "" }},
+	{"--concurrency-limit/ORCH_CONCURRENCY_LIMIT must be >= 1", func(c *Config) bool { return c.ConcurrencyLimit < 1 }},
+	{"--poll-interval/ORCH_POLL_INTERVAL must be > 0", func(c *Config) bool { return c.PollInterval <= 0 }},
+	{"--log-level/ORCH_LOG_LEVEL must be one of: debug, info, warn, error", func(c *Config) bool { return !validLogLevels[c.LogLevel] }},
+	{"--shutdown-timeout/ORCH_SHUTDOWN_TIMEOUT must be > 0", func(c *Config) bool { return c.ShutdownTimeout <= 0 }},
+	{"--project-id/ORCH_PROJECT_ID is required", func(c *Config) bool { return c.ProjectID == "" }},
+	{"--repo-dir/ORCH_REPO_DIR is required", func(c *Config) bool { return c.RepoDir == "" }},
+	{"--github-owner/ORCH_GITHUB_OWNER is required", func(c *Config) bool { return c.GitHubOwner == "" }},
+	{"--github-repo/ORCH_GITHUB_REPO is required", func(c *Config) bool { return c.GitHubRepo == "" }},
+	{"--bot-username/ORCH_BOT_USERNAME is required", func(c *Config) bool { return c.BotUsername == "" }},
+}
+
 // Validate checks all config fields and returns a multi-error listing every failure.
 func (c *Config) Validate() error {
 	var errs []string
-
-	if c.LinearAPIKey == "" {
-		errs = append(errs, "--linear-api-key/ORCH_LINEAR_API_KEY is required")
-	}
-	if c.GitHubToken == "" {
-		errs = append(errs, "--github-token/ORCH_GITHUB_TOKEN is required")
-	}
-	if c.CallbackPort < 1 || c.CallbackPort > 65535 {
-		errs = append(errs, "--callback-port/ORCH_CALLBACK_PORT must be 1-65535")
-	}
-	if c.WorktreesRoot == "" {
-		errs = append(errs, "--worktrees-root/ORCH_WORKTREES_ROOT is required")
-	}
-	if c.DBPath == "" {
-		errs = append(errs, "--db-path/ORCH_DB_PATH is required")
-	}
-	if c.ConcurrencyLimit < 1 {
-		errs = append(errs, "--concurrency-limit/ORCH_CONCURRENCY_LIMIT must be >= 1")
-	}
-	if c.PollInterval <= 0 {
-		errs = append(errs, "--poll-interval/ORCH_POLL_INTERVAL must be > 0")
-	}
-	if !validLogLevels[c.LogLevel] {
-		errs = append(errs, "--log-level/ORCH_LOG_LEVEL must be one of: debug, info, warn, error")
-	}
-	if c.ShutdownTimeout <= 0 {
-		errs = append(errs, "--shutdown-timeout/ORCH_SHUTDOWN_TIMEOUT must be > 0")
-	}
-	if c.ProjectID == "" {
-		errs = append(errs, "--project-id/ORCH_PROJECT_ID is required")
-	}
-	if c.RepoDir == "" {
-		errs = append(errs, "--repo-dir/ORCH_REPO_DIR is required")
-	}
-	if c.GitHubOwner == "" {
-		errs = append(errs, "--github-owner/ORCH_GITHUB_OWNER is required")
-	}
-	if c.GitHubRepo == "" {
-		errs = append(errs, "--github-repo/ORCH_GITHUB_REPO is required")
-	}
-	if c.BotUsername == "" {
-		errs = append(errs, "--bot-username/ORCH_BOT_USERNAME is required")
+	for _, r := range configRules {
+		if r.check(c) {
+			errs = append(errs, r.msg)
+		}
 	}
 
 	if len(errs) > 0 {

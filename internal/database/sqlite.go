@@ -68,8 +68,3 @@ func (s *SQLiteDB) Close() error {
 	}
 	return nil
 }
-
-// Ping verifies the connection is still alive.
-func (s *SQLiteDB) Ping(ctx context.Context) error {
-	return s.db.PingContext(ctx)
-}

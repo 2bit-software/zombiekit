@@ -1,1 +1,9 @@
 # Sentrux rules for zombiekit (Go)
+
+[constraints]
+max_cycles = 0
+max_cc = 25
+max_fn_lines = 100
+
+[scan]
+exclude_dirs = ["gen", "history", "embed"]

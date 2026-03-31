@@ -97,94 +97,25 @@ func (i *Importer) Import(ctx context.Context) (*ImportResult, error) {
 		DryRun:     i.opts.DryRun,
 	}
 
-	// Check for previous import
-	lastImport, err := i.metadata.GetLastImport(ctx, i.opts.SourcePath)
+	items, err := i.fetchPendingItems(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("get last import: %w", err)
-	}
-
-	// Fetch items to import
-	var items []memory.MemoryItem
-	if lastImport != nil && lastImport.LastImportedUpdatedAt != nil {
-		items, err = i.fetchMemoriesSince(ctx, *lastImport.LastImportedUpdatedAt)
-	} else {
-		items, err = i.fetchAllMemories(ctx)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("fetch memories: %w", err)
+		return nil, err
 	}
 
 	result.TotalInSource = len(items)
 
-	// Dry run - just return what would be imported
 	if i.opts.DryRun {
 		return i.preview(ctx, items, result)
 	}
 
-	// Import items
-	var maxUpdatedAt *time.Time
-	for idx, item := range items {
-		// Check for existing version
-		action, err := i.checkExistingVersion(ctx, item)
-		if err != nil {
-			result.ErrorCount++
-			result.ErrorDetails = append(result.ErrorDetails, ItemError{
-				Name:    item.Name,
-				Version: item.Version,
-				Error:   err.Error(),
-			})
-			continue
-		}
+	imported, maxUpdatedAt, itemErrors := i.importBatch(ctx, items)
+	result.Imported = imported
+	result.ErrorCount = len(itemErrors)
+	result.ErrorDetails = append(result.ErrorDetails, itemErrors...)
+	result.Skipped = len(items) - imported - len(itemErrors)
 
-		switch action {
-		case actionSkip:
-			result.Skipped++
-		case actionInsert, actionSoftDeleteAndInsert:
-			if action == actionSoftDeleteAndInsert {
-				if err := i.softDeleteVersions(ctx, item.Name); err != nil {
-					result.ErrorCount++
-					result.ErrorDetails = append(result.ErrorDetails, ItemError{
-						Name:    item.Name,
-						Version: item.Version,
-						Error:   fmt.Sprintf("soft delete: %s", err.Error()),
-					})
-					continue
-				}
-			}
-
-			if err := i.insertMemory(ctx, item); err != nil {
-				result.ErrorCount++
-				result.ErrorDetails = append(result.ErrorDetails, ItemError{
-					Name:    item.Name,
-					Version: item.Version,
-					Error:   err.Error(),
-				})
-				continue
-			}
-			result.Imported++
-
-			// Track max updated_at
-			if maxUpdatedAt == nil || item.UpdatedAt.After(*maxUpdatedAt) {
-				t := normalizeToUTC(item.UpdatedAt)
-				maxUpdatedAt = &t
-			}
-		}
-
-		// Report progress
-		if i.opts.OnProgress != nil {
-			i.opts.OnProgress(result.Imported, len(items), item.Name)
-		}
-
-		// Batch commit (every BatchSize items)
-		if (idx+1)%i.opts.BatchSize == 0 {
-			// Progress checkpoint - metadata will be saved at the end
-		}
-	}
-
-	// Save import metadata
 	if result.Imported > 0 {
 		if err := i.metadata.SaveImportMetadata(ctx, i.opts.SourcePath, result.Imported, maxUpdatedAt); err != nil {
-			// Log but don't fail the import
 			result.ErrorDetails = append(result.ErrorDetails, ItemError{
 				Name:  "_metadata",
 				Error: fmt.Sprintf("save metadata: %s", err.Error()),
@@ -196,12 +127,84 @@ func (i *Importer) Import(ctx context.Context) (*ImportResult, error) {
 	return result, nil
 }
 
-// Preview returns what would be imported without making changes.
-func (i *Importer) Preview(ctx context.Context) (*ImportResult, error) {
-	opts := i.opts
-	opts.DryRun = true
-	i.opts = opts
-	return i.Import(ctx)
+// fetchPendingItems returns the memory items that need importing, based on the
+// last successful import timestamp.
+func (i *Importer) fetchPendingItems(ctx context.Context) ([]memory.MemoryItem, error) {
+	lastImport, err := i.metadata.GetLastImport(ctx, i.opts.SourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("get last import: %w", err)
+	}
+
+	if lastImport != nil && lastImport.LastImportedUpdatedAt != nil {
+		items, err := i.fetchMemoriesSince(ctx, *lastImport.LastImportedUpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("fetch memories: %w", err)
+		}
+		return items, nil
+	}
+
+	items, err := i.fetchAllMemories(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetch memories: %w", err)
+	}
+	return items, nil
+}
+
+// importBatch imports a slice of items, returning the count of successful
+// imports, the latest updated_at timestamp among imported items, and any item
+// errors encountered.
+func (i *Importer) importBatch(ctx context.Context, items []memory.MemoryItem) (imported int, maxUpdatedAt *time.Time, errs []ItemError) {
+	for _, item := range items {
+		action, err := i.importItem(ctx, item)
+		if err != nil {
+			errs = append(errs, ItemError{
+				Name:    item.Name,
+				Version: item.Version,
+				Error:   err.Error(),
+			})
+			continue
+		}
+
+		if action == actionInsert || action == actionSoftDeleteAndInsert {
+			imported++
+			if maxUpdatedAt == nil || item.UpdatedAt.After(*maxUpdatedAt) {
+				t := normalizeToUTC(item.UpdatedAt)
+				maxUpdatedAt = &t
+			}
+		}
+
+		if i.opts.OnProgress != nil {
+			i.opts.OnProgress(imported, len(items), item.Name)
+		}
+	}
+	return imported, maxUpdatedAt, errs
+}
+
+// importItem handles the per-item import logic: checks the existing version in
+// PostgreSQL and performs the appropriate action (skip, insert, or soft-delete
+// old versions then insert). Returns the action taken so the caller can update
+// counters.
+func (i *Importer) importItem(ctx context.Context, item memory.MemoryItem) (importAction, error) {
+	action, err := i.checkExistingVersion(ctx, item)
+	if err != nil {
+		return actionSkip, err
+	}
+
+	if action == actionSkip {
+		return actionSkip, nil
+	}
+
+	if action == actionSoftDeleteAndInsert {
+		if err := i.softDeleteVersions(ctx, item.Name); err != nil {
+			return actionSkip, fmt.Errorf("soft delete: %w", err)
+		}
+	}
+
+	if err := i.insertMemory(ctx, item); err != nil {
+		return actionSkip, err
+	}
+
+	return action, nil
 }
 
 // preview populates the result with pending items for dry-run mode.

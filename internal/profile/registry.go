@@ -47,17 +47,6 @@ func NewRegistryManager() (*RegistryManager, error) {
 	}, nil
 }
 
-// Load reads the registry from disk. Returns an empty registry if the file doesn't exist.
-func (rm *RegistryManager) Load() (*Registry, error) {
-	fileLock := flock.New(rm.lockPath)
-	if err := fileLock.Lock(); err != nil {
-		return nil, fmt.Errorf("acquiring lock: %w", err)
-	}
-	defer fileLock.Unlock()
-
-	return rm.loadUnlocked()
-}
-
 // loadUnlocked reads the registry without acquiring a lock (caller must hold lock).
 func (rm *RegistryManager) loadUnlocked() (*Registry, error) {
 	data, err := os.ReadFile(rm.registryPath)
@@ -77,17 +66,6 @@ func (rm *RegistryManager) loadUnlocked() (*Registry, error) {
 	}
 
 	return &registry, nil
-}
-
-// Save writes the registry to disk with proper locking.
-func (rm *RegistryManager) Save(registry *Registry) error {
-	fileLock := flock.New(rm.lockPath)
-	if err := fileLock.Lock(); err != nil {
-		return fmt.Errorf("acquiring lock: %w", err)
-	}
-	defer fileLock.Unlock()
-
-	return rm.saveUnlocked(registry)
 }
 
 // saveUnlocked writes the registry without acquiring a lock (caller must hold lock).
@@ -160,57 +138,3 @@ func (rm *RegistryManager) Register(brainsPath string) error {
 	return rm.saveUnlocked(registry)
 }
 
-// Unregister removes a .brains/ directory from the registry.
-func (rm *RegistryManager) Unregister(brainsPath string) error {
-	absPath, err := filepath.Abs(brainsPath)
-	if err != nil {
-		return fmt.Errorf("resolving absolute path: %w", err)
-	}
-
-	fileLock := flock.New(rm.lockPath)
-	if err := fileLock.Lock(); err != nil {
-		return fmt.Errorf("acquiring lock: %w", err)
-	}
-	defer fileLock.Unlock()
-
-	registry, err := rm.loadUnlocked()
-	if err != nil {
-		return err
-	}
-
-	// Filter out the path
-	filtered := registry.Directories[:0]
-	for _, entry := range registry.Directories {
-		if entry.Path != absPath {
-			filtered = append(filtered, entry)
-		}
-	}
-	registry.Directories = filtered
-
-	return rm.saveUnlocked(registry)
-}
-
-// Prune removes entries for directories that no longer exist.
-func (rm *RegistryManager) Prune() error {
-	fileLock := flock.New(rm.lockPath)
-	if err := fileLock.Lock(); err != nil {
-		return fmt.Errorf("acquiring lock: %w", err)
-	}
-	defer fileLock.Unlock()
-
-	registry, err := rm.loadUnlocked()
-	if err != nil {
-		return err
-	}
-
-	// Filter to only existing directories
-	filtered := registry.Directories[:0]
-	for _, entry := range registry.Directories {
-		if info, err := os.Stat(entry.Path); err == nil && info.IsDir() {
-			filtered = append(filtered, entry)
-		}
-	}
-	registry.Directories = filtered
-
-	return rm.saveUnlocked(registry)
-}

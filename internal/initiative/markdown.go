@@ -77,6 +77,75 @@ var (
 	titleRe = regexp.MustCompile(`^#\s+Initiative:\s*(.+)$`)
 )
 
+// parseMetadataField applies a parsed metadata key-value pair to the initiative.
+func parseMetadataField(parsed *ParsedInitiative, key, value string) {
+	switch key {
+	case "Type":
+		parsed.Type = value
+	case "Status":
+		parsed.Status = value
+	case "Created":
+		if t, err := time.Parse("2006-01-02", value); err == nil {
+			parsed.Created = t
+		} else if t, err := time.Parse(time.RFC3339, value); err == nil {
+			parsed.Created = t
+		}
+	}
+}
+
+// parseStepRow attempts to parse a markdown table row as a step.
+// Returns nil if the line is not a valid step row.
+func parseStepRow(line string) *ParsedStep {
+	matches := stepRowRe.FindStringSubmatch(line)
+	if matches == nil {
+		return nil
+	}
+
+	stepName := strings.TrimSpace(matches[1])
+	if stepName == "Step" || stepName == "step" {
+		return nil
+	}
+
+	return &ParsedStep{
+		Name:    stepName,
+		Status:  parseStepStatus(strings.TrimSpace(matches[2])),
+		Updated: strings.TrimSpace(matches[3]),
+	}
+}
+
+// scanLine processes a single line from the initiative file, updating the parsed state.
+// Returns the updated inStepTable flag.
+func scanLine(parsed *ParsedInitiative, line string, inStepTable bool) bool {
+	if matches := titleRe.FindStringSubmatch(line); matches != nil {
+		parsed.Name = strings.TrimSpace(matches[1])
+		return inStepTable
+	}
+
+	if matches := metadataRe.FindStringSubmatch(line); matches != nil {
+		parseMetadataField(parsed, matches[1], strings.TrimSpace(matches[2]))
+		return inStepTable
+	}
+
+	if strings.HasPrefix(line, "| Step ") {
+		return true
+	}
+
+	if strings.HasPrefix(line, "|---") || strings.HasPrefix(line, "| ---") {
+		return inStepTable
+	}
+
+	if !inStepTable {
+		return false
+	}
+
+	if step := parseStepRow(line); step != nil {
+		parsed.Steps = append(parsed.Steps, *step)
+		return true
+	}
+
+	return line != "" && strings.HasPrefix(line, "|")
+}
+
 // ParseInitiativeMD parses an INITIATIVE.md file into structured data.
 func ParseInitiativeMD(path string) (*ParsedInitiative, error) {
 	file, err := os.Open(path)
@@ -87,73 +156,10 @@ func ParseInitiativeMD(path string) (*ParsedInitiative, error) {
 
 	parsed := &ParsedInitiative{}
 	scanner := bufio.NewScanner(file)
-
 	inStepTable := false
 
 	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Parse title: # Initiative: name
-		if matches := titleRe.FindStringSubmatch(line); matches != nil {
-			parsed.Name = strings.TrimSpace(matches[1])
-			continue
-		}
-
-		// Parse metadata: **Key**: value
-		if matches := metadataRe.FindStringSubmatch(line); matches != nil {
-			key := matches[1]
-			value := strings.TrimSpace(matches[2])
-			switch key {
-			case "Type":
-				parsed.Type = value
-			case "Status":
-				parsed.Status = value
-			case "Created":
-				// Try to parse the date
-				if t, err := time.Parse("2006-01-02", value); err == nil {
-					parsed.Created = t
-				} else if t, err := time.Parse(time.RFC3339, value); err == nil {
-					parsed.Created = t
-				}
-			}
-			continue
-		}
-
-		// Detect step table header (## Steps section or | Step | header row)
-		if strings.HasPrefix(line, "| Step ") {
-			inStepTable = true
-			continue
-		}
-
-		// Skip table separator
-		if strings.HasPrefix(line, "|---") || strings.HasPrefix(line, "| ---") {
-			continue
-		}
-
-		// Parse step table row
-		if inStepTable {
-			if matches := stepRowRe.FindStringSubmatch(line); matches != nil {
-				stepName := strings.TrimSpace(matches[1])
-				statusStr := strings.TrimSpace(matches[2])
-				updated := strings.TrimSpace(matches[3])
-
-				// Skip if this looks like a header row
-				if stepName == "Step" || stepName == "step" {
-					continue
-				}
-
-				step := ParsedStep{
-					Name:    stepName,
-					Status:  parseStepStatus(statusStr),
-					Updated: updated,
-				}
-				parsed.Steps = append(parsed.Steps, step)
-				continue
-			} else if line == "" || !strings.HasPrefix(line, "|") {
-				// End of table
-				inStepTable = false
-			}
-		}
+		inStepTable = scanLine(parsed, scanner.Text(), inStepTable)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -213,58 +219,52 @@ func (p *ParsedInitiative) AddStep(afterStep string, newStep ParsedStep) error {
 	return fmt.Errorf("step not found: %s", afterStep)
 }
 
-// WriteTo writes the parsed initiative to a file, preserving non-step sections.
-// Uses atomic write (temp file + rename) for safety.
-func (p *ParsedInitiative) WriteTo(path string) error {
-	// Read the original file to preserve non-step content
-	originalContent, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading original file: %w", err)
-	}
-
-	// Find the Steps section and replace it
-	lines := strings.Split(string(originalContent), "\n")
+// replaceStepsSection replaces the Steps/Cycles section in the given lines with new step content.
+// Returns the resulting lines and whether the section was found.
+func replaceStepsSection(lines []string, stepLines []string) ([]string, bool) {
 	var result []string
 	inStepsSection := false
 	stepsWritten := false
 
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-
-		// Detect "## Steps" or legacy "## Cycles" section
+	for _, line := range lines {
 		if strings.HasPrefix(line, "## Steps") || strings.HasPrefix(line, "## Cycles") {
-			result = append(result, "## Steps")
-			result = append(result, "")
+			result = append(result, "## Steps", "")
+			result = append(result, stepLines...)
 			inStepsSection = true
-
-			// Write all steps
-			result = append(result, p.formatSteps()...)
 			stepsWritten = true
 			continue
 		}
 
-		// If in steps section, skip until next ## section
 		if inStepsSection {
-			if strings.HasPrefix(line, "## ") && !strings.HasPrefix(line, "## Steps") && !strings.HasPrefix(line, "## Cycles") {
+			if strings.HasPrefix(line, "## ") {
 				inStepsSection = false
 				result = append(result, line)
 			}
-			// Skip lines in steps section (they've been replaced)
 			continue
 		}
 
 		result = append(result, line)
 	}
 
-	// If no steps section was found, append one
+	return result, stepsWritten
+}
+
+// WriteTo writes the parsed initiative to a file, preserving non-step sections.
+// Uses atomic write (temp file + rename) for safety.
+func (p *ParsedInitiative) WriteTo(path string) error {
+	originalContent, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading original file: %w", err)
+	}
+
+	lines := strings.Split(string(originalContent), "\n")
+	result, stepsWritten := replaceStepsSection(lines, p.formatSteps())
+
 	if !stepsWritten && len(p.Steps) > 0 {
-		result = append(result, "")
-		result = append(result, "## Steps")
-		result = append(result, "")
+		result = append(result, "", "## Steps", "")
 		result = append(result, p.formatSteps()...)
 	}
 
-	// Write atomically
 	tempPath := path + ".tmp"
 	content := strings.Join(result, "\n")
 	if err := os.WriteFile(tempPath, []byte(content), 0644); err != nil {

@@ -284,31 +284,11 @@ func (s *Service) Status() (*StatusResult, error) {
 	mdPath := filepath.Join(init.Path, InitiativeMDFile)
 	parsed, err := ParseInitiativeMD(mdPath)
 
-	// Variables for step info
 	var currentStep, stepStatus string
 	var stepsCompleted, stepsTotal int
 
 	if err == nil && parsed != nil {
-		stepsTotal = len(parsed.Steps)
-
-		// Count completed steps and find current step
-		for _, step := range parsed.Steps {
-			if step.Status == StepCompleted || step.Status == StepSkipped {
-				stepsCompleted++
-			}
-			if step.Status == StepInProgress {
-				currentStep = step.Name
-				stepStatus = string(step.Status)
-			}
-		}
-
-		// If no in-progress step, check if there's a next pending step
-		if currentStep == "" {
-			if next := parsed.NextStep(); next != nil {
-				currentStep = next.Name
-				stepStatus = string(next.Status)
-			}
-		}
+		currentStep, stepStatus, stepsCompleted, stepsTotal = analyzeSteps(parsed)
 	}
 
 	// Find available docs in initiative folder
@@ -345,6 +325,30 @@ func (s *Service) Status() (*StatusResult, error) {
 		InitiativeFile: initiativeFile,
 		Files:          files,
 	}, nil
+}
+
+// analyzeSteps counts completed steps and identifies the current step from a parsed initiative.
+func analyzeSteps(parsed *ParsedInitiative) (currentStep, stepStatus string, stepsCompleted, stepsTotal int) {
+	stepsTotal = len(parsed.Steps)
+
+	for _, step := range parsed.Steps {
+		if step.Status == StepCompleted || step.Status == StepSkipped {
+			stepsCompleted++
+		}
+		if step.Status == StepInProgress {
+			currentStep = step.Name
+			stepStatus = string(step.Status)
+		}
+	}
+
+	if currentStep == "" {
+		if next := parsed.NextStep(); next != nil {
+			currentStep = next.Name
+			stepStatus = string(next.Status)
+		}
+	}
+
+	return currentStep, stepStatus, stepsCompleted, stepsTotal
 }
 
 // findAvailableDocs scans the initiative folder for known artifact files.

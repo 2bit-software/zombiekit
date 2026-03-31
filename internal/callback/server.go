@@ -19,6 +19,13 @@ const (
 	idleTimeout        = 30 * time.Second
 )
 
+// EventSource abstracts the read side of the callback server.
+// Consumers that only need to receive events can accept this interface
+// instead of a concrete CallbackServer pointer.
+type EventSource interface {
+	Events() <-chan Event
+}
+
 // CallbackServer receives HTTP POST callbacks from agent sessions and delivers
 // parsed events to a consumer via a buffered channel.
 type CallbackServer struct {

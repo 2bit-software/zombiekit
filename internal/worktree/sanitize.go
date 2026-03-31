@@ -2,6 +2,11 @@ package worktree
 
 import "strings"
 
+// isBranchSafeRune reports whether r is allowed in a git branch suffix.
+func isBranchSafeRune(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_'
+}
+
 // sanitizeTitle converts a human-readable title into a git-safe branch suffix.
 //
 // Rules applied in order:
@@ -19,7 +24,7 @@ func sanitizeTitle(title string) string {
 
 	var b strings.Builder
 	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+		if isBranchSafeRune(r) {
 			b.WriteRune(r)
 		}
 	}

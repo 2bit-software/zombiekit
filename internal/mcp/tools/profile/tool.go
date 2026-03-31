@@ -19,13 +19,13 @@ func NewTool() *Tool {
 }
 
 // HandleCompose handles the profile-compose tool call.
-func (t *Tool) HandleCompose(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) HandleCompose(ctx context.Context, args map[string]any) (string, error) {
 	profilesArg, ok := args["profiles"]
 	if !ok {
 		return "", fmt.Errorf("profiles array is required")
 	}
 
-	profilesArray, ok := profilesArg.([]interface{})
+	profilesArray, ok := profilesArg.([]any)
 	if !ok || len(profilesArray) == 0 {
 		return "", fmt.Errorf("profiles must be a non-empty array of strings")
 	}
@@ -54,7 +54,7 @@ func (t *Tool) HandleCompose(ctx context.Context, args map[string]interface{}) (
 }
 
 // HandleList handles the profile-list tool call.
-func (t *Tool) HandleList(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) HandleList(ctx context.Context, args map[string]any) (string, error) {
 	workingDir := getWorkingDir(args)
 	svc, err := profile.NewService(workingDir)
 	if err != nil {
@@ -87,7 +87,7 @@ func (t *Tool) HandleList(ctx context.Context, args map[string]interface{}) (str
 }
 
 // HandleShow handles the profile-show tool call.
-func (t *Tool) HandleShow(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) HandleShow(ctx context.Context, args map[string]any) (string, error) {
 	nameArg, ok := args["name"]
 	if !ok {
 		return "", fmt.Errorf("name is required")
@@ -118,7 +118,7 @@ func (t *Tool) HandleShow(ctx context.Context, args map[string]interface{}) (str
 }
 
 // HandleValidate handles the profile-validate tool call.
-func (t *Tool) HandleValidate(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) HandleValidate(ctx context.Context, args map[string]any) (string, error) {
 	workingDir := getWorkingDir(args)
 	svc, err := profile.NewService(workingDir)
 	if err != nil {
@@ -155,32 +155,46 @@ func (t *Tool) HandleValidate(ctx context.Context, args map[string]interface{}) 
 	return sb.String(), nil
 }
 
-// HandleSave handles the profile-save tool call (renamed from profile-write).
-func (t *Tool) HandleSave(ctx context.Context, args map[string]interface{}) (string, error) {
-	// Extract required parameters
+// saveParams holds validated parameters for a profile save operation.
+type saveParams struct {
+	name      string
+	content   string
+	location  string
+	overwrite bool
+}
+
+// parseSaveParams extracts and validates required parameters for HandleSave.
+func parseSaveParams(args map[string]any) (saveParams, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
-		return "", fmt.Errorf("name is required")
+		return saveParams{}, fmt.Errorf("name is required")
 	}
 
 	content, ok := args["content"].(string)
 	if !ok || content == "" {
-		return "", fmt.Errorf("content is required")
+		return saveParams{}, fmt.Errorf("content is required")
 	}
 
-	location, ok := args["location"].(string)
-	if !ok || location == "" {
-		return "", fmt.Errorf("location is required")
-	}
-
+	location, _ := args["location"].(string)
 	if location != "local" && location != "global" {
-		return "", fmt.Errorf("location must be 'local' or 'global'")
+		return saveParams{}, fmt.Errorf("location must be 'local' or 'global'")
 	}
 
-	// Extract optional parameters
-	overwrite := false
-	if ow, ok := args["overwrite"].(bool); ok {
-		overwrite = ow
+	overwrite, _ := args["overwrite"].(bool)
+
+	return saveParams{
+		name:      name,
+		content:   content,
+		location:  location,
+		overwrite: overwrite,
+	}, nil
+}
+
+// HandleSave handles the profile-save tool call (renamed from profile-write).
+func (t *Tool) HandleSave(ctx context.Context, args map[string]any) (string, error) {
+	params, err := parseSaveParams(args)
+	if err != nil {
+		return "", err
 	}
 
 	workingDir := getWorkingDir(args)
@@ -189,9 +203,8 @@ func (t *Tool) HandleSave(ctx context.Context, args map[string]interface{}) (str
 		return "", fmt.Errorf("initializing profile service: %w", err)
 	}
 
-	path, err := svc.Write(name, content, location, overwrite)
+	path, err := svc.Write(params.name, params.content, params.location, params.overwrite)
 	if err != nil {
-		// Handle ProfileExistsError specially
 		if existsErr, ok := err.(*profile.ProfileExistsError); ok {
 			resp := SaveResponse{
 				Success: false,
@@ -221,7 +234,7 @@ func marshalResponse(v any) (string, error) {
 }
 
 // getWorkingDir extracts the working_directory parameter from args.
-func getWorkingDir(args map[string]interface{}) string {
+func getWorkingDir(args map[string]any) string {
 	if wd, ok := args["working_directory"].(string); ok && wd != "" {
 		return wd
 	}

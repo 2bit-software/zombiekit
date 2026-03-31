@@ -189,7 +189,7 @@ func (s *Server) registerTools() {
 
 // handleStickyMemory handles stickymemory tool calls.
 func (s *Server) handleStickyMemory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
+	args, ok := req.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError("invalid arguments format"), nil
 	}
@@ -204,7 +204,7 @@ func (s *Server) handleStickyMemory(ctx context.Context, req mcp.CallToolRequest
 
 // handleCodeReasoning handles code-reasoning tool calls.
 func (s *Server) handleCodeReasoning(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
+	args, ok := req.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError("invalid arguments format"), nil
 	}
@@ -253,7 +253,7 @@ func (s *Server) registerProfileTools() {
 			mcp.WithArray("profiles",
 				mcp.Required(),
 				mcp.Description("List of profile names to compose"),
-				mcp.Items(map[string]interface{}{"type": "string"}),
+				mcp.Items(map[string]any{"type": "string"}),
 			),
 			mcp.WithString("working_directory",
 				mcp.Description("Working directory for profile resolution (defaults to CWD)"),
@@ -302,7 +302,7 @@ func (s *Server) registerProfileTools() {
 
 // handleProfileCompose handles profile-compose tool calls.
 func (s *Server) handleProfileCompose(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
+	args, ok := req.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError("invalid arguments format"), nil
 	}
@@ -317,9 +317,9 @@ func (s *Server) handleProfileCompose(ctx context.Context, req mcp.CallToolReque
 
 // handleProfileList handles profile-list tool calls.
 func (s *Server) handleProfileList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
+	args, ok := req.Params.Arguments.(map[string]any)
 	if !ok {
-		args = make(map[string]interface{})
+		args = make(map[string]any)
 	}
 
 	result, err := s.profileTool.HandleList(ctx, args)
@@ -332,7 +332,7 @@ func (s *Server) handleProfileList(ctx context.Context, req mcp.CallToolRequest)
 
 // handleProfileSave handles profile-save tool calls.
 func (s *Server) handleProfileSave(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
+	args, ok := req.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError("invalid arguments format"), nil
 	}
@@ -379,7 +379,7 @@ func (s *Server) registerInitiativeTool() {
 
 // handleInitiative handles initiative tool calls.
 func (s *Server) handleInitiative(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
+	args, ok := req.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError("invalid arguments format"), nil
 	}
@@ -414,7 +414,7 @@ func (s *Server) registerWorkflowTool() {
 
 // handleWorkflow handles workflow-compose tool calls.
 func (s *Server) handleWorkflow(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]interface{})
+	args, ok := req.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError("invalid arguments format"), nil
 	}

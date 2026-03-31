@@ -18,6 +18,13 @@ const (
 	BackendPostgres BackendType = "postgres"
 )
 
+// StorageConfigProvider abstracts access to the resolved storage configuration.
+// Dependents that need database connection details can accept this interface
+// instead of receiving a StorageConfig value directly from a loader function.
+type StorageConfigProvider interface {
+	GetStorageConfig() StorageConfig
+}
+
 // Default configuration values.
 const (
 	DefaultConnectionTimeout = 5 * time.Second
@@ -103,6 +110,28 @@ const (
 	DefaultEmbeddingModel = "nomic-embed-text"
 )
 
+// envOrDefault returns the environment variable value, or fallback if unset/empty.
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// envInt32OrDefault parses an environment variable as int32, returning fallback on
+// missing or unparseable values.
+func envInt32OrDefault(key string, fallback int32) int32 {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.ParseInt(v, 10, 32)
+	if err != nil {
+		return fallback
+	}
+	return int32(n)
+}
+
 // LoadStorageConfigFromEnv loads storage configuration from environment variables.
 //
 // Environment variables:
@@ -115,30 +144,6 @@ const (
 //   - BRAINS_OLLAMA_URL: Ollama API URL (default: http://localhost:11434)
 //   - BRAINS_EMBEDDING_MODEL: Embedding model (default: nomic-embed-text)
 func LoadStorageConfigFromEnv() StorageConfig {
-	backend := os.Getenv("BRAINS_BACKEND")
-	if backend == "" {
-		backend = string(BackendSQLite)
-	}
-
-	sqlitePath := os.Getenv("BRAINS_SQLITE_PATH")
-	if sqlitePath == "" {
-		sqlitePath = DefaultSQLitePath()
-	}
-
-	maxConns := int32(10)
-	if v := os.Getenv("BRAINS_POSTGRES_MAX_CONNS"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
-			maxConns = int32(n)
-		}
-	}
-
-	minConns := int32(2)
-	if v := os.Getenv("BRAINS_POSTGRES_MIN_CONNS"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
-			minConns = int32(n)
-		}
-	}
-
 	timeout := DefaultConnectionTimeout
 	if v := os.Getenv("BRAINS_POSTGRES_TIMEOUT"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
@@ -146,25 +151,15 @@ func LoadStorageConfigFromEnv() StorageConfig {
 		}
 	}
 
-	ollamaURL := os.Getenv("BRAINS_OLLAMA_URL")
-	if ollamaURL == "" {
-		ollamaURL = DefaultOllamaURL
-	}
-
-	embeddingModel := os.Getenv("BRAINS_EMBEDDING_MODEL")
-	if embeddingModel == "" {
-		embeddingModel = DefaultEmbeddingModel
-	}
-
 	return StorageConfig{
-		Backend:           BackendType(backend),
-		SQLitePath:        sqlitePath,
+		Backend:           BackendType(envOrDefault("BRAINS_BACKEND", string(BackendSQLite))),
+		SQLitePath:        envOrDefault("BRAINS_SQLITE_PATH", DefaultSQLitePath()),
 		PostgresURL:       os.Getenv("BRAINS_POSTGRES_URL"),
-		MaxConns:          maxConns,
-		MinConns:          minConns,
+		MaxConns:          envInt32OrDefault("BRAINS_POSTGRES_MAX_CONNS", 10),
+		MinConns:          envInt32OrDefault("BRAINS_POSTGRES_MIN_CONNS", 2),
 		ConnectionTimeout: timeout,
-		OllamaURL:         ollamaURL,
-		EmbeddingModel:    embeddingModel,
+		OllamaURL:         envOrDefault("BRAINS_OLLAMA_URL", DefaultOllamaURL),
+		EmbeddingModel:    envOrDefault("BRAINS_EMBEDDING_MODEL", DefaultEmbeddingModel),
 	}
 }
 

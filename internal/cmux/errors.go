@@ -62,24 +62,6 @@ func IsSessionNotFound(err error) bool {
 	return errors.As(err, &e) && e.Kind == ErrSessionNotFound
 }
 
-// IsCmuxUnavailable reports whether err is a cmux-unavailable error.
-func IsCmuxUnavailable(err error) bool {
-	var e *Error
-	return errors.As(err, &e) && e.Kind == ErrCmuxUnavailable
-}
-
-// IsBinaryNotFound reports whether err is a binary-not-found error.
-func IsBinaryNotFound(err error) bool {
-	var e *Error
-	return errors.As(err, &e) && e.Kind == ErrBinaryNotFound
-}
-
-// IsCommandFailed reports whether err is a generic command-failed error.
-func IsCommandFailed(err error) bool {
-	var e *Error
-	return errors.As(err, &e) && e.Kind == ErrCommandFailed
-}
-
 // IsInvalidEnvKey reports whether err is an invalid-env-key error.
 func IsInvalidEnvKey(err error) bool {
 	var e *Error

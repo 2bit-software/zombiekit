@@ -8,9 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/2bit-software/zombiekit/internal/archival"
 	"github.com/2bit-software/zombiekit/internal/callback"
-	"github.com/2bit-software/zombiekit/internal/friction"
 	"github.com/2bit-software/zombiekit/internal/github"
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/state"
@@ -23,8 +21,8 @@ type Router struct {
 	store      state.StateStore
 	github     github.Client
 	linear     linear.Client
-	archiver   archival.Archiver
-	auditor    friction.Auditor
+	archiver   Archiver
+	auditor    Auditor
 	dispatcher *CommentDispatcher
 	cfg        *Config
 	logger     *slog.Logger
@@ -36,8 +34,8 @@ func NewRouter(
 	store state.StateStore,
 	gh github.Client,
 	lc linear.Client,
-	arch archival.Archiver,
-	aud friction.Auditor,
+	arch Archiver,
+	aud Auditor,
 	dispatcher *CommentDispatcher,
 	cfg *Config,
 	logger *slog.Logger,
@@ -205,42 +203,9 @@ func (r *Router) handleCommentResolved(ctx context.Context, evt callback.Event, 
 		return
 	}
 
-	if job.PRNumber == nil {
-		logger.Error("job has no PR number", slog.String("step", "CheckPRNumber"))
-		r.markNeedsAttention(ctx, evt.TicketID, job, logger)
-		return
-	}
-	prNumber := int(*job.PRNumber)
-
-	commentID, err := strconv.ParseInt(evt.CommentID, 10, 64)
+	prNumber, commentID, err := r.resolveComment(ctx, evt, job, logger)
 	if err != nil {
-		logger.Error("invalid comment ID", slog.String("step", "ParseCommentID"), slog.String("comment_id", evt.CommentID), slog.String("err", err.Error()))
-		r.markNeedsAttention(ctx, evt.TicketID, job, logger)
-		return
-	}
-
-	prDescPath := filepath.Join(job.WorktreePath, ".ai", "pr-description.md")
-	body, err := os.ReadFile(prDescPath)
-	if err != nil {
-		logger.Error("failed to read pr-description.md", slog.String("step", "ReadFile"), slog.String("err", err.Error()))
-		r.markNeedsAttention(ctx, evt.TicketID, job, logger)
-		return
-	}
-
-	if err := r.github.UpdatePRBody(ctx, prNumber, string(body)); err != nil {
-		logger.Error("failed to update PR body", slog.String("step", "UpdatePRBody"), slog.String("err", err.Error()))
-		r.markNeedsAttention(ctx, evt.TicketID, job, logger)
-		return
-	}
-
-	if _, err := r.github.PostCommentReply(ctx, prNumber, github.CommentKindReview, commentID, evt.Resolution); err != nil {
-		logger.Error("failed to post comment reply", slog.String("step", "PostCommentReply"), slog.String("err", err.Error()))
-		r.markNeedsAttention(ctx, evt.TicketID, job, logger)
-		return
-	}
-
-	if err := r.store.SetCommentWatermark(ctx, *job.PRNumber, commentID); err != nil {
-		logger.Error("failed to set comment watermark", slog.String("step", "SetCommentWatermark"), slog.String("err", err.Error()))
+		logger.Error("comment resolution failed", slog.String("err", err.Error()))
 		r.markNeedsAttention(ctx, evt.TicketID, job, logger)
 		return
 	}
@@ -252,7 +217,6 @@ func (r *Router) handleCommentResolved(ctx context.Context, evt callback.Event, 
 		logger.Error("audit failed", slog.String("step", "Audit"), slog.String("err", err.Error()))
 	}
 
-	// Release concurrency slot acquired by comment watcher before SpawnSession.
 	if err := r.store.ReleaseSlot(ctx, r.cfg.ProjectID); err != nil {
 		logger.Error("failed to release slot", slog.String("step", "ReleaseSlot"), slog.String("err", err.Error()))
 	}
@@ -266,6 +230,40 @@ func (r *Router) handleCommentResolved(ctx context.Context, evt callback.Event, 
 	}
 
 	logger.Info("comment resolution processed", slog.Int("pr_number", prNumber), slog.Int64("comment_id", commentID))
+}
+
+// resolveComment performs the core steps of comment resolution: parsing IDs,
+// updating the PR body, posting the reply, and advancing the watermark.
+func (r *Router) resolveComment(ctx context.Context, evt callback.Event, job *state.Job, logger *slog.Logger) (int, int64, error) {
+	if job.PRNumber == nil {
+		return 0, 0, fmt.Errorf("job has no PR number")
+	}
+	prNumber := int(*job.PRNumber)
+
+	commentID, err := strconv.ParseInt(evt.CommentID, 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid comment ID %q: %w", evt.CommentID, err)
+	}
+
+	prDescPath := filepath.Join(job.WorktreePath, ".ai", "pr-description.md")
+	body, err := os.ReadFile(prDescPath)
+	if err != nil {
+		return 0, 0, fmt.Errorf("read pr-description.md: %w", err)
+	}
+
+	if err := r.github.UpdatePRBody(ctx, prNumber, string(body)); err != nil {
+		return 0, 0, fmt.Errorf("update PR body: %w", err)
+	}
+
+	if _, err := r.github.PostCommentReply(ctx, prNumber, github.CommentKindReview, commentID, evt.Resolution); err != nil {
+		return 0, 0, fmt.Errorf("post comment reply: %w", err)
+	}
+
+	if err := r.store.SetCommentWatermark(ctx, *job.PRNumber, commentID); err != nil {
+		return 0, 0, fmt.Errorf("set comment watermark: %w", err)
+	}
+
+	return prNumber, commentID, nil
 }
 
 // markNeedsAttention moves a ticket to needs-attention in both Linear and

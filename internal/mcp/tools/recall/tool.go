@@ -112,21 +112,7 @@ func (t *Tool) ReadConversation(ctx context.Context, args map[string]any) (strin
 	// Convert to response format
 	outputs := make([]ChunkOutput, len(chunks))
 	for i, chunk := range chunks {
-		output := ChunkOutput{
-			ID:      chunk.ID,
-			Content: chunk.Content,
-		}
-
-		if chunk.Metadata != nil {
-			output.Role = chunk.Metadata.Role
-			if !chunk.Metadata.Timestamp.IsZero() {
-				output.Timestamp = chunk.Metadata.Timestamp.Format("2006-01-02T15:04:05Z07:00")
-			}
-			output.Project = chunk.Metadata.CWD
-			output.GitBranch = chunk.Metadata.GitBranch
-		}
-
-		outputs[i] = output
+		outputs[i] = chunkToOutput(chunk)
 	}
 
 	response := ReadResponse{
@@ -162,6 +148,23 @@ func normalizePageParams(args map[string]any) (page, limit int) {
 // calculateOffset computes the offset from page and limit.
 func calculateOffset(page, limit int) int {
 	return (page - 1) * limit
+}
+
+// chunkToOutput converts a recall.Chunk into the API response format.
+func chunkToOutput(chunk recall.Chunk) ChunkOutput {
+	output := ChunkOutput{
+		ID:      chunk.ID,
+		Content: chunk.Content,
+	}
+	if chunk.Metadata != nil {
+		output.Role = chunk.Metadata.Role
+		if !chunk.Metadata.Timestamp.IsZero() {
+			output.Timestamp = chunk.Metadata.Timestamp.Format("2006-01-02T15:04:05Z07:00")
+		}
+		output.Project = chunk.Metadata.CWD
+		output.GitBranch = chunk.Metadata.GitBranch
+	}
+	return output
 }
 
 // toJSON marshals a value to JSON string.

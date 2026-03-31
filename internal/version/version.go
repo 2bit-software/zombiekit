@@ -13,6 +13,11 @@ var (
 	buildDate = "unknown"
 )
 
+// Provider returns build information.
+type Provider interface {
+	GetBuildInfo() *BuildInfo
+}
+
 // BuildInfo contains version and build information.
 type BuildInfo struct {
 	Version   string

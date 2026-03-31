@@ -31,7 +31,7 @@ type ToolDefinition struct {
 }
 
 // HandleCompose loads and returns a workflow by name.
-func (t *Tool) HandleCompose(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) HandleCompose(ctx context.Context, args map[string]any) (string, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
 		return "", fmt.Errorf("name is required")
@@ -52,7 +52,7 @@ func (t *Tool) HandleCompose(ctx context.Context, args map[string]interface{}) (
 }
 
 // getWorkingDir extracts the working_directory parameter from args.
-func getWorkingDir(args map[string]interface{}) string {
+func getWorkingDir(args map[string]any) string {
 	if wd, ok := args["working_directory"].(string); ok && wd != "" {
 		return wd
 	}

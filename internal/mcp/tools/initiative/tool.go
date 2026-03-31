@@ -33,7 +33,7 @@ func (t *Tool) SetEmbeddedFS(fsys fs.FS) {
 type ToolDefinition struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
+	InputSchema map[string]any `json:"inputSchema"`
 }
 
 // Definition returns the tool definition for MCP registration.
@@ -41,28 +41,28 @@ func (t *Tool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "initiative",
 		Description: "Manage workflow initiative lifecycle. Actions: create (start new initiative), status (check current initiative), complete (finish initiative), list (show all initiatives).",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"action": map[string]interface{}{
+			"properties": map[string]any{
+				"action": map[string]any{
 					"type":        "string",
 					"enum":        []string{"create", "status", "complete", "list"},
 					"description": "The lifecycle action to perform",
 				},
-				"dir": map[string]interface{}{
+				"dir": map[string]any{
 					"type":        "string",
 					"description": "Working directory containing the .brains folder",
 				},
-				"type": map[string]interface{}{
+				"type": map[string]any{
 					"type":        "string",
 					"enum":        []string{"feature", "bug", "refactor"},
 					"description": "Required for create: Type of initiative",
 				},
-				"name": map[string]interface{}{
+				"name": map[string]any{
 					"type":        "string",
 					"description": "Required for create: Name/slug for the initiative (e.g., 'user-auth')",
 				},
-				"description": map[string]interface{}{
+				"description": map[string]any{
 					"type":        "string",
 					"description": "Optional for create: Description of the initiative",
 				},
@@ -73,7 +73,7 @@ func (t *Tool) Definition() ToolDefinition {
 }
 
 // Execute runs the initiative tool and returns the response as JSON.
-func (t *Tool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
+func (t *Tool) Execute(ctx context.Context, args map[string]any) (string, error) {
 	action := getStringArg(args, "action")
 	if action == "" {
 		return "", &ToolError{
@@ -123,7 +123,7 @@ func (t *Tool) Execute(ctx context.Context, args map[string]interface{}) (string
 // handleCreate handles the create action.
 // This implementation is idempotent: calling create with the same name+type
 // returns the existing initiative instead of creating a duplicate.
-func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]interface{}) (string, error) {
+func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]any) (string, error) {
 	initType := getStringArg(args, "type")
 	if initType == "" {
 		return "", &ToolError{
@@ -177,7 +177,13 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 		return marshalResponse(resp)
 	}
 
-	// Check if a DIFFERENT initiative is active (error case)
+	return t.createNewInitiative(dir, initSvc, initType, name)
+}
+
+// createNewInitiative handles the second half of create: validates no conflicting
+// active initiative exists, loads workflow steps, creates the initiative record,
+// copies templates, and creates the git branch.
+func (t *Tool) createNewInitiative(dir string, initSvc *internalInit.Service, initType, name string) (string, error) {
 	active, err := initSvc.GetActive()
 	if err != nil {
 		return "", fmt.Errorf("checking active initiative: %w", err)
@@ -190,28 +196,11 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 		}
 	}
 
-	// Load workflow steps for the initiative type
-	stepSvc, err := step.NewService(dir)
+	initSteps, err := loadWorkflowSteps(dir, initType)
 	if err != nil {
-		return "", fmt.Errorf("creating step service: %w", err)
+		return "", err
 	}
 
-	workflowSteps, err := stepSvc.GetWorkflowSteps(initType)
-	if err != nil {
-		// Non-fatal: proceed without steps if workflow not found
-		workflowSteps = nil
-	}
-
-	// Convert step.WorkflowStep to initiative.WorkflowStep
-	var initSteps []internalInit.WorkflowStep
-	for _, ws := range workflowSteps {
-		initSteps = append(initSteps, internalInit.WorkflowStep{
-			Name:    ws.Name,
-			Profile: ws.Profile,
-		})
-	}
-
-	// Create the initiative
 	initiative, err := initSvc.Create(internalInit.InitiativeType(initType), name, initSteps)
 	if err != nil {
 		if initErr, ok := err.(*internalInit.InitiativeError); ok {
@@ -224,37 +213,52 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]int
 		return "", err
 	}
 
-	// Copy templates to initiative folder
 	skipped, copied, err := t.copyTemplatesToInitiative(dir, initiative.Path)
 	if err != nil {
 		return "", fmt.Errorf("copying templates: %w", err)
 	}
 
-	// Create git branch
+	// Best-effort git branch creation
 	gitSvc := step.NewGitService(dir)
-	branchName := initiative.ID
-	_ = gitSvc.EnsureBranch(initType, name) // Ignore errors - git operations fail gracefully
-
-	// Determine next step based on initiative type
-	nextStep := initType
-	if initType == "feature" || initType == "bug" || initType == "refactor" {
-		nextStep = initType
-	}
+	_ = gitSvc.EnsureBranch(initType, name)
 
 	resp := CreateResponse{
 		Action:         "create",
 		InitiativeID:   initiative.ID,
 		InitiativePath: initiative.Path,
-		Branch:         branchName,
+		Branch:         initiative.ID,
 		Type:           initType,
 		Name:           name,
-		NextStep:       nextStep,
+		NextStep:       initType,
 		AlreadyExisted: false,
 		SkippedFiles:   skipped,
 		CopiedFiles:    copied,
 	}
 
 	return marshalResponse(resp)
+}
+
+// loadWorkflowSteps loads and converts workflow steps for an initiative type.
+// Returns nil steps (not an error) when no workflow is defined.
+func loadWorkflowSteps(dir, initType string) ([]internalInit.WorkflowStep, error) {
+	stepSvc, err := step.NewService(dir)
+	if err != nil {
+		return nil, fmt.Errorf("creating step service: %w", err)
+	}
+
+	workflowSteps, err := stepSvc.GetWorkflowSteps(initType)
+	if err != nil {
+		return nil, nil
+	}
+
+	initSteps := make([]internalInit.WorkflowStep, len(workflowSteps))
+	for i, ws := range workflowSteps {
+		initSteps[i] = internalInit.WorkflowStep{
+			Name:    ws.Name,
+			Profile: ws.Profile,
+		}
+	}
+	return initSteps, nil
 }
 
 // handleStatus handles the status action.
@@ -437,7 +441,7 @@ func (t *Tool) copyTemplatesToInitiative(workDir, initiativePath string) (skippe
 }
 
 // marshalResponse marshals a response to JSON.
-func marshalResponse(resp interface{}) (string, error) {
+func marshalResponse(resp any) (string, error) {
 	jsonData, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("encoding response: %w", err)
@@ -446,7 +450,7 @@ func marshalResponse(resp interface{}) (string, error) {
 }
 
 // getStringArg extracts a string argument from the args map.
-func getStringArg(args map[string]interface{}, key string) string {
+func getStringArg(args map[string]any, key string) string {
 	if val, ok := args[key]; ok {
 		if s, ok := val.(string); ok {
 			return s

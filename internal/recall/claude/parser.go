@@ -104,6 +104,55 @@ func ExtractContent(entry HistoryEntry) string {
 	}
 }
 
+// scanResult holds the raw output of scanning a JSONL file with optional sync point detection.
+type scanResult struct {
+	entries        []HistoryEntry
+	syncPointFound bool
+	syncPointIndex int
+}
+
+// scanJSONLFile reads all valid history entries from a JSONL file, optionally locating a sync point UUID.
+func scanJSONLFile(path, syncUUID string) (scanResult, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return scanResult{}, fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
+
+	result := scanResult{
+		syncPointFound: syncUUID == "",
+		syncPointIndex: -1,
+	}
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var entry HistoryEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			continue
+		}
+
+		result.entries = append(result.entries, entry)
+
+		if !result.syncPointFound && entry.UUID == syncUUID {
+			result.syncPointFound = true
+			result.syncPointIndex = len(result.entries) - 1
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return scanResult{}, fmt.Errorf("scan file: %w", err)
+	}
+
+	return result, nil
+}
+
 // ParseFileFromUUID parses a JSONL file and returns importable entries after the specified UUID.
 //
 // If lastKnownUUID is empty, returns all importable entries (fresh import scenario).
@@ -115,68 +164,24 @@ func ExtractContent(entry HistoryEntry) string {
 //   - lastUUID: UUID of the last entry in the file (for state update)
 //   - err: parsing error or ErrSyncPointNotFound
 func ParseFileFromUUID(path, lastKnownUUID string) (entries []HistoryEntry, lastUUID string, err error) {
-	file, err := os.Open(path)
+	scan, err := scanJSONLFile(path, lastKnownUUID)
 	if err != nil {
-		return nil, "", fmt.Errorf("open file: %w", err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	// Allow up to 10MB per line for large messages
-	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
-
-	var allEntries []HistoryEntry
-	syncPointFound := lastKnownUUID == "" // Empty UUID means fresh import, always "found"
-	syncPointIndex := -1
-
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
-		var entry HistoryEntry
-		if err := json.Unmarshal(line, &entry); err != nil {
-			// Skip malformed lines (graceful degradation)
-			continue
-		}
-
-		allEntries = append(allEntries, entry)
-
-		// Check if this is the sync point
-		if !syncPointFound && entry.UUID == lastKnownUUID {
-			syncPointFound = true
-			syncPointIndex = len(allEntries) - 1
-		}
+		return nil, "", err
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, "", fmt.Errorf("scan file: %w", err)
+	if len(scan.entries) > 0 {
+		lastUUID = scan.entries[len(scan.entries)-1].UUID
 	}
 
-	// Track the last UUID in the file
-	if len(allEntries) > 0 {
-		lastUUID = allEntries[len(allEntries)-1].UUID
-	}
-
-	// If we were looking for a UUID and didn't find it, return error
-	if lastKnownUUID != "" && !syncPointFound {
+	if lastKnownUUID != "" && !scan.syncPointFound {
 		return nil, lastUUID, ErrSyncPointNotFound
 	}
 
-	// Get entries after sync point and filter for importable
-	var entriesToImport []HistoryEntry
 	startIndex := 0
-	if syncPointIndex >= 0 {
-		startIndex = syncPointIndex + 1 // Start after the sync point
+	if scan.syncPointIndex >= 0 {
+		startIndex = scan.syncPointIndex + 1
 	}
 
-	for i := startIndex; i < len(allEntries); i++ {
-		entriesToImport = append(entriesToImport, allEntries[i])
-	}
-
-	// Filter for importable entries
-	entries = FilterImportable(entriesToImport)
-
+	entries = FilterImportable(scan.entries[startIndex:])
 	return entries, lastUUID, nil
 }

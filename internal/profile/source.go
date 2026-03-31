@@ -14,11 +14,6 @@ const (
 	SourceTypeClaude SourceType = "claude"
 )
 
-// ValidSourceTypes returns all valid source type values.
-func ValidSourceTypes() []SourceType {
-	return []SourceType{SourceTypeBrains, SourceTypeClaude}
-}
-
 // String returns the string representation of the source type.
 func (s SourceType) String() string {
 	return string(s)

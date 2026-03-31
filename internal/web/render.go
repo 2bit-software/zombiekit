@@ -33,31 +33,50 @@ type Renderer struct {
 
 // NewRenderer creates a new Renderer with templates from the registry's plugins.
 func NewRenderer(registry *PluginRegistry) (*Renderer, error) {
-	// Create base template with helper functions
-	funcMap := template.FuncMap{
+	tmpl := template.New("").Funcs(templateFuncMap())
+
+	tmpl, err := parseShellTemplates(tmpl)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := parsePluginTemplates(tmpl, registry); err != nil {
+		return nil, err
+	}
+
+	return &Renderer{
+		templates: tmpl,
+		registry:  registry,
+	}, nil
+}
+
+func templateFuncMap() template.FuncMap {
+	return template.FuncMap{
 		"isActive": func(currentPath, itemPath string) bool {
 			if itemPath == "/" {
 				return currentPath == "/"
 			}
 			return strings.HasPrefix(currentPath, itemPath)
 		},
-		"formatSize": func(bytes int) string {
-			if bytes < 1024 {
-				return fmt.Sprintf("%d B", bytes)
-			} else if bytes < 1024*1024 {
-				return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
-			}
-			return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
-		},
+		"formatSize": formatSize,
 		"formatTime": func(t time.Time) string {
 			return t.Format("Jan 2, 2006 3:04 PM")
 		},
 		"lower": strings.ToLower,
 	}
+}
 
-	tmpl := template.New("").Funcs(funcMap)
+func formatSize(bytes int) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	if bytes < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+}
 
-	// Parse shell templates from embedded FS
+func parseShellTemplates(tmpl *template.Template) (*template.Template, error) {
 	shellTemplates, err := fs.Sub(templatesFS, "templates")
 	if err != nil {
 		return nil, fmt.Errorf("getting shell templates: %w", err)
@@ -67,55 +86,49 @@ func NewRenderer(registry *PluginRegistry) (*Renderer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parsing shell templates: %w", err)
 	}
+	return tmpl, nil
+}
 
-	// Parse plugin templates
+func parsePluginTemplates(tmpl *template.Template, registry *PluginRegistry) error {
 	for _, rp := range registry.All() {
 		tp, ok := rp.Plugin().(TemplatePlugin)
 		if !ok {
 			continue
 		}
 
-		pluginFS := tp.Templates()
-		pluginID := rp.Name()
-
-		// Walk the plugin's templates directory
-		err := fs.WalkDir(pluginFS, "templates", func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			if !strings.HasSuffix(path, ".html") {
-				return nil
-			}
-
-			// Read template content
-			content, err := fs.ReadFile(pluginFS, path)
-			if err != nil {
-				return fmt.Errorf("reading template %s: %w", path, err)
-			}
-
-			// Name template as "pluginID/filename.html"
-			baseName := filepath.Base(path)
-			templateName := pluginID + "/" + baseName
-
-			_, err = tmpl.New(templateName).Parse(string(content))
-			if err != nil {
-				return fmt.Errorf("parsing template %s: %w", templateName, err)
-			}
-
-			return nil
-		})
-		if err != nil {
-			return nil, fmt.Errorf("loading templates for plugin %s: %w", pluginID, err)
+		if err := loadPluginTemplates(tmpl, tp.Templates(), rp.Name()); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
-	return &Renderer{
-		templates: tmpl,
-		registry:  registry,
-	}, nil
+func loadPluginTemplates(tmpl *template.Template, pluginFS fs.FS, pluginID string) error {
+	err := fs.WalkDir(pluginFS, "templates", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".html") {
+			return nil
+		}
+
+		content, err := fs.ReadFile(pluginFS, path)
+		if err != nil {
+			return fmt.Errorf("reading template %s: %w", path, err)
+		}
+
+		templateName := pluginID + "/" + filepath.Base(path)
+		_, err = tmpl.New(templateName).Parse(string(content))
+		if err != nil {
+			return fmt.Errorf("parsing template %s: %w", templateName, err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("loading templates for plugin %s: %w", pluginID, err)
+	}
+	return nil
 }
 
 // Render renders a template with HTMX-aware handling.

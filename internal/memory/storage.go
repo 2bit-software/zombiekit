@@ -3,8 +3,6 @@ package memory
 
 import (
 	"context"
-
-	"github.com/2bit-software/zombiekit/internal/mo"
 )
 
 // Storage defines the interface for storing and retrieving memory items.
@@ -15,7 +13,7 @@ type Storage interface {
 
 	// Get retrieves the latest non-deleted version of a memory item.
 	// Returns Nothing if the item doesn't exist or is deleted.
-	Get(ctx context.Context, name string) (mo.Maybe[MemoryItem], error)
+	Get(ctx context.Context, name string) (Maybe[MemoryItem], error)
 
 	// Delete soft-deletes all versions of a memory item.
 	Delete(ctx context.Context, name string) error

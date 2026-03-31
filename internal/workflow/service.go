@@ -13,6 +13,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Provider abstracts read-only access to workflow definitions.
+// Dependents that only need to look up or enumerate workflows
+// can accept this interface instead of the concrete Service.
+type Provider interface {
+	Load(name string) (*Workflow, error)
+	List() ([]*Workflow, error)
+}
+
 // Workflow represents a workflow definition.
 type Workflow struct {
 	Name        string

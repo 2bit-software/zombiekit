@@ -89,9 +89,6 @@ type importResult struct {
 }
 
 func dbImport(c *cli.Context) error {
-	ctx := context.Background()
-
-	// Validate required flags
 	sourcePath := c.String("from")
 	targetURL := c.String("to")
 	dryRun := c.Bool("dry-run")
@@ -99,16 +96,13 @@ func dbImport(c *cli.Context) error {
 	verbose := c.Bool("verbose")
 	format := c.String("format")
 
-	if targetURL == "" && !dryRun {
+	if targetURL == "" {
+		if dryRun {
+			return cli.Exit("Error: --to flag or BRAINS_POSTGRES_URL environment variable is required even for dry-run", 1)
+		}
 		return cli.Exit("Error: --to flag or BRAINS_POSTGRES_URL environment variable is required", 1)
 	}
 
-	// For dry-run without target, we still need a target to check existing items
-	if targetURL == "" && dryRun {
-		return cli.Exit("Error: --to flag or BRAINS_POSTGRES_URL environment variable is required even for dry-run", 1)
-	}
-
-	// Set up progress callback for verbose mode
 	var progressFunc importer.ProgressFunc
 	if verbose && format == "text" {
 		progressFunc = func(imported, total int, currentItem string) {
@@ -116,7 +110,6 @@ func dbImport(c *cli.Context) error {
 		}
 	}
 
-	// Create importer
 	opts := importer.ImportOptions{
 		SourcePath: sourcePath,
 		TargetURL:  targetURL,
@@ -125,44 +118,45 @@ func dbImport(c *cli.Context) error {
 		OnProgress: progressFunc,
 	}
 
+	return runImport(context.Background(), c, opts, format)
+}
+
+// runImport creates the importer, executes the import, and formats output.
+func runImport(ctx context.Context, c *cli.Context, opts importer.ImportOptions, format string) error {
 	imp, err := importer.New(ctx, opts)
 	if err != nil {
 		if format == "json" {
-			return outputDBImportError(c, sourcePath, targetURL, dryRun, err)
+			return outputDBImportError(c, opts.SourcePath, opts.TargetURL, opts.DryRun, err)
 		}
 		return cli.Exit(fmt.Sprintf("Error: %v", err), 1)
 	}
 	defer imp.Close()
 
-	// Print starting message
 	if format == "text" {
-		if dryRun {
+		if opts.DryRun {
 			fmt.Fprintln(c.App.Writer, "Dry run - no changes will be made")
 			fmt.Fprintln(c.App.Writer)
 		}
-		fmt.Fprintf(c.App.Writer, "Importing from %s to PostgreSQL...\n", sourcePath)
+		fmt.Fprintf(c.App.Writer, "Importing from %s to PostgreSQL...\n", opts.SourcePath)
 	}
 
-	// Run import
 	result, err := imp.Import(ctx)
 	if err != nil {
 		if format == "json" {
-			return outputDBImportError(c, sourcePath, targetURL, dryRun, err)
+			return outputDBImportError(c, opts.SourcePath, opts.TargetURL, opts.DryRun, err)
 		}
 		return cli.Exit(fmt.Sprintf("Error: %v", err), 1)
 	}
 
-	// Clear progress line if verbose
-	if verbose && format == "text" {
+	if opts.OnProgress != nil && format == "text" {
 		fmt.Fprintln(c.App.Writer)
 	}
 
-	// Output results
 	if format == "json" {
 		return outputDBImportJSON(c, result)
 	}
 
-	return outputDBImportText(c, result, dryRun, verbose)
+	return outputDBImportText(c, result, opts.DryRun, c.Bool("verbose"))
 }
 
 func outputDBImportJSON(c *cli.Context, result *importer.ImportResult) error {

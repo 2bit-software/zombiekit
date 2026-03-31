@@ -11,9 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/2bit-software/zombiekit/internal/archival"
 	"github.com/2bit-software/zombiekit/internal/callback"
-	"github.com/2bit-software/zombiekit/internal/friction"
 	"github.com/2bit-software/zombiekit/internal/github"
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/state"
@@ -177,9 +175,9 @@ func (m *mockAuditor) Audit(_ context.Context, ticketID string, _ callback.Event
 
 // Compile-time interface checks
 var (
-	_ archival.Archiver = (*mockArchiver)(nil)
-	_ friction.Auditor  = (*mockAuditor)(nil)
-	_ state.StateStore  = (*routerMockStore)(nil)
+	_ Archiver         = (*mockArchiver)(nil)
+	_ Auditor          = (*mockAuditor)(nil)
+	_ state.StateStore = (*routerMockStore)(nil)
 )
 
 // --- CompletionEvent tests ---

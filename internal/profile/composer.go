@@ -12,15 +12,6 @@ type Composer struct {
 	source   ProfileSourceInterface // For loading inheritance chains
 }
 
-// NewComposer creates a new Composer with the given profiles.
-// Deprecated: Use NewComposerWithSource instead.
-func NewComposer(profiles map[string]*Profile, resolver *Resolver) *Composer {
-	return &Composer{
-		profiles: profiles,
-		resolver: resolver,
-	}
-}
-
 // NewComposerWithSource creates a new Composer with the given profiles and source.
 func NewComposerWithSource(profiles map[string]*Profile, source ProfileSourceInterface) *Composer {
 	return &Composer{
@@ -32,44 +23,72 @@ func NewComposerWithSource(profiles map[string]*Profile, source ProfileSourceInt
 // Compose combines the specified profiles into a single result.
 // It resolves includes, handles inheritance, and deduplicates content.
 func (c *Composer) Compose(profileNames []string) (*CompositionResult, error) {
-	// Deduplicate input profile names
 	profileNames = c.deduplicateNames(profileNames)
 
-	// Validate all requested profiles exist
-	for _, name := range profileNames {
+	if err := c.validateProfileNames(profileNames); err != nil {
+		return nil, err
+	}
+
+	if err := c.checkForCycles(profileNames); err != nil {
+		return nil, err
+	}
+
+	orderedProfiles, resolutionLog, err := c.resolveAllIncludes(profileNames)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.composeContent(orderedProfiles, resolutionLog), nil
+}
+
+// validateProfileNames checks that every requested profile exists, returning a
+// ProfileNotFoundError with suggestions for the first missing name.
+func (c *Composer) validateProfileNames(names []string) error {
+	for _, name := range names {
 		if _, exists := c.profiles[name]; !exists {
-			suggestions := c.findSimilar(name)
-			return nil, &ProfileNotFoundError{
+			return &ProfileNotFoundError{
 				Name:        name,
-				Suggestions: suggestions,
+				Suggestions: c.findSimilar(name),
 			}
 		}
 	}
+	return nil
+}
 
-	// Build DAG and detect cycles
+// checkForCycles runs DFS cycle detection across all requested profile names.
+func (c *Composer) checkForCycles(names []string) error {
 	visited := make(map[string]bool)
 	pathSet := make(map[string]bool)
-	for _, name := range profileNames {
+	for _, name := range names {
 		if err := c.detectCycle(name, visited, pathSet, nil); err != nil {
-			return nil, err
+			return err
 		}
 	}
+	return nil
+}
 
-	// Resolve includes with deduplication (depth-first, includes before self)
+// resolveAllIncludes performs depth-first include resolution across all
+// requested profile names, deduplicating along the way.
+func (c *Composer) resolveAllIncludes(names []string) ([]*Profile, []ResolutionEntry, error) {
 	resolved := make(map[string]bool)
 	var orderedProfiles []*Profile
 	var resolutionLog []ResolutionEntry
 
-	for _, name := range profileNames {
+	for _, name := range names {
 		profiles, log, err := c.resolveIncludes(name, resolved, "")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		orderedProfiles = append(orderedProfiles, profiles...)
 		resolutionLog = append(resolutionLog, log...)
 	}
 
-	// Compose content with inheritance
+	return orderedProfiles, resolutionLog, nil
+}
+
+// composeContent resolves inheritance for each profile, concatenates content,
+// and assembles the final CompositionResult.
+func (c *Composer) composeContent(orderedProfiles []*Profile, resolutionLog []ResolutionEntry) *CompositionResult {
 	var contentParts []string
 	var profilesUsed []string
 	var warnings []string
@@ -81,7 +100,6 @@ func (c *Composer) Compose(profileNames []string) (*CompositionResult, error) {
 			content = p.Body
 		}
 		if inherited {
-			// Update resolution log entry
 			for i := range resolutionLog {
 				if resolutionLog[i].Name == p.Name {
 					resolutionLog[i].Inherited = true
@@ -93,7 +111,6 @@ func (c *Composer) Compose(profileNames []string) (*CompositionResult, error) {
 		profilesUsed = append(profilesUsed, p.Name)
 	}
 
-	// Concatenate without separators
 	finalContent := strings.Join(contentParts, "\n\n")
 	charCount := len(finalContent)
 
@@ -104,7 +121,7 @@ func (c *Composer) Compose(profileNames []string) (*CompositionResult, error) {
 		EstimatedTokens: charCount / 4,
 		Warnings:        warnings,
 		ResolutionLog:   resolutionLog,
-	}, nil
+	}
 }
 
 // detectCycle uses DFS with path tracking to detect cycles in the include graph.
