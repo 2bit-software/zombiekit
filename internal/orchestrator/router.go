@@ -11,6 +11,7 @@ import (
 	"github.com/2bit-software/zombiekit/internal/callback"
 	"github.com/2bit-software/zombiekit/internal/github"
 	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
 	"github.com/2bit-software/zombiekit/internal/state"
 )
 
@@ -148,6 +149,9 @@ func (r *Router) handleComplete(ctx context.Context, evt callback.Event, logger 
 		logger.Error("audit failed", slog.String("step", "Audit"), slog.String("err", err.Error()))
 	}
 
+	// Idempotent: cleans up sandbox VM if one was used for this session.
+	sandbox.Cleanup(ctx, sandbox.Name(evt.TicketID))
+
 	logger.Info("completion processed", slog.Int("pr_number", prNumber))
 }
 
@@ -188,6 +192,8 @@ func (r *Router) handleFailed(ctx context.Context, evt callback.Event, logger *s
 			TicketID: evt.TicketID,
 		})
 	}
+
+	sandbox.Cleanup(ctx, sandbox.Name(evt.TicketID))
 
 	logger.Info("failure processed", slog.String("reason", evt.Reason))
 }

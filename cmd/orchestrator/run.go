@@ -10,6 +10,7 @@ import (
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/2bit-software/zombiekit/internal/orchestrator"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
 	"github.com/2bit-software/zombiekit/internal/state"
 	"github.com/2bit-software/zombiekit/internal/version"
 	"github.com/2bit-software/zombiekit/internal/worktree"
@@ -43,7 +44,16 @@ func run(c *cli.Context) error {
 		return err
 	}
 
-	sessionMgr, err := cmux.New()
+	var cmuxOpts []cmux.Option
+	if sandbox.Available() {
+		sbxCfg := sandbox.DefaultConfig()
+		cfg.SandboxAvailable = true
+		cfg.SandboxConfig = sbxCfg
+		cmuxOpts = append(cmuxOpts, cmux.WithCommandBuilder(sandbox.NewCommandBuilder(sbxCfg)))
+		logging.Logger().Info("docker sandbox mode enabled (sbx detected on PATH)")
+	}
+
+	sessionMgr, err := cmux.New(cmuxOpts...)
 	if err != nil {
 		return err
 	}

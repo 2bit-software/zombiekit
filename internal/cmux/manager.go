@@ -67,25 +67,35 @@ func (_m *CmuxManager) SpawnSession(ctx context.Context, ticketID, title, worktr
 	if err != nil {
 		return "", err
 	}
-	entries, err := parseListWorkspaces(listOut)
+	entries, err := ParseListWorkspaces(listOut)
 	if err != nil {
 		return "", newError(ErrCommandFailed, err.Error(), err)
 	}
-	if found := findByTicketID(entries, ticketID); found != nil {
+	if found := FindByTicketID(entries, ticketID); found != nil {
 		return "", newErrorf(ErrSessionExists, nil,
-			"cmux workspace already exists for %s: %s", ticketID, found.ref)
+			"cmux workspace already exists for %s: %s", ticketID, found.Ref)
 	}
 
-	cmdStr, err := buildCommand(env, _m.command, prompt)
+	var cmdStr string
+	cwd := worktreePath
+
+	if _m.commandBuilder != nil {
+		cmdStr, cwd, err = _m.commandBuilder(worktreePath, env, _m.command, prompt)
+	} else {
+		cmdStr, err = buildCommand(env, _m.command, prompt)
+	}
 	if err != nil {
 		return "", err
 	}
+	if cwd == "" {
+		cwd = worktreePath
+	}
 
-	createOut, err := _m.run(ctx, "new-workspace", "--cwd", worktreePath, "--command", cmdStr)
+	createOut, err := _m.run(ctx, "new-workspace", "--cwd", cwd, "--command", cmdStr)
 	if err != nil {
 		return "", err
 	}
-	ref, err := parseNewWorkspace(createOut)
+	ref, err := ParseNewWorkspace(createOut)
 	if err != nil {
 		return "", newError(ErrCommandFailed, err.Error(), err)
 	}
@@ -137,16 +147,16 @@ func (_m *CmuxManager) findLiveSession(ctx context.Context, ticketID string) (st
 		return "", err
 	}
 
-	entries, err := parseListWorkspaces(listOut)
+	entries, err := ParseListWorkspaces(listOut)
 	if err != nil {
 		return "", err
 	}
 
-	found := findByTicketID(entries, ticketID)
+	found := FindByTicketID(entries, ticketID)
 	if found == nil {
 		return "", newErrorf(ErrSessionNotFound, nil, "no cmux workspace found for %s", ticketID)
 	}
-	return found.ref, nil
+	return found.Ref, nil
 }
 
 // SessionExists checks live cmux state for a workspace matching the ticket ID.
@@ -159,12 +169,12 @@ func (_m *CmuxManager) SessionExists(ctx context.Context, ticketID string) (bool
 		return false, err
 	}
 
-	entries, err := parseListWorkspaces(listOut)
+	entries, err := ParseListWorkspaces(listOut)
 	if err != nil {
 		return false, err
 	}
 
-	if findByTicketID(entries, ticketID) != nil {
+	if FindByTicketID(entries, ticketID) != nil {
 		return true, nil
 	}
 

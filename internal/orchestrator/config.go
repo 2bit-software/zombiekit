@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v2"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
 )
 
 var validLogLevels = map[string]bool{
@@ -34,6 +35,11 @@ type Config struct {
 	TrackingLabel        string
 	BotUsername          string
 	ClosedPRTicketStatus string
+
+	// SandboxAvailable is true when sbx is detected on PATH at startup.
+	// When true, agent sessions run inside Docker Sandboxes for isolation.
+	SandboxAvailable bool
+	SandboxConfig    sandbox.Config
 }
 
 // NewConfig parses a urfave/cli context into a validated Config.
