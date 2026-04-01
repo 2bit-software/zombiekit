@@ -159,8 +159,9 @@ func (r *Router) handleComplete(ctx context.Context, evt callback.Event, logger 
 		logger.Error("audit failed", slog.String("step", "Audit"), slog.String("err", err.Error()))
 	}
 
-	// Idempotent: cleans up sandbox VM if one was used for this session.
-	sandbox.Cleanup(ctx, sandbox.Name(evt.TicketID))
+	if r.cfg.SandboxAvailable {
+		sandbox.Cleanup(ctx, sandbox.Name(evt.TicketID))
+	}
 
 	logger.Info("completion processed", slog.Int("pr_number", prNumber))
 }
@@ -203,7 +204,9 @@ func (r *Router) handleFailed(ctx context.Context, evt callback.Event, logger *s
 		})
 	}
 
-	sandbox.Cleanup(ctx, sandbox.Name(evt.TicketID))
+	if r.cfg.SandboxAvailable {
+		sandbox.Cleanup(ctx, sandbox.Name(evt.TicketID))
+	}
 
 	logger.Info("failure processed", slog.String("reason", evt.Reason))
 }

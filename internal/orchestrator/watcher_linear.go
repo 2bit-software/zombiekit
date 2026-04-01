@@ -148,8 +148,9 @@ func (o *Orchestrator) rollbackTicket(ctx context.Context, ticket linear.Ticket,
 		}
 	}
 
-	// Idempotent: attempts sandbox cleanup regardless of whether one was created.
-	sandbox.Cleanup(ctx, sandbox.Name(ticket.Identifier))
+	if o.cfg.SandboxAvailable {
+		sandbox.Cleanup(ctx, sandbox.Name(ticket.Identifier))
+	}
 
 	if worktreePath != "" {
 		if delErr := o.worktrees.DeleteWorktree(ctx, worktreePath); delErr != nil {

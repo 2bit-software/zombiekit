@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/urfave/cli/v2"
@@ -48,12 +49,16 @@ func run(c *cli.Context) error {
 	}
 
 	var cmuxOpts []cmux.Option
-	if sandbox.Available() {
+	useSandbox, err := resolveSandboxMode(c.String("sandbox"))
+	if err != nil {
+		return err
+	}
+	if useSandbox {
 		sbxCfg := sandbox.DefaultConfig()
 		cfg.SandboxAvailable = true
 		cfg.SandboxConfig = sbxCfg
 		cmuxOpts = append(cmuxOpts, cmux.WithCommandBuilder(sandbox.NewCommandBuilder(sbxCfg)))
-		logging.Logger().Info("docker sandbox mode enabled (sbx detected on PATH)")
+		logging.Logger().Info("docker sandbox mode enabled")
 	}
 
 	sessionMgr, err := cmux.New(cmuxOpts...)
@@ -67,4 +72,21 @@ func run(c *cli.Context) error {
 	}
 
 	return orchestrator.New(cfg, store, linearClient, ghClient, worktreeMgr, sessionMgr).Run()
+}
+
+// resolveSandboxMode interprets the --sandbox flag value.
+func resolveSandboxMode(mode string) (bool, error) {
+	switch mode {
+	case "auto":
+		return sandbox.Available(), nil
+	case "enabled":
+		if !sandbox.Available() {
+			return false, fmt.Errorf("--sandbox=enabled but sbx is not on PATH")
+		}
+		return true, nil
+	case "disabled":
+		return false, nil
+	default:
+		return false, fmt.Errorf("--sandbox must be auto, enabled, or disabled (got %q)", mode)
+	}
 }
