@@ -37,7 +37,7 @@ func TestNew_CmuxAvailable(t *testing.T) {
 	mgr, err := New()
 	require.NoError(t, err)
 	require.NotNil(t, mgr)
-	assert.Equal(t, "claude --permission-mode auto", mgr.command)
+	assert.Equal(t, "claude --dangerously-skip-permissions", mgr.command)
 }
 
 func TestNew_WithCommand(t *testing.T) {

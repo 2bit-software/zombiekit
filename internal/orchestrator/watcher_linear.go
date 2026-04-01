@@ -110,6 +110,9 @@ func (o *Orchestrator) runTicketPipeline(ctx context.Context, ticket linear.Tick
 		"WORK_CALLBACK_URL": fmt.Sprintf("http://localhost:%d/%s", o.cfg.CallbackPort, ticket.Identifier),
 	}
 	prompt := "Read .ai/ticket.md — this is your assigned ticket. Use /brains.new to begin."
+	if hasLabel(ticket.Labels, "automode") {
+		prompt = "Read .ai/ticket.md — this is your assigned ticket. Use /brains.new automode to begin."
+	}
 	sessionRef, err = o.sessions.SpawnSession(ctx, ticket.Identifier, ticket.Title, worktreePath, env, prompt)
 	if err != nil {
 		return "", worktreePath, fmt.Errorf("spawn session: %w", err)
@@ -185,6 +188,16 @@ func (o *Orchestrator) markNeedsAttention(ctx context.Context, ticket linear.Tic
 	if err := o.linear.RemoveLabel(ctx, ticket.ID, labelAIReady); err != nil {
 		logger.Error("failed to remove ai-ready label after failure", "ticket", ticket.Identifier, "error", err)
 	}
+}
+
+// hasLabel reports whether labels contains the given name (case-insensitive).
+func hasLabel(labels []string, name string) bool {
+	for _, l := range labels {
+		if strings.EqualFold(l, name) {
+			return true
+		}
+	}
+	return false
 }
 
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)

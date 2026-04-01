@@ -181,21 +181,26 @@ func TestCreateWorktree_HappyPath(t *testing.T) {
 	assert.True(t, worktreeExists(t, repoDir, path))
 }
 
-func TestCreateWorktree_DuplicateTicketID(t *testing.T) {
+func TestCreateWorktree_DuplicateTicketID_RecoverStale(t *testing.T) {
 	repoDir := initTestRepo(t)
 	root := filepath.Join(t.TempDir(), "worktrees")
 	mgr, err := New(repoDir, WithWorktreesRoot(root))
 	require.NoError(t, err)
 
-	_, err = mgr.CreateWorktree(context.Background(), "DEV-100", "first")
+	path1, err := mgr.CreateWorktree(context.Background(), "DEV-100", "first")
 	require.NoError(t, err)
+	assert.True(t, worktreeExists(t, repoDir, path1))
 
-	_, err = mgr.CreateWorktree(context.Background(), "DEV-100", "second")
-	require.Error(t, err)
-	assert.True(t, IsPathExists(err), "expected ErrPathExists, got: %v", err)
+	// Second create with same ticket ID cleans up the stale worktree
+	// and creates a fresh one.
+	path2, err := mgr.CreateWorktree(context.Background(), "DEV-100", "second")
+	require.NoError(t, err)
+	assert.True(t, worktreeExists(t, repoDir, path2))
+	assert.True(t, branchExists(t, repoDir, "DEV-100/second"))
+	assert.False(t, branchExists(t, repoDir, "DEV-100/first"))
 }
 
-func TestCreateWorktree_BranchCollision(t *testing.T) {
+func TestCreateWorktree_BranchCollision_RecoverStale(t *testing.T) {
 	repoDir := initTestRepo(t)
 	root := filepath.Join(t.TempDir(), "worktrees")
 	mgr, err := New(repoDir, WithWorktreesRoot(root))
@@ -204,9 +209,11 @@ func TestCreateWorktree_BranchCollision(t *testing.T) {
 	// Pre-create the branch that CreateWorktree would use
 	runGit(t, repoDir, "branch", "DEV-200/my-feature")
 
-	_, err = mgr.CreateWorktree(context.Background(), "DEV-200", "my feature")
-	require.Error(t, err)
-	assert.True(t, IsBranchExists(err), "expected ErrBranchExists, got: %v", err)
+	// CreateWorktree recovers by deleting the stale branch and retrying.
+	path, err := mgr.CreateWorktree(context.Background(), "DEV-200", "my feature")
+	require.NoError(t, err)
+	assert.True(t, worktreeExists(t, repoDir, path))
+	assert.True(t, branchExists(t, repoDir, "DEV-200/my-feature"))
 }
 
 func TestCreateWorktree_AutoCreatesRoot(t *testing.T) {

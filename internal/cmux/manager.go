@@ -17,7 +17,7 @@ func New(opts ...Option) (*CmuxManager, error) {
 
 	m := &CmuxManager{
 		cmuxBin:  cmuxBin,
-		command:  "claude --permission-mode auto",
+		command:  "claude --dangerously-skip-permissions",
 		sessions: make(map[string]sessionEntry),
 	}
 
@@ -101,21 +101,52 @@ func (_m *CmuxManager) SpawnSession(ctx context.Context, ticketID, title, worktr
 }
 
 // KillSession closes the cmux workspace for the given ticket.
+//
+// It first checks the in-memory tracker, then falls back to querying
+// live cmux state. This allows a separate process (e.g., the CLI) to
+// kill sessions spawned by the orchestrator.
 func (_m *CmuxManager) KillSession(ctx context.Context, ticketID string) error {
 	_m.mu.Lock()
 	defer _m.mu.Unlock()
 
-	entry, exists := _m.sessions[ticketID]
-	if !exists {
-		return newErrorf(ErrSessionNotFound, nil, "no tracked session for %s", ticketID)
+	// Try in-memory tracker first.
+	if entry, exists := _m.sessions[ticketID]; exists {
+		if _, err := _m.run(ctx, "close-workspace", "--workspace", entry.ref); err != nil {
+			return err
+		}
+		delete(_m.sessions, ticketID)
+		return nil
 	}
 
-	if _, err := _m.run(ctx, "close-workspace", "--workspace", entry.ref); err != nil {
+	// Fall back to querying live cmux state.
+	ref, err := _m.findLiveSession(ctx, ticketID)
+	if err != nil {
 		return err
 	}
 
-	delete(_m.sessions, ticketID)
+	if _, err := _m.run(ctx, "close-workspace", "--workspace", ref); err != nil {
+		return err
+	}
 	return nil
+}
+
+// findLiveSession queries cmux for a workspace matching the ticket ID.
+func (_m *CmuxManager) findLiveSession(ctx context.Context, ticketID string) (string, error) {
+	listOut, err := _m.run(ctx, "list-workspaces")
+	if err != nil {
+		return "", err
+	}
+
+	entries, err := parseListWorkspaces(listOut)
+	if err != nil {
+		return "", err
+	}
+
+	found := findByTicketID(entries, ticketID)
+	if found == nil {
+		return "", newErrorf(ErrSessionNotFound, nil, "no cmux workspace found for %s", ticketID)
+	}
+	return found.ref, nil
 }
 
 // SessionExists checks live cmux state for a workspace matching the ticket ID.
