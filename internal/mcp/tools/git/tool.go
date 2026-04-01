@@ -10,6 +10,51 @@ import (
 	internalgit "github.com/2bit-software/zombiekit/internal/git"
 )
 
+// resolveRunner returns the effective runner for this call.
+// If directory is specified in args, creates a new runner for that directory.
+// Otherwise returns the tool's default runner.
+func (t *Tool) resolveRunner(ctx context.Context, args map[string]any) (*internalgit.Runner, error) {
+	dir := getStringArg(args, "directory")
+	if dir == "" {
+		return t.runner, nil
+	}
+
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(t.runner.WorkDir(), dir)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		return nil, &ToolError{
+			Code:    "INVALID_DIRECTORY",
+			Message: fmt.Sprintf("directory does not exist: %s", dir),
+			Hint:    "Provide a valid absolute or relative directory path",
+		}
+	}
+	if !info.IsDir() {
+		return nil, &ToolError{
+			Code:    "INVALID_DIRECTORY",
+			Message: fmt.Sprintf("path is not a directory: %s", dir),
+			Hint:    "Provide a path to a directory, not a file",
+		}
+	}
+
+	runner, err := internalgit.NewRunner(dir)
+	if err != nil {
+		return nil, fmt.Errorf("creating runner: %w", err)
+	}
+
+	if _, err := runner.Run(ctx, "rev-parse", "--git-dir"); err != nil {
+		return nil, &ToolError{
+			Code:    "NOT_GIT_REPOSITORY",
+			Message: fmt.Sprintf("not a git repository: %s", dir),
+			Hint:    "Provide a path to a directory inside a git repository",
+		}
+	}
+
+	return runner, nil
+}
+
 // ToolDefinition represents an MCP tool definition.
 type ToolDefinition struct {
 	Name        string
@@ -30,7 +75,7 @@ func NewTool(runner *internalgit.Runner) *Tool {
 func (t *Tool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "git",
-		Description: "Local git operations: status, log, diff, stage, commit, push. All operations run in the server's working directory.",
+		Description: "Local git operations: status, log, diff, stage, commit, push. Operations run in the server's working directory by default, or in the specified directory.",
 	}
 }
 
@@ -45,19 +90,24 @@ func (t *Tool) Execute(ctx context.Context, args map[string]any) (string, error)
 		}
 	}
 
+	runner, err := t.resolveRunner(ctx, args)
+	if err != nil {
+		return "", err
+	}
+
 	switch action {
 	case "status":
-		return t.handleStatus(ctx)
+		return t.handleStatus(ctx, runner)
 	case "log":
-		return t.handleLog(ctx, args)
+		return t.handleLog(ctx, args, runner)
 	case "diff":
-		return t.handleDiff(ctx, args)
+		return t.handleDiff(ctx, args, runner)
 	case "stage":
-		return t.handleStage(ctx, args)
+		return t.handleStage(ctx, args, runner)
 	case "commit":
-		return t.handleCommit(ctx, args)
+		return t.handleCommit(ctx, args, runner)
 	case "push":
-		return t.handlePush(ctx, args)
+		return t.handlePush(ctx, args, runner)
 	default:
 		return "", &ToolError{
 			Code:    "INVALID_ACTION",
@@ -68,13 +118,13 @@ func (t *Tool) Execute(ctx context.Context, args map[string]any) (string, error)
 }
 
 // handleStatus returns branch, status lines, tracking info, and staged changes flag.
-func (t *Tool) handleStatus(ctx context.Context) (string, error) {
-	branch, err := t.runner.Run(ctx, "branch", "--show-current")
+func (t *Tool) handleStatus(ctx context.Context, runner *internalgit.Runner) (string, error) {
+	branch, err := runner.Run(ctx, "branch", "--show-current")
 	if err != nil {
 		return "", fmt.Errorf("getting branch: %w", err)
 	}
 
-	statusOut, err := t.runner.Run(ctx, "status", "--short")
+	statusOut, err := runner.Run(ctx, "status", "--short")
 	if err != nil {
 		return "", fmt.Errorf("getting status: %w", err)
 	}
@@ -85,10 +135,10 @@ func (t *Tool) handleStatus(ctx context.Context) (string, error) {
 	}
 
 	// Check for staged changes: `git diff --cached --quiet` exits non-zero if staged changes exist
-	hasStagedChanges := t.runner.RunSilent(ctx, "diff", "--cached", "--quiet") != nil
+	hasStagedChanges := runner.RunSilent(ctx, "diff", "--cached", "--quiet") != nil
 
 	// Get tracking info
-	trackingOut, _ := t.runner.Run(ctx, "status", "-sb")
+	trackingOut, _ := runner.Run(ctx, "status", "-sb")
 	trackingInfo := ""
 	if trackingOut != "" {
 		lines := strings.SplitN(trackingOut, "\n", 2)
@@ -105,7 +155,7 @@ func (t *Tool) handleStatus(ctx context.Context) (string, error) {
 }
 
 // handleLog returns recent commits.
-func (t *Tool) handleLog(ctx context.Context, args map[string]any) (string, error) {
+func (t *Tool) handleLog(ctx context.Context, args map[string]any, runner *internalgit.Runner) (string, error) {
 	count := getIntArg(args, "count", 10)
 	rangeSpec := getStringArg(args, "range")
 	base := getStringArg(args, "base")
@@ -118,7 +168,7 @@ func (t *Tool) handleLog(ctx context.Context, args map[string]any) (string, erro
 		gitArgs = []string{"log", "--oneline", fmt.Sprintf("%s..HEAD", base)}
 	}
 
-	out, err := t.runner.Run(ctx, gitArgs...)
+	out, err := runner.Run(ctx, gitArgs...)
 	if err != nil {
 		return "", fmt.Errorf("getting log: %w", err)
 	}
@@ -141,7 +191,7 @@ func (t *Tool) handleLog(ctx context.Context, args map[string]any) (string, erro
 }
 
 // handleDiff returns diff content.
-func (t *Tool) handleDiff(ctx context.Context, args map[string]any) (string, error) {
+func (t *Tool) handleDiff(ctx context.Context, args map[string]any, runner *internalgit.Runner) (string, error) {
 	scope := getStringArg(args, "scope")
 	base := getStringArg(args, "base")
 	statOnly := getBoolArg(args, "stat_only")
@@ -179,7 +229,7 @@ func (t *Tool) handleDiff(ctx context.Context, args map[string]any) (string, err
 		}
 	}
 
-	out, err := t.runner.Run(ctx, gitArgs...)
+	out, err := runner.Run(ctx, gitArgs...)
 	if err != nil {
 		return "", fmt.Errorf("getting diff: %w", err)
 	}
@@ -192,7 +242,7 @@ func (t *Tool) handleDiff(ctx context.Context, args map[string]any) (string, err
 }
 
 // handleStage validates and stages specific files.
-func (t *Tool) handleStage(ctx context.Context, args map[string]any) (string, error) {
+func (t *Tool) handleStage(ctx context.Context, args map[string]any, runner *internalgit.Runner) (string, error) {
 	filesStr := getStringArg(args, "files")
 	if filesStr == "" {
 		return "", &ToolError{
@@ -210,12 +260,12 @@ func (t *Tool) handleStage(ctx context.Context, args map[string]any) (string, er
 		}
 	}
 
-	if err := validateFiles(t.runner.WorkDir(), files); err != nil {
+	if err := validateFiles(runner.WorkDir(), files); err != nil {
 		return "", err
 	}
 
 	gitArgs := append([]string{"add", "--"}, files...)
-	if _, err := t.runner.Run(ctx, gitArgs...); err != nil {
+	if _, err := runner.Run(ctx, gitArgs...); err != nil {
 		return "", fmt.Errorf("staging files: %w", err)
 	}
 
@@ -226,14 +276,14 @@ func (t *Tool) handleStage(ctx context.Context, args map[string]any) (string, er
 }
 
 // handleCommit creates a commit with the given message.
-func (t *Tool) handleCommit(ctx context.Context, args map[string]any) (string, error) {
+func (t *Tool) handleCommit(ctx context.Context, args map[string]any, runner *internalgit.Runner) (string, error) {
 	message := getStringArg(args, "message")
 	if err := validateMessage(message); err != nil {
 		return "", err
 	}
 
 	// Verify staged changes exist
-	if err := t.runner.RunSilent(ctx, "diff", "--cached", "--quiet"); err == nil {
+	if err := runner.RunSilent(ctx, "diff", "--cached", "--quiet"); err == nil {
 		return "", &ToolError{
 			Code:    "NO_STAGED_CHANGES",
 			Message: "nothing staged for commit",
@@ -256,14 +306,14 @@ func (t *Tool) handleCommit(ctx context.Context, args map[string]any) (string, e
 	tmpFile.Close()
 
 	// Commit
-	if _, err := t.runner.Run(ctx, "commit", "-F", tmpPath); err != nil {
+	if _, err := runner.Run(ctx, "commit", "-F", tmpPath); err != nil {
 		return "", fmt.Errorf("committing: %w", err)
 	}
 
 	// Get commit info
-	hash, _ := t.runner.Run(ctx, "rev-parse", "--short", "HEAD")
-	branch, _ := t.runner.Run(ctx, "branch", "--show-current")
-	logLine, _ := t.runner.Run(ctx, "log", "--oneline", "-1")
+	hash, _ := runner.Run(ctx, "rev-parse", "--short", "HEAD")
+	branch, _ := runner.Run(ctx, "branch", "--show-current")
+	logLine, _ := runner.Run(ctx, "log", "--oneline", "-1")
 
 	return marshalResponse(CommitResponse{
 		Action:  "commit",
@@ -274,14 +324,14 @@ func (t *Tool) handleCommit(ctx context.Context, args map[string]any) (string, e
 }
 
 // handlePush pushes the current branch to a remote.
-func (t *Tool) handlePush(ctx context.Context, args map[string]any) (string, error) {
+func (t *Tool) handlePush(ctx context.Context, args map[string]any, runner *internalgit.Runner) (string, error) {
 	setUpstream := getBoolArg(args, "set_upstream")
 	remote := getStringArg(args, "remote")
 	if remote == "" {
 		remote = "origin"
 	}
 
-	branch, err := t.runner.Run(ctx, "branch", "--show-current")
+	branch, err := runner.Run(ctx, "branch", "--show-current")
 	if err != nil {
 		return "", fmt.Errorf("getting branch: %w", err)
 	}
@@ -296,14 +346,14 @@ func (t *Tool) handlePush(ctx context.Context, args map[string]any) (string, err
 	}
 	gitArgs = append(gitArgs, remote, branch)
 
-	out, pushErr := t.runner.Run(ctx, gitArgs...)
+	out, pushErr := runner.Run(ctx, gitArgs...)
 
 	// git push often writes to stderr even on success, so check if it actually failed
 	if pushErr != nil {
 		return "", fmt.Errorf("pushing: %w", pushErr)
 	}
 
-	absPath, _ := filepath.Abs(t.runner.WorkDir())
+	absPath, _ := filepath.Abs(runner.WorkDir())
 
 	return marshalResponse(PushResponse{
 		Action:  "push",
