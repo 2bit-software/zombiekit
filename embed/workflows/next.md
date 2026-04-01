@@ -28,7 +28,7 @@ Goal: Read step state from INITIATIVE.md and advance to the next step.
 
 3. **Determine Action**
    - If current step is `in_progress`: Mark as `completed`, advance next `pending` to `in_progress`
-   - If all steps are `completed`/`skipped`: Suggest `/brains.complete`
+   - If all steps are `completed`/`skipped`: Invoke `/brains.complete` via the `Skill` tool with `skill: "brains.complete"`
    - If no `in_progress` step: Start the first `pending` step
 
 4. **Update INITIATIVE.md**
@@ -37,6 +37,7 @@ Goal: Read step state from INITIATIVE.md and advance to the next step.
 
 5. **Load Next Profile**
    - Use `mcp__zombiekit__profile-compose` with the step's profile
+   - If `"automode"` was included in the current compose call, include it again: `profiles: ["{step_profile}", "automode"]`
    - Pass through any user arguments
 
 ### Step Status Values
@@ -118,8 +119,16 @@ if next_step:
     next_step.updated = now()
     load_profile(next_step.profile)
 else:
-    suggest("/brains.complete")
+    invoke("/brains.complete")  # Use Skill tool with skill: "brains.complete"
 ```
+
+### AutoMode Propagation
+
+If the `automode` profile is present in the current compose call, this workflow is running autonomously:
+
+- After loading the next step's profile and completing its work, **immediately call `/brains.next`** again instead of stopping.
+- When all steps are complete, invoke `/brains.complete` via the `Skill` tool with `skill: "brains.complete"` and `args: "automode"`. The `automode` argument ensures the complete workflow loads the automode profile.
+- Always include `"automode"` in every `mcp__zombiekit__profile-compose` call.
 
 ### Error Conditions
 
@@ -138,10 +147,8 @@ This may indicate the initiative needs to be restarted or is in an inconsistent 
 ```
 
 **All steps complete:**
-```
-All steps complete for {initiative-name}.
 
-Options:
-- `/brains.complete` - Mark initiative done
-- `/brains.new <description>` - Start new work
-```
+When all steps are `completed` or `skipped`, automatically forward to the complete workflow:
+
+- **Regular mode**: Use `AskUserQuestion` to confirm the user wants to complete the initiative, then invoke via `Skill` tool with `skill: "brains.complete"`.
+- **AutoMode**: Invoke directly via `Skill` tool with `skill: "brains.complete"` and `args: "automode"` — no confirmation needed.

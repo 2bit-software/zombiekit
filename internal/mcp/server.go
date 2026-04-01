@@ -544,6 +544,9 @@ func (s *Server) registerGitTool() {
 		mcp.WithString("remote",
 			mcp.Description("Remote name for push (default: origin)"),
 		),
+		mcp.WithString("directory",
+			mcp.Description("Working directory for git operations. When omitted, uses the server's default working directory."),
+		),
 	)
 	s.mcpServer.AddTool(gitMCPTool, s.handleGit)
 }

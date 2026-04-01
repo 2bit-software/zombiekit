@@ -9,7 +9,9 @@ import (
 
 	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/admin"
+	"github.com/2bit-software/zombiekit/internal/cmux"
 	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/2bit-software/zombiekit/internal/worktree"
 )
 
 func openStore(c *cli.Context, mustExist bool) (*state.SQLiteStore, error) {
@@ -79,7 +81,29 @@ func jobsCommand() *cli.Command {
 				Name:      "delete",
 				Usage:     "Delete a job and release its concurrency slot",
 				ArgsUsage: "<ticket-id>",
-				Action:    jobsDelete,
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "session",
+						Aliases: []string{"s"},
+						Usage:   "Kill the cmux workspace for this job",
+					},
+					&cli.BoolFlag{
+						Name:    "worktree",
+						Aliases: []string{"w"},
+						Usage:   "Delete the git worktree and branch for this job",
+					},
+					&cli.StringFlag{
+						Name:    "repo-dir",
+						Usage:   "Git repository root (required with --worktree)",
+						EnvVars: []string{"ORCH_REPO_DIR"},
+					},
+					&cli.StringFlag{
+						Name:    "worktrees-root",
+						Usage:   "Worktrees root directory (optional, used with --worktree)",
+						EnvVars: []string{"ORCH_WORKTREES_ROOT"},
+					},
+				},
+				Action: jobsDelete,
 			},
 			{
 				Name:      "set-status",
@@ -155,7 +179,33 @@ func jobsDelete(c *cli.Context) error {
 	}
 	defer func() { _ = store.Close() }()
 
-	result, err := svc.DeleteJob(c.Context, ticketID)
+	var opts []admin.DeleteOption
+
+	if c.Bool("session") {
+		sessionMgr, err := cmux.New()
+		if err != nil {
+			return cli.Exit(fmt.Sprintf("--session: %s", err), 1)
+		}
+		opts = append(opts, admin.WithSessionCleanup(sessionMgr))
+	}
+
+	if c.Bool("worktree") {
+		repoDir := c.String("repo-dir")
+		if repoDir == "" {
+			return cli.Exit("--worktree requires --repo-dir or ORCH_REPO_DIR", 1)
+		}
+		var wtOpts []worktree.Option
+		if root := c.String("worktrees-root"); root != "" {
+			wtOpts = append(wtOpts, worktree.WithWorktreesRoot(root))
+		}
+		wtMgr, err := worktree.New(repoDir, wtOpts...)
+		if err != nil {
+			return cli.Exit(fmt.Sprintf("--worktree: %s", err), 1)
+		}
+		opts = append(opts, admin.WithWorktreeCleanup(wtMgr))
+	}
+
+	result, err := svc.DeleteJob(c.Context, ticketID, opts...)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
@@ -166,6 +216,20 @@ func jobsDelete(c *cli.Context) error {
 		msg += ", slot released"
 	}
 	fmt.Println(msg)
+
+	if result.SessionKilled {
+		fmt.Printf("  session killed: %s\n", result.Job.CmuxSession)
+	}
+	if result.SessionErr != nil {
+		fmt.Printf("  session kill failed: %s\n", result.SessionErr)
+	}
+	if result.WorktreeDeleted {
+		fmt.Printf("  worktree deleted: %s\n", result.Job.WorktreePath)
+	}
+	if result.WorktreeErr != nil {
+		fmt.Printf("  worktree delete failed: %s\n", result.WorktreeErr)
+	}
+
 	return nil
 }
 

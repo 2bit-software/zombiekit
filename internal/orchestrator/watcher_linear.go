@@ -109,7 +109,8 @@ func (o *Orchestrator) runTicketPipeline(ctx context.Context, ticket linear.Tick
 	env := map[string]string{
 		"WORK_CALLBACK_URL": fmt.Sprintf("http://localhost:%d/%s", o.cfg.CallbackPort, ticket.Identifier),
 	}
-	sessionRef, err = o.sessions.SpawnSession(ctx, ticket.Identifier, ticket.Title, worktreePath, env)
+	prompt := "Read .ai/ticket.md — this is your assigned ticket. Use /brains.new to begin."
+	sessionRef, err = o.sessions.SpawnSession(ctx, ticket.Identifier, ticket.Title, worktreePath, env, prompt)
 	if err != nil {
 		return "", worktreePath, fmt.Errorf("spawn session: %w", err)
 	}

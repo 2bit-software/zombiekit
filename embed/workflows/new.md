@@ -42,13 +42,24 @@ Analyze the user's input and determine which workflow type best matches their in
 
 3. If still unclear, ask one clarifying question before proceeding.
 
+### AutoMode Detection
+
+Before classification, check if the user input contains the keyword **automode** (case-insensitive).
+
+- If detected: Strip "automode" from the input text and set `AUTOMODE = true` for this session.
+- If not detected: Set `AUTOMODE = false`.
+
+When `AUTOMODE = true`, **every** call to `mcp__zombiekit__profile-compose` for the remainder of this workflow MUST include `"automode"` as an additional profile. For example, instead of `profiles: ["feature"]`, use `profiles: ["feature", "automode"]`.
+
 ### After Classification
 
 Once you've determined the type:
 
 1. State your classification and brief rationale
 2. Check for Linear ticket reference (see below)
-3. Load the corresponding profile using `mcp__zombiekit__profile-compose` with the detected profile name ("feature", "bug", or "refactor")
+3. Load the corresponding profile using `mcp__zombiekit__profile-compose`:
+   - Normal mode: `profiles: ["{detected_type}"]`
+   - AutoMode: `profiles: ["{detected_type}", "automode"]`
 
 Example output:
 
@@ -94,4 +105,4 @@ User input: "work on DEV-101 add commit offer"
    LINEAR_TITLE: Have the /brains.complete command also offer to write a commit"
 ```
 
-Then call `mcp__zombiekit__profile-compose` with the detected profile name and enriched arguments.
+Then call `mcp__zombiekit__profile-compose` with the detected profile name (and `"automode"` if active) and the enriched arguments.

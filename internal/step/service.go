@@ -228,13 +228,6 @@ func (s *Service) resolveFiles(patterns []string, historyFolder string) []string
 	return files
 }
 
-// IsInitialized checks if the working directory has a .brains folder.
-func (s *Service) IsInitialized() bool {
-	brainsDir := filepath.Join(s.workDir, ".brains")
-	_, err := os.Stat(brainsDir)
-	return err == nil
-}
-
 // WorkDir returns the service's working directory.
 func (s *Service) WorkDir() string {
 	return s.workDir

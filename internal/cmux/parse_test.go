@@ -132,20 +132,20 @@ func TestFindByTicketID(t *testing.T) {
 }
 
 func TestBuildCommand(t *testing.T) {
-	t.Run("empty env", func(t *testing.T) {
-		cmd, err := buildCommand(nil, "claude")
+	t.Run("empty env no prompt", func(t *testing.T) {
+		cmd, err := buildCommand(nil, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, "claude", cmd)
 	})
 
-	t.Run("empty map", func(t *testing.T) {
-		cmd, err := buildCommand(map[string]string{}, "claude")
+	t.Run("empty map no prompt", func(t *testing.T) {
+		cmd, err := buildCommand(map[string]string{}, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, "claude", cmd)
 	})
 
 	t.Run("single var", func(t *testing.T) {
-		cmd, err := buildCommand(map[string]string{"FOO": "bar"}, "claude")
+		cmd, err := buildCommand(map[string]string{"FOO": "bar"}, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, `bash -c "export FOO='bar' && claude"`, cmd)
 	})
@@ -154,13 +154,13 @@ func TestBuildCommand(t *testing.T) {
 		cmd, err := buildCommand(map[string]string{
 			"ZEBRA": "z",
 			"ALPHA": "a",
-		}, "claude")
+		}, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, `bash -c "export ALPHA='a' ZEBRA='z' && claude"`, cmd)
 	})
 
 	t.Run("single quote in value", func(t *testing.T) {
-		cmd, err := buildCommand(map[string]string{"MSG": "it's"}, "claude")
+		cmd, err := buildCommand(map[string]string{"MSG": "it's"}, "claude", "")
 		require.NoError(t, err)
 		// Inner: export MSG='it'\''s' && claude
 		// Outer escapes \ to \\
@@ -170,32 +170,64 @@ func TestBuildCommand(t *testing.T) {
 	t.Run("special characters in value", func(t *testing.T) {
 		cmd, err := buildCommand(map[string]string{
 			"URL": "http://localhost:8666/DEV-186?foo=bar&baz=1",
-		}, "claude")
+		}, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, `bash -c "export URL='http://localhost:8666/DEV-186?foo=bar&baz=1' && claude"`, cmd)
 	})
 
 	t.Run("dollar sign in value escaped", func(t *testing.T) {
-		cmd, err := buildCommand(map[string]string{"PATH_VAR": "/home/$USER/bin"}, "claude")
+		cmd, err := buildCommand(map[string]string{"PATH_VAR": "/home/$USER/bin"}, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, `bash -c "export PATH_VAR='/home/\$USER/bin' && claude"`, cmd)
 	})
 
 	t.Run("invalid key with spaces", func(t *testing.T) {
-		_, err := buildCommand(map[string]string{"BAD KEY": "val"}, "claude")
+		_, err := buildCommand(map[string]string{"BAD KEY": "val"}, "claude", "")
 		assert.Error(t, err)
 		assert.True(t, IsInvalidEnvKey(err))
 	})
 
 	t.Run("invalid key with dash", func(t *testing.T) {
-		_, err := buildCommand(map[string]string{"BAD-KEY": "val"}, "claude")
+		_, err := buildCommand(map[string]string{"BAD-KEY": "val"}, "claude", "")
 		assert.Error(t, err)
 		assert.True(t, IsInvalidEnvKey(err))
 	})
 
 	t.Run("valid key with underscore and digits", func(t *testing.T) {
-		cmd, err := buildCommand(map[string]string{"_MY_VAR_2": "ok"}, "claude")
+		cmd, err := buildCommand(map[string]string{"_MY_VAR_2": "ok"}, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, `bash -c "export _MY_VAR_2='ok' && claude"`, cmd)
 	})
+
+	t.Run("prompt without env", func(t *testing.T) {
+		cmd, err := buildCommand(nil, "claude", "Read .ai/ticket.md and begin.")
+		require.NoError(t, err)
+		assert.Equal(t, "claude 'Read .ai/ticket.md and begin.'", cmd)
+	})
+
+	t.Run("prompt with env", func(t *testing.T) {
+		cmd, err := buildCommand(map[string]string{"FOO": "bar"}, "claude", "Start working")
+		require.NoError(t, err)
+		assert.Equal(t, `bash -c "export FOO='bar' && claude 'Start working'"`, cmd)
+	})
+
+	t.Run("prompt with single quotes", func(t *testing.T) {
+		cmd, err := buildCommand(nil, "claude", "Read the file — it's important")
+		require.NoError(t, err)
+		assert.Equal(t, "claude 'Read the file — it'\\''s important'", cmd)
+	})
+
+	t.Run("prompt with dollar sign", func(t *testing.T) {
+		cmd, err := buildCommand(map[string]string{"X": "1"}, "claude", "Check $WORK_CALLBACK_URL")
+		require.NoError(t, err)
+		// Dollar sign in prompt is inside single quotes (preserved literally in inner layer)
+		// but gets \$ escaped in the outer double-quote layer
+		assert.Equal(t, `bash -c "export X='1' && claude 'Check \$WORK_CALLBACK_URL'"`, cmd)
+	})
+}
+
+func TestBashQuote(t *testing.T) {
+	assert.Equal(t, "'hello'", bashQuote("hello"))
+	assert.Equal(t, "'it'\\''s'", bashQuote("it's"))
+	assert.Equal(t, "''", bashQuote(""))
 }

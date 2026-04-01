@@ -17,7 +17,7 @@ func New(opts ...Option) (*CmuxManager, error) {
 
 	m := &CmuxManager{
 		cmuxBin:  cmuxBin,
-		command:  "claude",
+		command:  "claude --permission-mode auto",
 		sessions: make(map[string]sessionEntry),
 	}
 
@@ -55,7 +55,7 @@ func (_m *CmuxManager) run(ctx context.Context, args ...string) (string, error) 
 //
 // It checks both internal tracking and live cmux state before creating.
 // The workspace is named "{ticketID}: {title}" for human identification.
-func (_m *CmuxManager) SpawnSession(ctx context.Context, ticketID, title, worktreePath string, env map[string]string) (string, error) {
+func (_m *CmuxManager) SpawnSession(ctx context.Context, ticketID, title, worktreePath string, env map[string]string, prompt string) (string, error) {
 	_m.mu.Lock()
 	defer _m.mu.Unlock()
 
@@ -76,7 +76,7 @@ func (_m *CmuxManager) SpawnSession(ctx context.Context, ticketID, title, worktr
 			"cmux workspace already exists for %s: %s", ticketID, found.ref)
 	}
 
-	cmdStr, err := buildCommand(env, _m.command)
+	cmdStr, err := buildCommand(env, _m.command, prompt)
 	if err != nil {
 		return "", err
 	}

@@ -242,6 +242,244 @@ func TestMissingAction(t *testing.T) {
 	assert.Contains(t, err.Error(), "MISSING_REQUIRED_PARAM")
 }
 
+// --- Directory parameter tests ---
+
+func initSecondTestRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	commands := [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+	}
+	for _, args := range commands {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		require.NoError(t, cmd.Run(), "setup: %v", args)
+	}
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "SECOND.md"), []byte("# Second Repo"), 0644))
+	for _, args := range [][]string{
+		{"git", "add", "SECOND.md"},
+		{"git", "commit", "-m", "second repo initial"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		require.NoError(t, cmd.Run(), "setup: %v", args)
+	}
+
+	// Create a distinct branch name
+	cmd := exec.Command("git", "checkout", "-b", "second-branch")
+	cmd.Dir = dir
+	require.NoError(t, cmd.Run())
+
+	return dir
+}
+
+func TestStatusWithDirectory(t *testing.T) {
+	defaultDir := initTestRepo(t)
+	secondDir := initSecondTestRepo(t)
+	tool := newTool(t, defaultDir)
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "status",
+		"directory": secondDir,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "second-branch")
+}
+
+func TestLogWithDirectory(t *testing.T) {
+	defaultDir := initTestRepo(t)
+	secondDir := initSecondTestRepo(t)
+	tool := newTool(t, defaultDir)
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "log",
+		"directory": secondDir,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "second repo initial")
+	assert.NotContains(t, result, "initial commit")
+}
+
+func TestDiffWithDirectory(t *testing.T) {
+	defaultDir := initTestRepo(t)
+	secondDir := initSecondTestRepo(t)
+	tool := newTool(t, defaultDir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(secondDir, "SECOND.md"), []byte("# Modified"), 0644))
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "diff",
+		"scope":     "all",
+		"directory": secondDir,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "Modified")
+}
+
+func TestStageWithDirectory(t *testing.T) {
+	defaultDir := initTestRepo(t)
+	secondDir := initSecondTestRepo(t)
+	tool := newTool(t, defaultDir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(secondDir, "new-file.txt"), []byte("data"), 0644))
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "stage",
+		"files":     "new-file.txt",
+		"directory": secondDir,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "new-file.txt")
+}
+
+func TestCommitWithDirectory(t *testing.T) {
+	defaultDir := initTestRepo(t)
+	secondDir := initSecondTestRepo(t)
+	tool := newTool(t, defaultDir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(secondDir, "commit-file.txt"), []byte("data"), 0644))
+	cmd := exec.Command("git", "add", "commit-file.txt")
+	cmd.Dir = secondDir
+	require.NoError(t, cmd.Run())
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "commit",
+		"message":   "commit in second repo",
+		"directory": secondDir,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "commit in second repo")
+}
+
+func TestPushWithDirectory(t *testing.T) {
+	defaultDir := initTestRepo(t)
+	secondDir := initSecondTestRepo(t)
+
+	// Create bare remote for the second repo
+	bareDir := t.TempDir()
+	cmd := exec.Command("git", "init", "--bare")
+	cmd.Dir = bareDir
+	require.NoError(t, cmd.Run())
+
+	cmd = exec.Command("git", "remote", "add", "origin", bareDir)
+	cmd.Dir = secondDir
+	require.NoError(t, cmd.Run())
+
+	tool := newTool(t, defaultDir)
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":       "push",
+		"set_upstream": true,
+		"directory":    secondDir,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, `"success": true`)
+	assert.Contains(t, result, "second-branch")
+}
+
+func TestDirectoryOmitted(t *testing.T) {
+	dir := initTestRepo(t)
+	tool := newTool(t, dir)
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action": "log",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "initial commit")
+}
+
+func TestDirectoryEmpty(t *testing.T) {
+	dir := initTestRepo(t)
+	tool := newTool(t, dir)
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "log",
+		"directory": "",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "initial commit")
+}
+
+func TestDirectoryNotFound(t *testing.T) {
+	dir := initTestRepo(t)
+	tool := newTool(t, dir)
+
+	_, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "status",
+		"directory": "/nonexistent/path/that/does/not/exist",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "INVALID_DIRECTORY")
+}
+
+func TestDirectoryNotGitRepo(t *testing.T) {
+	dir := initTestRepo(t)
+	tool := newTool(t, dir)
+
+	notGitDir := t.TempDir()
+
+	_, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "status",
+		"directory": notGitDir,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "NOT_GIT_REPOSITORY")
+}
+
+func TestDirectoryIsFile(t *testing.T) {
+	dir := initTestRepo(t)
+	tool := newTool(t, dir)
+
+	tmpFile := filepath.Join(t.TempDir(), "somefile.txt")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("not a dir"), 0644))
+
+	_, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "status",
+		"directory": tmpFile,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "INVALID_DIRECTORY")
+}
+
+func TestDirectoryRelative(t *testing.T) {
+	defaultDir := initTestRepo(t)
+
+	// Create a subdirectory that is also a git repo
+	subDir := filepath.Join(defaultDir, "subrepo")
+	require.NoError(t, os.Mkdir(subDir, 0755))
+	for _, args := range [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = subDir
+		require.NoError(t, cmd.Run(), "setup: %v", args)
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "sub.txt"), []byte("sub"), 0644))
+	for _, args := range [][]string{
+		{"git", "add", "sub.txt"},
+		{"git", "commit", "-m", "sub commit"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = subDir
+		require.NoError(t, cmd.Run(), "setup: %v", args)
+	}
+
+	tool := newTool(t, defaultDir)
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":    "log",
+		"directory": "subrepo",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "sub commit")
+}
+
 func TestPushWithLocalBareRemote(t *testing.T) {
 	// Create a bare repo as remote
 	bareDir := t.TempDir()
