@@ -36,6 +36,10 @@ type Config struct {
 	BotUsername          string
 	ClosedPRTicketStatus string
 
+	// CopyFiles lists files (relative to repo root) to copy into each
+	// new worktree. Used for untracked files like .env or .mcp.json.
+	CopyFiles []string
+
 	// SandboxAvailable is true when sbx is detected on PATH at startup.
 	// When true, agent sessions run inside Docker Sandboxes for isolation.
 	SandboxAvailable bool
@@ -63,6 +67,7 @@ func NewConfig(c *cli.Context) (*Config, error) {
 		TrackingLabel:        c.String("tracking-label"),
 		BotUsername:          c.String("bot-username"),
 		ClosedPRTicketStatus: c.String("closed-pr-status"),
+		CopyFiles:            c.StringSlice("copy-files"),
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err

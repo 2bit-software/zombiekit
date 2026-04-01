@@ -22,10 +22,9 @@ When you reach the completion phase (all steps are done, or `/brains.complete` i
 
 1. **Skip all confirmation prompts** — do not ask whether to commit, update Linear, etc.
 2. **Commit all changes**: Stage both implementation files and the `history/{initiative}/` directory. Use the `/commit-message` skill to generate and execute the commit.
-3. **Create a pull request**: Use the `/create-pr` skill to create a PR with a structured description. Do NOT ask for confirmation.
-4. **Push the code**: Push the branch to the remote.
-5. **Update Linear** (if a source ticket exists): Post a completion comment and mark the ticket as Done.
-6. **Clear active state**: Proceed with normal initiative completion.
+3. **Prepare PR and notify orchestrator**: If `WORK_CALLBACK_URL` is set, use the `/create-pr-automode` skill. This writes the PR description to `.ai/` and fires a callback so the orchestrator pushes the branch and creates the PR from the host. If `WORK_CALLBACK_URL` is NOT set, fall back to the `/create-pr` skill.
+4. **Update Linear** (if a source ticket exists): Post a completion comment and mark the ticket as Done.
+5. **Clear active state**: Proceed with normal initiative completion.
 
 ## Signal Propagation
 

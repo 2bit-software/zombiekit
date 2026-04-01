@@ -46,11 +46,16 @@ func New(repoDir string, opts ...Option) (*GitManager, error) {
 	return m, nil
 }
 
-// run executes a git command and returns its stdout.
+// run executes a git command from the repo directory and returns its stdout.
 // Errors are classified by parsing stderr.
 func (_m *GitManager) run(ctx context.Context, args ...string) (string, error) {
+	return _m.runFrom(ctx, _m.repoDir, args...)
+}
+
+// runFrom executes a git command from the given directory and returns its stdout.
+func (_m *GitManager) runFrom(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, _m.gitBin, args...)
-	cmd.Dir = _m.repoDir
+	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
 	var stdout, stderr bytes.Buffer
@@ -81,21 +86,23 @@ func (_m *GitManager) CreateWorktree(ctx context.Context, ticketID, shortTitle s
 	}
 
 	_, err := _m.run(ctx, "worktree", "add", "-b", branch, worktreePath)
-	if err == nil {
-		return worktreePath, nil
+	if err != nil {
+		if !IsBranchExists(err) && !IsPathExists(err) {
+			return "", err
+		}
+
+		// Stale worktree or branch from a previous run — clean up and retry.
+		if cleanErr := _m.cleanStaleWorktree(ctx, worktreePath, branch); cleanErr != nil {
+			return "", fmt.Errorf("cleaning stale worktree for %s: %w", ticketID, cleanErr)
+		}
+
+		if _, err := _m.run(ctx, "worktree", "add", "-b", branch, worktreePath); err != nil {
+			return "", err
+		}
 	}
 
-	if !IsBranchExists(err) && !IsPathExists(err) {
-		return "", err
-	}
-
-	// Stale worktree or branch from a previous run — clean up and retry.
-	if cleanErr := _m.cleanStaleWorktree(ctx, worktreePath, branch); cleanErr != nil {
-		return "", fmt.Errorf("cleaning stale worktree for %s: %w", ticketID, cleanErr)
-	}
-
-	if _, err := _m.run(ctx, "worktree", "add", "-b", branch, worktreePath); err != nil {
-		return "", err
+	if err := _m.copyFiles(worktreePath); err != nil {
+		return worktreePath, fmt.Errorf("copy files: %w", err)
 	}
 
 	return worktreePath, nil
@@ -210,4 +217,42 @@ func (_m *GitManager) resolveBranch(ctx context.Context, path string) (string, e
 	}
 
 	return "", newError(ErrNotAWorktree, fmt.Sprintf("%s is not a known worktree", path), nil)
+}
+
+// PushBranch pushes a branch from the given worktree to origin.
+func (_m *GitManager) PushBranch(ctx context.Context, worktreePath, branch string) error {
+	_, err := _m.runFrom(ctx, worktreePath, "push", "-u", "origin", branch)
+	return err
+}
+
+// copyFiles copies configured files from the repo root into the worktree.
+// Missing source files are skipped with a debug log. Copy errors are returned.
+func (_m *GitManager) copyFiles(worktreePath string) error {
+	for _, relPath := range _m.filesToCopy {
+		src := filepath.Join(_m.repoDir, relPath)
+
+		info, err := os.Stat(src)
+		if err != nil {
+			// Missing source is expected (file may be optional).
+			continue
+		}
+		if info.IsDir() {
+			continue
+		}
+
+		dst := filepath.Join(worktreePath, relPath)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return fmt.Errorf("create parent dir for %s: %w", relPath, err)
+		}
+
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", relPath, err)
+		}
+
+		if err := os.WriteFile(dst, data, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("write %s: %w", relPath, err)
+		}
+	}
+	return nil
 }

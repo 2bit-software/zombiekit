@@ -46,7 +46,8 @@ func newRouterFixture(t *testing.T) *routerFixture {
 		TrackingLabel: "ai-managed",
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	r := NewRouter(events, store, gh, lc, arch, aud, nil, cfg, logger)
+	wt := &stubWorktree{basePath: t.TempDir()}
+	r := NewRouter(events, store, gh, lc, wt, arch, aud, nil, cfg, logger)
 
 	return &routerFixture{
 		events:   events,

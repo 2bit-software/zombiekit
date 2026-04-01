@@ -13,6 +13,7 @@ import (
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/sandbox"
 	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/2bit-software/zombiekit/internal/worktree"
 )
 
 // Router consumes events from the callback server and dispatches them to
@@ -22,6 +23,7 @@ type Router struct {
 	store      state.StateStore
 	github     github.Client
 	linear     linear.Client
+	worktrees  worktree.Manager
 	archiver   Archiver
 	auditor    Auditor
 	dispatcher *CommentDispatcher
@@ -35,6 +37,7 @@ func NewRouter(
 	store state.StateStore,
 	gh github.Client,
 	lc linear.Client,
+	wt worktree.Manager,
 	arch Archiver,
 	aud Auditor,
 	dispatcher *CommentDispatcher,
@@ -46,6 +49,7 @@ func NewRouter(
 		store:      store,
 		github:     gh,
 		linear:     lc,
+		worktrees:  wt,
 		archiver:   arch,
 		auditor:    aud,
 		dispatcher: dispatcher,
@@ -100,6 +104,12 @@ func (r *Router) handleComplete(ctx context.Context, evt callback.Event, logger 
 	}
 	if job == nil {
 		logger.Warn("no job found for ticket, discarding event")
+		return
+	}
+
+	if err := r.worktrees.PushBranch(ctx, job.WorktreePath, evt.Branch); err != nil {
+		logger.Error("failed to push branch", slog.String("step", "PushBranch"), slog.String("branch", evt.Branch), slog.String("err", err.Error()))
+		r.markNeedsAttention(ctx, evt.TicketID, job, logger)
 		return
 	}
 

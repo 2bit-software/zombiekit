@@ -39,7 +39,10 @@ func run(c *cli.Context) error {
 		return err
 	}
 
-	worktreeMgr, err := worktree.New(cfg.RepoDir, worktree.WithWorktreesRoot(cfg.WorktreesRoot))
+	worktreeMgr, err := worktree.New(cfg.RepoDir,
+		worktree.WithWorktreesRoot(cfg.WorktreesRoot),
+		worktree.WithCopyFiles(cfg.CopyFiles),
+	)
 	if err != nil {
 		return err
 	}
