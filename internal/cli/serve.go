@@ -4,9 +4,11 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/joho/godotenv"
@@ -81,9 +83,28 @@ func runServe(c *cli.Context) error {
 
 	ctx := context.Background()
 
-	// Set up logging
+	// Set up logging — stdio mode must not write to stderr (it breaks MCP clients),
+	// so redirect logs to a file under ~/.brains/
 	logLevel := c.String("log-level")
-	logging.InitLogger(logLevel, false, os.Stderr)
+	mode := c.String("mode")
+	var logWriter io.Writer = os.Stderr
+	if mode == "stdio" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logWriter = io.Discard
+		} else {
+			logDir := filepath.Join(homeDir, ".brains")
+			os.MkdirAll(logDir, 0o755)
+			f, err := os.OpenFile(filepath.Join(logDir, "mcp.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+			if err != nil {
+				logWriter = io.Discard
+			} else {
+				logWriter = f
+				defer f.Close()
+			}
+		}
+	}
+	logging.InitLogger(logLevel, false, logWriter)
 
 	// Load tool configuration from config files
 	toolCfg := config.LoadConfig()
@@ -133,7 +154,6 @@ func runServe(c *cli.Context) error {
 	server := mcp.NewServer(storage, recallStorage, toolCfg, workDir)
 	defer server.Close()
 
-	mode := c.String("mode")
 	port := c.Int("port")
 
 	logging.Logger().Info("Starting MCP server",

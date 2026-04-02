@@ -35,6 +35,40 @@ tasks:
         echo "  bs:     {{.INSTALL_DIR}}/bs -> brains"
         echo ""
         {{.INSTALL_DIR}}/brains version
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Would you like to add zombiekit as a global MCP server"
+        echo "for Claude Code? (~/.claude/settings.json)"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        printf "Add to Claude Code settings? [y/N] "
+        read -r REPLY
+        if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
+          SETTINGS_FILE="$HOME/.claude/settings.json"
+          if [ ! -f "$SETTINGS_FILE" ]; then
+            echo '{}' > "$SETTINGS_FILE"
+          fi
+          # Use jq to merge mcpServers entry, preserving existing config
+          if command -v jq >/dev/null 2>&1; then
+            jq '.mcpServers.zombiekit = {"command": "{{.INSTALL_DIR}}/brains", "args": ["serve", "--mode", "stdio"]}' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
+              && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+            echo "Added zombiekit MCP server to $SETTINGS_FILE"
+            echo "Restart Claude Code to pick up the new MCP server."
+          else
+            echo "jq is not installed — add this manually to $SETTINGS_FILE:"
+            echo ""
+            echo '  "mcpServers": {'
+            echo '    "zombiekit": {'
+            echo '      "command": "{{.INSTALL_DIR}}/brains",'
+            echo '      "args": ["serve", "--mode", "stdio"]'
+            echo '    }'
+            echo '  }'
+          fi
+        else
+          echo "Skipped. You can add it later by running:"
+          echo ""
+          echo "  jq '.mcpServers.zombiekit = {\"command\": \"{{.INSTALL_DIR}}/brains\", \"args\": [\"serve\", \"--mode\", \"stdio\"]}' ~/.claude/settings.json > /tmp/settings.json && mv /tmp/settings.json ~/.claude/settings.json"
+        fi
 
   up:
     desc: Start ZombieKit stack
