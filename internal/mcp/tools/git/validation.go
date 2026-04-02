@@ -41,24 +41,6 @@ func validateFiles(workDir string, files []string) error {
 	return nil
 }
 
-// protectedBranches that must not be pushed to directly.
-var protectedBranches = map[string]bool{
-	"main":   true,
-	"master": true,
-}
-
-// validateBranchForPush checks that the current branch is safe to push.
-func validateBranchForPush(branch string) error {
-	if protectedBranches[branch] {
-		return &ToolError{
-			Code:    "BRANCH_PROTECTED",
-			Message: fmt.Sprintf("cannot push to %s", branch),
-			Hint:    "Use a feature branch instead",
-		}
-	}
-	return nil
-}
-
 // validateMessage checks that a commit message is non-empty.
 func validateMessage(message string) error {
 	if strings.TrimSpace(message) == "" {

@@ -205,22 +205,6 @@ func TestCommitRejectsNoStagedChanges(t *testing.T) {
 	assert.Contains(t, err.Error(), "nothing staged")
 }
 
-func TestPushRejectsMainBranch(t *testing.T) {
-	dir := initTestRepo(t)
-
-	// Ensure we're on main
-	cmd := exec.Command("git", "branch", "-m", "main")
-	cmd.Dir = dir
-	_ = cmd.Run() // May already be on main
-
-	tool := newTool(t, dir)
-
-	_, err := tool.Execute(context.Background(), map[string]any{
-		"action": "push",
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "BRANCH_PROTECTED")
-}
 
 func TestInvalidAction(t *testing.T) {
 	dir := initTestRepo(t)

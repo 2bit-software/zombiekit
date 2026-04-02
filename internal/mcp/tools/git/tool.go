@@ -336,10 +336,6 @@ func (t *Tool) handlePush(ctx context.Context, args map[string]any, runner *inte
 		return "", fmt.Errorf("getting branch: %w", err)
 	}
 
-	if err := validateBranchForPush(branch); err != nil {
-		return "", err
-	}
-
 	gitArgs := []string{"push"}
 	if setUpstream {
 		gitArgs = append(gitArgs, "-u")
