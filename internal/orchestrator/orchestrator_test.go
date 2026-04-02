@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,11 +70,15 @@ func (m *mockStore) ListAllJobs(_ context.Context) ([]state.Job, error)         
 func (m *mockStore) DeleteJob(_ context.Context, _ string) error                  { return nil }
 func (m *mockStore) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error) { return nil, nil }
 
-func setupLogger(t *testing.T) {
-	t.Helper()
-	logging.ResetLogger()
-	logging.InitLogger("debug", false, nil)
-	t.Cleanup(logging.ResetLogger)
+var loggerOnce sync.Once
+
+func setupLogger(_ *testing.T) {
+	// Init once, no reset. The reconciliation test leaks a goroutine
+	// (no way to cancel the shutdown manager from tests), so resetting
+	// the logger between tests causes a panic in the leaked goroutine.
+	loggerOnce.Do(func() {
+		logging.InitLogger("debug", false, nil)
+	})
 }
 
 func testConfig(t *testing.T) *Config {
@@ -103,18 +108,15 @@ func TestRun_ReconciliationRuns(t *testing.T) {
 	}
 	orch := New(testConfig(t), store, &stubLinear{}, gh, &stubWorktree{basePath: t.TempDir()}, &stubSession{})
 
-	// Run in a goroutine and send SIGINT to stop quickly
-	// Since we can't easily send signals in tests, we use a port-0 callback
-	// server which will start, and then we verify reconciliation ran.
-	// We need to stop the orchestrator — the simplest approach is to verify
-	// the mock was called, since reconciliation runs before services.
-	errCh := make(chan error, 1)
-	go func() { errCh <- orch.Run() }()
+	// Run in a goroutine — the orchestrator blocks on services.
+	// We verify reconciliation ran via the mock, then let the test end.
+	// The leaked goroutine is acceptable here since we can't signal the
+	// shutdown manager from tests.
+	go func() { _ = orch.Run() }()
 
-	// Give services time to start
+	// Give services time to start and reconciliation to run.
 	time.Sleep(200 * time.Millisecond)
 
-	// Verify reconciliation ran
 	assert.Contains(t, store.calls, "ListJobsByStatus")
 }
 

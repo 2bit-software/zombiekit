@@ -112,6 +112,10 @@ func (s *stubWorktree) CleanBranch(_ context.Context, _ string) error {
 	s.record("CleanBranch")
 	return nil
 }
+func (s *stubWorktree) PushBranch(_ context.Context, _, _ string) error {
+	s.record("PushBranch")
+	return nil
+}
 
 type stubSession struct {
 	mu       sync.Mutex

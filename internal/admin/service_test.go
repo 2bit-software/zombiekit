@@ -50,6 +50,10 @@ func (s *stubWorktreeManager) CleanBranch(_ context.Context, _ string) error {
 	return nil
 }
 
+func (s *stubWorktreeManager) PushBranch(_ context.Context, _, _ string) error {
+	return nil
+}
+
 func setupTestService(t *testing.T) (*Service, *state.SQLiteStore) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")

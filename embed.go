@@ -12,8 +12,11 @@ var embeddedProfiles embed.FS
 //go:embed embed/integrations/claude/commands/*
 var embeddedCommands embed.FS
 
-//go:embed embed/templates/*
+//go:embed embed/templates embed/templates/init-spec-creator/*
 var embeddedTemplates embed.FS
+
+//go:embed embed/scripts embed/scripts/commit-message/* embed/scripts/permissions-audit/* embed/scripts/repo-auditor/*
+var embeddedScripts embed.FS
 
 //go:embed embed/workflows/*
 var embeddedWorkflows embed.FS
@@ -24,6 +27,7 @@ var (
 	EmbeddedProfiles  fs.FS
 	EmbeddedCommands  fs.FS
 	EmbeddedTemplates fs.FS
+	EmbeddedScripts   fs.FS
 	EmbeddedWorkflows fs.FS
 )
 
@@ -40,6 +44,10 @@ func init() {
 	EmbeddedTemplates, err = fs.Sub(embeddedTemplates, "embed")
 	if err != nil {
 		panic("embed: templates: " + err.Error())
+	}
+	EmbeddedScripts, err = fs.Sub(embeddedScripts, "embed")
+	if err != nil {
+		panic("embed: scripts: " + err.Error())
 	}
 	EmbeddedWorkflows, err = fs.Sub(embeddedWorkflows, "embed")
 	if err != nil {

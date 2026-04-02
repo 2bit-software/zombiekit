@@ -56,7 +56,7 @@ func (o *Orchestrator) Run() error {
 
 	router := NewRouter(
 		callbackSrv.Events(),
-		o.store, o.github, o.linear,
+		o.store, o.github, o.linear, o.worktrees,
 		NoopArchiver{}, NoopAuditor{},
 		dispatcher,
 		o.cfg, logger,

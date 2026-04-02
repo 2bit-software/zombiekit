@@ -9,34 +9,34 @@ import (
 
 func TestParseNewWorkspace(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
-		ref, err := parseNewWorkspace("OK workspace:9")
+		ref, err := ParseNewWorkspace("OK workspace:9")
 		require.NoError(t, err)
 		assert.Equal(t, "workspace:9", ref)
 	})
 
 	t.Run("high number", func(t *testing.T) {
-		ref, err := parseNewWorkspace("OK workspace:123")
+		ref, err := ParseNewWorkspace("OK workspace:123")
 		require.NoError(t, err)
 		assert.Equal(t, "workspace:123", ref)
 	})
 
 	t.Run("empty string", func(t *testing.T) {
-		_, err := parseNewWorkspace("")
+		_, err := ParseNewWorkspace("")
 		assert.Error(t, err)
 	})
 
 	t.Run("missing OK prefix", func(t *testing.T) {
-		_, err := parseNewWorkspace("workspace:9")
+		_, err := ParseNewWorkspace("workspace:9")
 		assert.Error(t, err)
 	})
 
 	t.Run("wrong prefix", func(t *testing.T) {
-		_, err := parseNewWorkspace("ERROR workspace:9")
+		_, err := ParseNewWorkspace("ERROR workspace:9")
 		assert.Error(t, err)
 	})
 
 	t.Run("extra fields", func(t *testing.T) {
-		_, err := parseNewWorkspace("OK workspace:9 extra")
+		_, err := ParseNewWorkspace("OK workspace:9 extra")
 		assert.Error(t, err)
 	})
 }
@@ -47,46 +47,46 @@ func TestParseListWorkspaces(t *testing.T) {
   workspace:4  clawbeam
   workspace:6  gogo`
 
-		entries, err := parseListWorkspaces(input)
+		entries, err := ParseListWorkspaces(input)
 		require.NoError(t, err)
 		require.Len(t, entries, 3)
 
-		assert.Equal(t, "workspace:5", entries[0].ref)
-		assert.Equal(t, "zombiekit", entries[0].name)
-		assert.True(t, entries[0].selected)
+		assert.Equal(t, "workspace:5", entries[0].Ref)
+		assert.Equal(t, "zombiekit", entries[0].Name)
+		assert.True(t, entries[0].Selected)
 
-		assert.Equal(t, "workspace:4", entries[1].ref)
-		assert.Equal(t, "clawbeam", entries[1].name)
-		assert.False(t, entries[1].selected)
+		assert.Equal(t, "workspace:4", entries[1].Ref)
+		assert.Equal(t, "clawbeam", entries[1].Name)
+		assert.False(t, entries[1].Selected)
 
-		assert.Equal(t, "workspace:6", entries[2].ref)
-		assert.Equal(t, "gogo", entries[2].name)
-		assert.False(t, entries[2].selected)
+		assert.Equal(t, "workspace:6", entries[2].Ref)
+		assert.Equal(t, "gogo", entries[2].Name)
+		assert.False(t, entries[2].Selected)
 	})
 
 	t.Run("name with colon", func(t *testing.T) {
 		input := `  workspace:9  DEV-186: implement session manager`
 
-		entries, err := parseListWorkspaces(input)
+		entries, err := ParseListWorkspaces(input)
 		require.NoError(t, err)
 		require.Len(t, entries, 1)
-		assert.Equal(t, "DEV-186: implement session manager", entries[0].name)
+		assert.Equal(t, "DEV-186: implement session manager", entries[0].Name)
 	})
 
 	t.Run("empty input", func(t *testing.T) {
-		entries, err := parseListWorkspaces("")
+		entries, err := ParseListWorkspaces("")
 		require.NoError(t, err)
 		assert.Empty(t, entries)
 	})
 
 	t.Run("whitespace only", func(t *testing.T) {
-		entries, err := parseListWorkspaces("   \n  \n")
+		entries, err := ParseListWorkspaces("   \n  \n")
 		require.NoError(t, err)
 		assert.Empty(t, entries)
 	})
 
 	t.Run("unparseable non-empty input", func(t *testing.T) {
-		_, err := parseListWorkspaces("gibberish\nmore gibberish")
+		_, err := ParseListWorkspaces("gibberish\nmore gibberish")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "format may have changed")
 	})
@@ -94,39 +94,39 @@ func TestParseListWorkspaces(t *testing.T) {
 	t.Run("selected suffix stripped", func(t *testing.T) {
 		input := `* workspace:1  myproject  [selected]`
 
-		entries, err := parseListWorkspaces(input)
+		entries, err := ParseListWorkspaces(input)
 		require.NoError(t, err)
 		require.Len(t, entries, 1)
-		assert.Equal(t, "myproject", entries[0].name)
-		assert.True(t, entries[0].selected)
+		assert.Equal(t, "myproject", entries[0].Name)
+		assert.True(t, entries[0].Selected)
 	})
 }
 
 func TestFindByTicketID(t *testing.T) {
-	entries := []workspaceEntry{
-		{ref: "workspace:1", name: "DEV-100: first task"},
-		{ref: "workspace:2", name: "DEV-200: second task"},
-		{ref: "workspace:3", name: "unrelated workspace"},
+	entries := []WorkspaceEntry{
+		{Ref: "workspace:1", Name: "DEV-100: first task"},
+		{Ref: "workspace:2", Name: "DEV-200: second task"},
+		{Ref: "workspace:3", Name: "unrelated workspace"},
 	}
 
 	t.Run("found", func(t *testing.T) {
-		found := findByTicketID(entries, "DEV-100")
+		found := FindByTicketID(entries, "DEV-100")
 		require.NotNil(t, found)
-		assert.Equal(t, "workspace:1", found.ref)
+		assert.Equal(t, "workspace:1", found.Ref)
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		found := findByTicketID(entries, "DEV-999")
+		found := FindByTicketID(entries, "DEV-999")
 		assert.Nil(t, found)
 	})
 
 	t.Run("partial match rejected", func(t *testing.T) {
-		found := findByTicketID(entries, "DEV-10")
+		found := FindByTicketID(entries, "DEV-10")
 		assert.Nil(t, found)
 	})
 
 	t.Run("empty entries", func(t *testing.T) {
-		found := findByTicketID(nil, "DEV-100")
+		found := FindByTicketID(nil, "DEV-100")
 		assert.Nil(t, found)
 	})
 }
@@ -227,7 +227,7 @@ func TestBuildCommand(t *testing.T) {
 }
 
 func TestBashQuote(t *testing.T) {
-	assert.Equal(t, "'hello'", bashQuote("hello"))
-	assert.Equal(t, "'it'\\''s'", bashQuote("it's"))
-	assert.Equal(t, "''", bashQuote(""))
+	assert.Equal(t, "'hello'", BashQuote("hello"))
+	assert.Equal(t, "'it'\\''s'", BashQuote("it's"))
+	assert.Equal(t, "''", BashQuote(""))
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
 	"github.com/2bit-software/zombiekit/internal/shutdown"
 )
 
@@ -106,10 +107,26 @@ func (o *Orchestrator) runTicketPipeline(ctx context.Context, ticket linear.Tick
 		return "", worktreePath, err
 	}
 
+	if o.cfg.SandboxAvailable {
+		sbxName := sandbox.Name(ticket.Identifier)
+		if err := sandbox.Create(ctx, sbxName, worktreePath, o.cfg.SandboxConfig); err != nil {
+			return "", worktreePath, fmt.Errorf("create sandbox: %w", err)
+		}
+	}
+
 	env := map[string]string{
 		"WORK_CALLBACK_URL": fmt.Sprintf("http://localhost:%d/%s", o.cfg.CallbackPort, ticket.Identifier),
 	}
+	if o.cfg.SandboxAvailable {
+		env[sandbox.EnvSandboxName] = sandbox.Name(ticket.Identifier)
+		for k, v := range o.cfg.SandboxConfig.HostEnv() {
+			env[k] = v
+		}
+	}
 	prompt := "Read .ai/ticket.md — this is your assigned ticket. Use /brains.new to begin."
+	if hasLabel(ticket.Labels, "automode") {
+		prompt = "Read .ai/ticket.md — this is your assigned ticket. Use /brains.new automode to begin."
+	}
 	sessionRef, err = o.sessions.SpawnSession(ctx, ticket.Identifier, ticket.Title, worktreePath, env, prompt)
 	if err != nil {
 		return "", worktreePath, fmt.Errorf("spawn session: %w", err)
@@ -130,6 +147,11 @@ func (o *Orchestrator) rollbackTicket(ctx context.Context, ticket linear.Ticket,
 			logger.Error("rollback: failed to kill session", "ticket", ticket.Identifier, "error", killErr)
 		}
 	}
+
+	if o.cfg.SandboxAvailable {
+		sandbox.Cleanup(ctx, sandbox.Name(ticket.Identifier))
+	}
+
 	if worktreePath != "" {
 		if delErr := o.worktrees.DeleteWorktree(ctx, worktreePath); delErr != nil {
 			logger.Error("rollback: failed to delete worktree", "ticket", ticket.Identifier, "error", delErr)
@@ -185,6 +207,16 @@ func (o *Orchestrator) markNeedsAttention(ctx context.Context, ticket linear.Tic
 	if err := o.linear.RemoveLabel(ctx, ticket.ID, labelAIReady); err != nil {
 		logger.Error("failed to remove ai-ready label after failure", "ticket", ticket.Identifier, "error", err)
 	}
+}
+
+// hasLabel reports whether labels contains the given name (case-insensitive).
+func hasLabel(labels []string, name string) bool {
+	for _, l := range labels {
+		if strings.EqualFold(l, name) {
+			return true
+		}
+	}
+	return false
 }
 
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)

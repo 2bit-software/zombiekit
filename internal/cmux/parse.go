@@ -7,14 +7,15 @@ import (
 	"strings"
 )
 
-type workspaceEntry struct {
-	ref      string
-	name     string
-	selected bool
+// WorkspaceEntry represents a parsed cmux workspace from list-workspaces output.
+type WorkspaceEntry struct {
+	Ref      string
+	Name     string
+	Selected bool
 }
 
-// parseNewWorkspace extracts workspace ref from "OK workspace:N".
-func parseNewWorkspace(stdout string) (string, error) {
+// ParseNewWorkspace extracts workspace ref from "OK workspace:N".
+func ParseNewWorkspace(stdout string) (string, error) {
 	parts := strings.Fields(stdout)
 	if len(parts) != 2 || parts[0] != "OK" || !strings.HasPrefix(parts[1], "workspace:") {
 		return "", fmt.Errorf("unexpected new-workspace output: %q", stdout)
@@ -22,15 +23,15 @@ func parseNewWorkspace(stdout string) (string, error) {
 	return parts[1], nil
 }
 
-// parseListWorkspaces parses cmux list-workspaces plain text output.
+// ParseListWorkspaces parses cmux list-workspaces plain text output.
 //
 // Expected format per line:
 //
 //	[*] workspace:N  name  [selected]
 //
 // Returns error if non-empty input produces zero valid entries (format change detection).
-func parseListWorkspaces(stdout string) ([]workspaceEntry, error) {
-	var entries []workspaceEntry
+func ParseListWorkspaces(stdout string) ([]WorkspaceEntry, error) {
+	var entries []WorkspaceEntry
 	var nonEmptyLines int
 
 	for _, line := range strings.Split(stdout, "\n") {
@@ -58,10 +59,10 @@ func parseListWorkspaces(stdout string) ([]workspaceEntry, error) {
 		name = strings.TrimSuffix(name, "[selected]")
 		name = strings.TrimSpace(name)
 
-		entries = append(entries, workspaceEntry{
-			ref:      ref,
-			name:     name,
-			selected: selected,
+		entries = append(entries, WorkspaceEntry{
+			Ref:      ref,
+			Name:     name,
+			Selected: selected,
 		})
 	}
 
@@ -75,11 +76,11 @@ func parseListWorkspaces(stdout string) ([]workspaceEntry, error) {
 	return entries, nil
 }
 
-// findByTicketID searches workspace entries for a name starting with "{ticketID}: ".
-func findByTicketID(entries []workspaceEntry, ticketID string) *workspaceEntry {
+// FindByTicketID searches workspace entries for a name starting with "{ticketID}: ".
+func FindByTicketID(entries []WorkspaceEntry, ticketID string) *WorkspaceEntry {
 	prefix := ticketID + ": "
 	for i := range entries {
-		if strings.HasPrefix(entries[i].name, prefix) {
+		if strings.HasPrefix(entries[i].Name, prefix) {
 			return &entries[i]
 		}
 	}
@@ -88,9 +89,9 @@ func findByTicketID(entries []workspaceEntry, ticketID string) *workspaceEntry {
 
 var validEnvKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// bashQuote wraps a string in bash single quotes, escaping embedded single
+// BashQuote wraps a string in bash single quotes, escaping embedded single
 // quotes with the '\'' idiom.
-func bashQuote(s string) string {
+func BashQuote(s string) string {
 	escaped := strings.ReplaceAll(s, `'`, `'\''`)
 	return `'` + escaped + `'`
 }
@@ -105,7 +106,7 @@ func bashQuote(s string) string {
 func buildCommand(env map[string]string, cmd, prompt string) (string, error) {
 	effective := cmd
 	if len(prompt) > 0 {
-		effective = cmd + ` ` + bashQuote(prompt)
+		effective = cmd + ` ` + BashQuote(prompt)
 	}
 
 	if len(env) == 0 {
@@ -117,7 +118,7 @@ func buildCommand(env map[string]string, cmd, prompt string) (string, error) {
 		if !validEnvKey.MatchString(k) {
 			return "", newErrorf(ErrInvalidEnvKey, nil, "invalid env key: %q", k)
 		}
-		exports = append(exports, k+"="+bashQuote(v))
+		exports = append(exports, k+"="+BashQuote(v))
 	}
 
 	sort.Strings(exports)

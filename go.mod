@@ -6,6 +6,7 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/BurntSushi/toml v1.6.0
 	github.com/adrg/frontmatter v0.2.0
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/gofri/go-github-ratelimit/v2 v2.0.2
 	github.com/gofrs/flock v0.13.0

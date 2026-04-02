@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v2"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
 )
 
 var validLogLevels = map[string]bool{
@@ -34,6 +35,15 @@ type Config struct {
 	TrackingLabel        string
 	BotUsername          string
 	ClosedPRTicketStatus string
+
+	// CopyFiles lists files (relative to repo root) to copy into each
+	// new worktree. Used for untracked files like .env or .mcp.json.
+	CopyFiles []string
+
+	// SandboxAvailable is true when sbx is detected on PATH at startup.
+	// When true, agent sessions run inside Docker Sandboxes for isolation.
+	SandboxAvailable bool
+	SandboxConfig    sandbox.Config
 }
 
 // NewConfig parses a urfave/cli context into a validated Config.
@@ -57,6 +67,7 @@ func NewConfig(c *cli.Context) (*Config, error) {
 		TrackingLabel:        c.String("tracking-label"),
 		BotUsername:          c.String("bot-username"),
 		ClosedPRTicketStatus: c.String("closed-pr-status"),
+		CopyFiles:            c.StringSlice("copy-files"),
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err

@@ -11,7 +11,9 @@ import (
 	"github.com/2bit-software/zombiekit/internal/callback"
 	"github.com/2bit-software/zombiekit/internal/github"
 	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
 	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/2bit-software/zombiekit/internal/worktree"
 )
 
 // Router consumes events from the callback server and dispatches them to
@@ -21,6 +23,7 @@ type Router struct {
 	store      state.StateStore
 	github     github.Client
 	linear     linear.Client
+	worktrees  worktree.Manager
 	archiver   Archiver
 	auditor    Auditor
 	dispatcher *CommentDispatcher
@@ -34,6 +37,7 @@ func NewRouter(
 	store state.StateStore,
 	gh github.Client,
 	lc linear.Client,
+	wt worktree.Manager,
 	arch Archiver,
 	aud Auditor,
 	dispatcher *CommentDispatcher,
@@ -45,6 +49,7 @@ func NewRouter(
 		store:      store,
 		github:     gh,
 		linear:     lc,
+		worktrees:  wt,
 		archiver:   arch,
 		auditor:    aud,
 		dispatcher: dispatcher,
@@ -102,6 +107,12 @@ func (r *Router) handleComplete(ctx context.Context, evt callback.Event, logger 
 		return
 	}
 
+	if err := r.worktrees.PushBranch(ctx, job.WorktreePath, evt.Branch); err != nil {
+		logger.Error("failed to push branch", slog.String("step", "PushBranch"), slog.String("branch", evt.Branch), slog.String("err", err.Error()))
+		r.markNeedsAttention(ctx, evt.TicketID, job, logger)
+		return
+	}
+
 	prDescPath := filepath.Join(job.WorktreePath, ".ai", "pr-description.md")
 	body, err := os.ReadFile(prDescPath)
 	if err != nil {
@@ -148,6 +159,10 @@ func (r *Router) handleComplete(ctx context.Context, evt callback.Event, logger 
 		logger.Error("audit failed", slog.String("step", "Audit"), slog.String("err", err.Error()))
 	}
 
+	if r.cfg.SandboxAvailable {
+		sandbox.Cleanup(ctx, sandbox.Name(evt.TicketID))
+	}
+
 	logger.Info("completion processed", slog.Int("pr_number", prNumber))
 }
 
@@ -187,6 +202,10 @@ func (r *Router) handleFailed(ctx context.Context, evt callback.Event, logger *s
 			Kind:     SessionFailed,
 			TicketID: evt.TicketID,
 		})
+	}
+
+	if r.cfg.SandboxAvailable {
+		sandbox.Cleanup(ctx, sandbox.Name(evt.TicketID))
 	}
 
 	logger.Info("failure processed", slog.String("reason", evt.Reason))

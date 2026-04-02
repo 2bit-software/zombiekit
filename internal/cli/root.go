@@ -39,6 +39,7 @@ func NewApp(info *version.BuildInfo) *cli.App {
 			newRecallCommand(),
 			newDBCommand(),
 			newProfileCommand(),
+			newHookCommand(),
 			newInitCommand(),
 		},
 	}

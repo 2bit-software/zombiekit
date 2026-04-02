@@ -56,6 +56,13 @@ func copyOneEmbeddedFile(fsys fs.FS, path, srcPrefix, destDir string, force bool
 	}
 
 	destPath := filepath.Join(destDir, relPath)
+
+	// Ensure parent directory exists for nested files
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		result.errors = append(result.errors, fmt.Errorf("creating directory for %s: %w", destPath, err))
+		return
+	}
+
 	exists := fileExists(destPath)
 
 	if exists && !force {
@@ -90,53 +97,74 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// initGlobal implements the --global flag behavior (existing functionality).
-// Creates the global profile directory at ~/.brains/profiles/
+// initGlobal implements the --global flag behavior.
+// Creates ~/.brains/ with profiles/, scripts/, and templates/.
 func initGlobal(c *cli.Context) error {
-	sourceType, err := profile.ParseSourceType(c.String("source"))
+	force := c.Bool("force")
+
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting home directory: %w", err)
 	}
 
-	svc, err := profile.NewServiceWithSource(sourceType, "")
-	if err != nil {
-		return fmt.Errorf("initializing profile service: %w", err)
-	}
+	brainsDir := filepath.Join(homeDir, ".brains")
+	profilesDir := filepath.Join(brainsDir, "profiles")
+	scriptsDir := filepath.Join(brainsDir, "scripts")
+	templatesDir := filepath.Join(brainsDir, "templates")
 
-	targetDir, err := svc.GetInitDir(true)
-	if err != nil {
-		return fmt.Errorf("getting init directory: %w", err)
-	}
-
-	// Create display path
-	displayPath := targetDir
-	homeDir, _ := os.UserHomeDir()
-	if homeDir != "" {
-		displayPath = "~" + targetDir[len(homeDir):]
-	}
-
-	// Check if already exists
-	if _, err := os.Stat(targetDir); err == nil {
-		fmt.Printf("Directory already exists: %s\n", displayPath)
-		return nil
-	}
-
-	// Create the directory
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-
-	// Register in registry (best effort, only for brains source)
-	if sourceType == profile.SourceTypeBrains {
-		brainsDir := filepath.Dir(targetDir)
-		rm, err := profile.NewRegistryManager()
-		if err == nil {
-			_ = rm.Register(brainsDir) // Ignore errors, this is optional
+	// Create directory structure
+	for _, dir := range []string{brainsDir, profilesDir, scriptsDir, templatesDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", dir, err)
 		}
 	}
 
-	fmt.Printf("Initialized %s\n", displayPath)
+	total := copyResult{}
+
+	// Install scripts
+	if err := validateEmbeddedFS(zombiekit.EmbeddedScripts, "scripts", "scripts"); err != nil {
+		return err
+	}
+	if err := copyToDir(&total, zombiekit.EmbeddedScripts, "scripts", []string{scriptsDir}, force); err != nil {
+		return err
+	}
+	if err := makeExecutable(scriptsDir); err != nil {
+		return fmt.Errorf("setting script permissions: %w", err)
+	}
+
+	// Install templates
+	if err := validateEmbeddedFS(zombiekit.EmbeddedTemplates, "templates", "templates"); err != nil {
+		return err
+	}
+	if err := copyToDir(&total, zombiekit.EmbeddedTemplates, "templates", []string{templatesDir}, force); err != nil {
+		return err
+	}
+
+	// Register in registry (best effort)
+	rm, err := profile.NewRegistryManager()
+	if err == nil {
+		_ = rm.Register(brainsDir)
+	}
+
+	fmt.Printf("\nInitialized ~/.brains/\n")
+	printInitSummary(total)
 	return nil
+}
+
+// makeExecutable sets executable permissions on script files (.sh, .py) within a directory tree.
+func makeExecutable(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		ext := filepath.Ext(path)
+		if ext == ".sh" || ext == ".py" {
+			if err := os.Chmod(path, 0o755); err != nil {
+				return fmt.Errorf("chmod %s: %w", path, err)
+			}
+		}
+		return nil
+	})
 }
 
 // validateEmbeddedFS checks that the embedded filesystem contains entries at the given path.
@@ -255,7 +283,7 @@ func newInitCommand() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "global",
-				Usage: "Create global profile directory (~/.brains/) only",
+				Usage: "Install global profiles, scripts, and templates to ~/.brains/",
 			},
 			&cli.BoolFlag{
 				Name:  "force",

@@ -132,6 +132,17 @@ func runCommand() *cli.Command {
 				Value:   "cancelled",
 				EnvVars: []string{"ORCH_CLOSED_PR_STATUS"},
 			},
+			&cli.StringSliceFlag{
+				Name:    "copy-files",
+				Usage:   "Files to copy from repo root into each worktree (e.g., .env,.mcp.json)",
+				EnvVars: []string{"ORCH_COPY_FILES"},
+			},
+			&cli.StringFlag{
+				Name:    "sandbox",
+				Usage:   "Docker Sandbox mode: auto (default, use if sbx available), enabled (require sbx), disabled (never use sbx)",
+				Value:   "auto",
+				EnvVars: []string{"ORCH_SANDBOX"},
+			},
 		},
 		Action: runDaemon,
 	}
