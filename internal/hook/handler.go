@@ -26,8 +26,8 @@ func (h *Handler) Handle(event *HookEvent) (string, error) {
 	switch event.HookEventName {
 	case "SessionStart":
 		return h.handleSessionStart(event)
-	case "PostToolUse":
-		return h.handlePostToolUse(event)
+	case "PreToolUse":
+		return h.handlePreToolUse(event)
 	case "SessionEnd":
 		return h.handleSessionEnd(event)
 	default:
@@ -68,7 +68,7 @@ func (h *Handler) handleSessionStart(event *HookEvent) (string, error) {
 	return FormatOutput(h.agent, bodies), nil
 }
 
-func (h *Handler) handlePostToolUse(event *HookEvent) (string, error) {
+func (h *Handler) handlePreToolUse(event *HookEvent) (string, error) {
 	filePaths := event.ExtractFilePaths()
 	if len(filePaths) == 0 {
 		return "", nil
@@ -94,7 +94,7 @@ func (h *Handler) handlePostToolUse(event *HookEvent) (string, error) {
 		return "", err
 	}
 
-	return FormatOutput(h.agent, bodies), nil
+	return FormatPreToolOutput(h.agent, bodies), nil
 }
 
 func (h *Handler) handleSessionEnd(event *HookEvent) (string, error) {
