@@ -145,11 +145,11 @@ func TestInitCommand_FileCount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 4, len(entries), "should have 4 command files")
 
-	// Count template files (should be 7)
+	// Count template entries (7 files + init-spec-creator/ subdirectory = 8)
 	templatesDir := filepath.Join(tmpDir, ".brains", "templates")
 	entries, err = os.ReadDir(templatesDir)
 	require.NoError(t, err)
-	assert.Equal(t, 7, len(entries), "should have 7 template files")
+	assert.Equal(t, 8, len(entries), "should have 7 template files + 1 subdirectory")
 }
 
 func TestInitCommand_SpecificFiles(t *testing.T) {
@@ -180,6 +180,61 @@ func TestInitCommand_SpecificFiles(t *testing.T) {
 		path := filepath.Join(tmpDir, ".brains", "templates", tpl)
 		assert.FileExists(t, path, "template file should exist: %s", tpl)
 	}
+}
+
+func TestInitCommand_Global(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	err := runInitCmd(t, tmpDir, "--global")
+	require.NoError(t, err)
+
+	brainsDir := filepath.Join(tmpDir, ".brains")
+	assert.DirExists(t, filepath.Join(brainsDir, "scripts"))
+	assert.DirExists(t, filepath.Join(brainsDir, "templates"))
+
+	// Verify scripts were installed with subdirectories
+	assert.DirExists(t, filepath.Join(brainsDir, "scripts", "commit-message"))
+	assert.DirExists(t, filepath.Join(brainsDir, "scripts", "permissions-audit"))
+	assert.DirExists(t, filepath.Join(brainsDir, "scripts", "repo-auditor"))
+
+	// Verify scripts are executable
+	gitInfoPath := filepath.Join(brainsDir, "scripts", "commit-message", "git-info.sh")
+	assert.FileExists(t, gitInfoPath)
+	info, err := os.Stat(gitInfoPath)
+	require.NoError(t, err)
+	assert.True(t, info.Mode()&0o111 != 0, "script should be executable")
+
+	// Verify templates include init-spec-creator subdirectory
+	assert.DirExists(t, filepath.Join(brainsDir, "templates", "init-spec-creator"))
+	assert.FileExists(t, filepath.Join(brainsDir, "templates", "init-spec-creator", "DOMAIN-TEMPLATE.md"))
+}
+
+func TestInitCommand_GlobalForceOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	// First init
+	err := runInitCmd(t, tmpDir, "--global")
+	require.NoError(t, err)
+
+	// Modify a script
+	scriptPath := filepath.Join(tmpDir, ".brains", "scripts", "commit-message", "git-info.sh")
+	original := []byte("MODIFIED")
+	err = os.WriteFile(scriptPath, original, 0o755)
+	require.NoError(t, err)
+
+	// Second init without --force — should skip
+	err = runInitCmd(t, tmpDir, "--global")
+	require.NoError(t, err)
+	content, _ := os.ReadFile(scriptPath)
+	assert.Equal(t, original, content)
+
+	// Third init with --force — should overwrite
+	err = runInitCmd(t, tmpDir, "--global", "--force")
+	require.NoError(t, err)
+	content, _ = os.ReadFile(scriptPath)
+	assert.NotEqual(t, original, content)
 }
 
 func TestInitCommand_FileContentsNotEmpty(t *testing.T) {
