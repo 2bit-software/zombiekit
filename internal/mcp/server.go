@@ -17,6 +17,7 @@ import (
 	initiativetool "github.com/2bit-software/zombiekit/internal/mcp/tools/initiative"
 	profiletool "github.com/2bit-software/zombiekit/internal/mcp/tools/profile"
 	recalltool "github.com/2bit-software/zombiekit/internal/mcp/tools/recall"
+	skillinstalltool "github.com/2bit-software/zombiekit/internal/mcp/tools/skillinstall"
 	"github.com/2bit-software/zombiekit/internal/mcp/tools/stickymemory"
 	workflowtool "github.com/2bit-software/zombiekit/internal/mcp/tools/workflow"
 	"github.com/2bit-software/zombiekit/internal/memory"
@@ -25,19 +26,20 @@ import (
 
 // Server is the MCP protocol server that exposes tools.
 type Server struct {
-	mcpServer      *server.MCPServer
-	storage        memory.Storage
-	recallStorage  recall.Storage
-	stickyMemory   *stickymemory.Tool
-	codeReasoning  *codereasoning.Tool
-	sessionManager *codereasoning.SessionManager
-	profileTool    *profiletool.Tool
-	workflowTool   *workflowtool.Tool
-	initiativeTool *initiativetool.Tool
-	recallTool     *recalltool.Tool
-	gitTool        *gittool.Tool
-	ghPRTool       *ghprtool.Tool
-	config         *config.Config
+	mcpServer        *server.MCPServer
+	storage          memory.Storage
+	recallStorage    recall.Storage
+	stickyMemory     *stickymemory.Tool
+	codeReasoning    *codereasoning.Tool
+	sessionManager   *codereasoning.SessionManager
+	profileTool      *profiletool.Tool
+	workflowTool     *workflowtool.Tool
+	initiativeTool   *initiativetool.Tool
+	recallTool       *recalltool.Tool
+	gitTool          *gittool.Tool
+	ghPRTool         *ghprtool.Tool
+	skillInstallTool *skillinstalltool.Tool
+	config           *config.Config
 }
 
 // NewServer creates a new MCP server with the given storage backend and configuration.
@@ -84,19 +86,20 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 	}
 
 	s := &Server{
-		mcpServer:      mcpServer,
-		storage:        storage,
-		recallStorage:  recallStorage,
-		stickyMemory:   stickyMemoryTool,
-		codeReasoning:  codeReasoningTool,
-		sessionManager: sessionManager,
-		profileTool:    profTool,
-		workflowTool:   wfTool,
-		initiativeTool: initiativeToolInst,
-		recallTool:     recallToolInst,
-		gitTool:        gitToolInst,
-		ghPRTool:       ghPRToolInst,
-		config:         cfg,
+		mcpServer:        mcpServer,
+		storage:          storage,
+		recallStorage:    recallStorage,
+		stickyMemory:     stickyMemoryTool,
+		codeReasoning:    codeReasoningTool,
+		sessionManager:   sessionManager,
+		profileTool:      profTool,
+		workflowTool:     wfTool,
+		initiativeTool:   initiativeToolInst,
+		recallTool:       recallToolInst,
+		gitTool:          gitToolInst,
+		ghPRTool:         ghPRToolInst,
+		skillInstallTool: skillinstalltool.NewTool(),
+		config:           cfg,
 	}
 
 	// Register tools (filtered by config)
@@ -185,6 +188,26 @@ func (s *Server) registerTools() {
 
 	// Register gh-pr tool
 	s.registerGHPRTool()
+
+	// Register skill-install tool
+	if s.config.IsToolEnabled("skill-install") {
+		skillInstallTool := mcp.NewTool("skill-install",
+			mcp.WithDescription("Install a zombiekit profile as a Claude Code skill"),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Profile name to install as a skill"),
+			),
+			mcp.WithString("scope",
+				mcp.Required(),
+				mcp.Description("Installation scope: 'local' (.claude/skills/) or 'global' (~/.claude/skills/)"),
+				mcp.Enum("local", "global"),
+			),
+			mcp.WithString("working_directory",
+				mcp.Description("Working directory for local install (defaults to process CWD)"),
+			),
+		)
+		s.mcpServer.AddTool(skillInstallTool, s.handleSkillInstall)
+	}
 }
 
 // handleStickyMemory handles stickymemory tool calls.
@@ -195,6 +218,21 @@ func (s *Server) handleStickyMemory(ctx context.Context, req mcp.CallToolRequest
 	}
 
 	result, err := s.stickyMemory.Execute(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// handleSkillInstall handles skill-install tool calls.
+func (s *Server) handleSkillInstall(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	result, err := s.skillInstallTool.Execute(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
