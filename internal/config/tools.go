@@ -19,6 +19,7 @@ var KnownTools = []string{
 	"recall-read-conversation",
 	"git",
 	"gh-pr",
+	"skill-install",
 }
 
 // ToolCategory derives the category name from a tool name.

@@ -2,8 +2,8 @@
 package cli
 
 import (
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/version"
+	"github.com/urfave/cli/v2"
 )
 
 // NewApp creates the root CLI application with all commands and global flags.
@@ -41,6 +41,7 @@ func NewApp(info *version.BuildInfo) *cli.App {
 			newProfileCommand(),
 			newHookCommand(),
 			newInitCommand(),
+			newSkillCommand(),
 		},
 	}
 }
