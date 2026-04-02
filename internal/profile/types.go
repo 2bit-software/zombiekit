@@ -52,6 +52,9 @@ type Profile struct {
 	// Content
 	Body       string // Markdown content after frontmatter
 	RawContent []byte // Original file content for --raw mode
+
+	// Skill directory layout
+	IsSkill bool // true if loaded from a skill-directory layout (name/SKILL.md)
 }
 
 // ProfileFrontmatter represents the optional YAML frontmatter in a profile file.
@@ -130,6 +133,7 @@ type ListEntry struct {
 	Model       string        `json:"model,omitempty"`    // Claude-specific: model name
 	Color       string        `json:"color,omitempty"`    // Claude-specific: UI color
 	Type        string        `json:"type,omitempty"`     // Profile type: "action", "domain", or "step"
+	Format      string        `json:"format,omitempty"`   // "skill" for directory-layout profiles
 }
 
 // ShowResult contains the result of showing a single profile.

@@ -2,6 +2,7 @@ package profile
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -98,6 +99,9 @@ func (c *Composer) composeContent(orderedProfiles []*Profile, resolutionLog []Re
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("warning resolving %s: %v", p.Name, err))
 			content = p.Body
+		}
+		if p.IsSkill && p.Path != "" {
+			content = "Base directory for this skill: " + filepath.Dir(p.Path) + "\n\n" + content
 		}
 		if inherited {
 			for i := range resolutionLog {

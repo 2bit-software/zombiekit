@@ -173,10 +173,17 @@ func (r *Resolver) LoadAllProfiles(dirs []ResolvedDirectory) (map[string][]*Prof
 	return profiles, nil
 }
 
-// loadProfilesFromDir loads all .md files from a single profiles directory.
+// loadProfilesFromDir loads all profiles from a single profiles directory.
+// Supports two layouts: flat name.md files and skill-directory name/SKILL.md.
+// Any *.skill ZIP files found are auto-extracted before loading (idempotent).
 func (r *Resolver) loadProfilesFromDir(dir ResolvedDirectory) (map[string]*Profile, error) {
 	profiles := make(map[string]*Profile)
 
+	// Pass 1: extract any pending .skill ZIPs (idempotent — skips existing dirs).
+	// Errors are non-fatal; continue loading whatever is already on disk.
+	ExtractPendingSkills(dir.Path) //nolint:errcheck
+
+	// Pass 2: re-read directory to pick up newly extracted subdirs.
 	entries, err := os.ReadDir(dir.Path)
 	if err != nil {
 		return nil, fmt.Errorf("reading directory %s: %w", dir.Path, err)
@@ -184,16 +191,39 @@ func (r *Resolver) loadProfilesFromDir(dir ResolvedDirectory) (map[string]*Profi
 
 	for _, entry := range entries {
 		if entry.IsDir() {
+			skillDir := filepath.Join(dir.Path, entry.Name())
+			if !IsSkillDirectory(skillDir) {
+				continue
+			}
+			p, loadErr := LoadSkillProfile(skillDir, dir.Source)
+			if loadErr != nil {
+				continue
+			}
+			// Conflict: directory skill and flat .md share the same name.
+			// Directory is processed first; flat .md will be skipped below.
+			if _, exists := profiles[p.Name]; exists {
+				continue
+			}
+			profiles[p.Name] = p
 			continue
 		}
 
 		name := entry.Name()
+		if strings.HasSuffix(name, ".skill") {
+			continue // handled by ExtractPendingSkills above
+		}
 		if !strings.HasSuffix(name, ".md") {
 			continue
 		}
 
 		// Extract profile name from filename (without .md extension)
 		profileName := strings.TrimSuffix(name, ".md")
+
+		// Skip if a skill directory with the same name was already loaded.
+		if _, exists := profiles[profileName]; exists {
+			continue
+		}
+
 		filePath := filepath.Join(dir.Path, name)
 
 		content, err := os.ReadFile(filePath)

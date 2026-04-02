@@ -92,6 +92,10 @@ func (s *Service) List() ([]ListEntry, error) {
 
 	for name, versions := range allProfiles {
 		for i, p := range versions {
+			format := ""
+			if p.IsSkill {
+				format = "skill"
+			}
 			entry := ListEntry{
 				Name:        name,
 				Source:      p.Source,
@@ -104,6 +108,7 @@ func (s *Service) List() ([]ListEntry, error) {
 				Model:       p.Model,
 				Color:       p.Color,
 				Type:        p.Type,
+				Format:      format,
 			}
 			if !seen[name] || entry.Shadowed {
 				entries = append(entries, entry)
