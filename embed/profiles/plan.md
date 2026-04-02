@@ -49,16 +49,29 @@ Execution steps:
    - Order steps based on dependencies
    - Flag remaining uncertainties
 
-5. **Audit Phase** (parallel agents)
+5. **Reuse Audit**
+   - Call `mcp__zombiekit__profile-compose` with `{"profiles": ["reuse-audit"]}` and follow the returned instructions
+   - This searches the codebase for existing implementations of each planned item
+   - Produces `reuse-audit.md` only — does not touch the plan yet
+
+6. **Plan Revision from Reuse Findings**
+   - Read `reuse-audit.md`
+   - For each DUPLICATE: replace the planned item with a direct reference to the existing code
+   - For each OVERLAP marked "Extend": update the planned item to describe extending the existing code rather than creating new
+   - For each OVERLAP marked "Create new": add a note in the plan explaining why new creation was chosen over reuse
+   - RELATED and NONE items require no plan changes
+   - The revised `implementation-plan.md` must remain self-consistent — re-check dependencies after substitutions
+
+7. **Audit Phase** (parallel agents)
    - Verify plan completeness
    - Check alignment with spec
    - Identify gaps between spec and plan
 
-6. **Loop or Highlight**
+8. **Loop or Highlight**
    - If issues found: Loop back or suggest `/brains.revise`
    - If clean: Highlight key technical decisions
 
-7. **Report Completion**
+9. **Report Completion**
    - Plan summary
    - Spike results (if any)
    - Technical decisions made
@@ -71,6 +84,7 @@ Execution steps:
   implementation-plan.md
   technical-spec.md
   spike-results.md (if spikes run)
+  reuse-audit.md
 ```
 
 ## Spike Triggers
