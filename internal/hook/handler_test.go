@@ -67,7 +67,7 @@ func TestHandler_SessionStart_InjectsUnconditional(t *testing.T) {
 	assert.NotContains(t, output, "TypeScript")
 }
 
-func TestHandler_PostToolUse_Read_InjectsMatchingRules(t *testing.T) {
+func TestHandler_PreToolUse_Read_InjectsMatchingRules(t *testing.T) {
 	dir := setupTestRules(t)
 	sessionID := "test-ptr-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
@@ -77,7 +77,7 @@ func TestHandler_PostToolUse_Read_InjectsMatchingRules(t *testing.T) {
 	// First read — should inject Go rules
 	output, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
@@ -87,7 +87,7 @@ func TestHandler_PostToolUse_Read_InjectsMatchingRules(t *testing.T) {
 	assert.Contains(t, output, "Go Standards")
 }
 
-func TestHandler_PostToolUse_Deduplication(t *testing.T) {
+func TestHandler_PreToolUse_Deduplication(t *testing.T) {
 	dir := setupTestRules(t)
 	sessionID := "test-dedup-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
@@ -97,7 +97,7 @@ func TestHandler_PostToolUse_Deduplication(t *testing.T) {
 	// First read
 	output1, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
@@ -108,7 +108,7 @@ func TestHandler_PostToolUse_Deduplication(t *testing.T) {
 	// Second read — should be empty (dedup)
 	output2, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "other.go")},
@@ -117,7 +117,7 @@ func TestHandler_PostToolUse_Deduplication(t *testing.T) {
 	assert.Empty(t, output2)
 }
 
-func TestHandler_PostToolUse_DifferentTypes(t *testing.T) {
+func TestHandler_PreToolUse_DifferentTypes(t *testing.T) {
 	dir := setupTestRules(t)
 	sessionID := "test-diff-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
@@ -127,7 +127,7 @@ func TestHandler_PostToolUse_DifferentTypes(t *testing.T) {
 	// Read Go file
 	output1, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
@@ -139,7 +139,7 @@ func TestHandler_PostToolUse_DifferentTypes(t *testing.T) {
 	// Read TS file — should inject TS rules only
 	output2, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "app.tsx")},
@@ -159,7 +159,7 @@ func TestHandler_Compaction_ResetsTracking(t *testing.T) {
 	// Inject Go rules
 	_, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
@@ -179,7 +179,7 @@ func TestHandler_Compaction_ResetsTracking(t *testing.T) {
 	// Read Go file again — should re-inject after compaction
 	output2, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
@@ -197,7 +197,7 @@ func TestHandler_MultiEdit(t *testing.T) {
 
 	output, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "MultiEdit",
 		ToolInput: &ToolInput{
@@ -251,7 +251,7 @@ func TestHandler_EmptyBodyRules_Skipped(t *testing.T) {
 
 	output, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "test.empty")},
@@ -269,7 +269,7 @@ func TestHandler_Write_InjectsIfNotSeen(t *testing.T) {
 
 	output, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Write",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "new.go")},
@@ -288,7 +288,7 @@ func TestHandler_Resume_ResetsTracking(t *testing.T) {
 	// Inject Go rules
 	_, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
@@ -308,7 +308,7 @@ func TestHandler_Resume_ResetsTracking(t *testing.T) {
 	// Read Go file again — should re-inject after resume
 	output2, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
-		HookEventName: "PostToolUse",
+		HookEventName: "PreToolUse",
 		CWD:           dir,
 		ToolName:      "Read",
 		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
@@ -317,9 +317,9 @@ func TestHandler_Resume_ResetsTracking(t *testing.T) {
 	assert.Contains(t, output2, "Go Standards")
 }
 
-func TestHandler_ClaudeFormat(t *testing.T) {
+func TestHandler_ClaudeFormat_SessionStart(t *testing.T) {
 	dir := setupTestRules(t)
-	sessionID := "test-claude-fmt-" + t.Name()
+	sessionID := "test-claude-ss-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
 	handler := NewHandler(dir, t.TempDir(), AgentClaude)
@@ -334,4 +334,25 @@ func TestHandler_ClaudeFormat(t *testing.T) {
 	assert.Contains(t, output, "<system-reminder>")
 	assert.Contains(t, output, "</system-reminder>")
 	assert.Contains(t, output, "General Rules")
+}
+
+func TestHandler_ClaudeFormat_PreToolUse(t *testing.T) {
+	dir := setupTestRules(t)
+	sessionID := "test-claude-ptu-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
+
+	output, err := handler.Handle(&HookEvent{
+		SessionID:     sessionID,
+		HookEventName: "PreToolUse",
+		CWD:           dir,
+		ToolName:      "Read",
+		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, output, `"hookSpecificOutput"`)
+	assert.Contains(t, output, `"permissionDecision":"allow"`)
+	assert.Contains(t, output, `"hookEventName":"PreToolUse"`)
+	assert.Contains(t, output, "Go Standards")
 }

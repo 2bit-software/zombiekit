@@ -17,7 +17,7 @@ func newHookCommand() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "event",
-				Usage:    "Hook event type: session-start, post-tool-use, session-end",
+				Usage:    "Hook event type: session-start, pre-tool-use, session-end",
 				Required: true,
 			},
 		},
@@ -38,8 +38,8 @@ func runHook(c *cli.Context) error {
 		switch eventType {
 		case "session-start":
 			event.HookEventName = "SessionStart"
-		case "post-tool-use":
-			event.HookEventName = "PostToolUse"
+		case "pre-tool-use":
+			event.HookEventName = "PreToolUse"
 		case "session-end":
 			event.HookEventName = "SessionEnd"
 		default:
