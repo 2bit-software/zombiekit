@@ -8,7 +8,7 @@ ZombieKit (aka "brains") is a **prompt composition and artifact management syste
 
 1. **Prompt Composition** - Hierarchical profile system that composes prompts from multiple sources
 2. **Artifact Storage** - Filesystem-based storage for specs, plans, and tasks
-3. **MCP Tools** - Sticky memory and code-reasoning tools
+3. **MCP Tools** - Sticky memory, profiles, workflows, and git tools
 4. **Initiative Management** - Track multi-step development workflows
 5. **Web Management** - UI for profiles, memories, and search
 
@@ -40,7 +40,7 @@ ZombieKit (aka "brains") is a **prompt composition and artifact management syste
 │   MCP Tools:                        CLI Commands:                           │
 │   • profile-compose                 • brains profile compose X,Y,Z          │
 │   • stickymemory                    • brains init                           │
-│   • code-reasoning                  • brains serve                          │
+│   • initiative                       • brains serve                          │
 │   • step (workflow execution)       • brains gui                            │
 │   • feature (template delivery)     • brains memory ...                     │
 │                                                                             │
@@ -212,19 +212,6 @@ Persistent key-value storage across sessions.
 | `clear` | Delete all memories |
 
 **Storage:** SQLite (default) or PostgreSQL
-
-### code-reasoning
-
-Sequential thinking tool for problem-solving with branching and revision.
-
-| Parameter | Description |
-|-----------|-------------|
-| `thought` | Current reasoning step |
-| `thought_number` | Position in sequence |
-| `total_thoughts` | Estimated total |
-| `next_thought_needed` | Continue or finish |
-| `branch_id` | For alternative approaches |
-| `is_revision` | Correcting earlier thought |
 
 ### profile-compose
 

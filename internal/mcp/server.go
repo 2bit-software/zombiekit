@@ -1,5 +1,5 @@
 // Package mcp implements the Model Context Protocol server for brains.
-// It exposes the stickymemory and code-reasoning tools via the MCP protocol.
+// It exposes tools via the MCP protocol.
 package mcp
 
 import (
@@ -12,7 +12,6 @@ import (
 
 	"github.com/2bit-software/zombiekit/internal/config"
 	internalgit "github.com/2bit-software/zombiekit/internal/git"
-	"github.com/2bit-software/zombiekit/internal/mcp/tools/codereasoning"
 	gittool "github.com/2bit-software/zombiekit/internal/mcp/tools/git"
 	initiativetool "github.com/2bit-software/zombiekit/internal/mcp/tools/initiative"
 	profiletool "github.com/2bit-software/zombiekit/internal/mcp/tools/profile"
@@ -30,8 +29,6 @@ type Server struct {
 	storage          memory.Storage
 	recallStorage    recall.Storage
 	stickyMemory     *stickymemory.Tool
-	codeReasoning    *codereasoning.Tool
-	sessionManager   *codereasoning.SessionManager
 	profileTool      *profiletool.Tool
 	workflowTool     *workflowtool.Tool
 	initiativeTool   *initiativetool.Tool
@@ -57,9 +54,7 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 		server.WithToolCapabilities(true),
 	)
 
-	sessionManager := codereasoning.NewSessionManager()
 	stickyMemoryTool := stickymemory.NewTool(storage)
-	codeReasoningTool := codereasoning.NewTool(sessionManager)
 	profTool := profiletool.NewTool()
 	wfTool := workflowtool.NewTool(commandsFS, workflowsFS)
 	initiativeToolInst := initiativetool.NewTool()
@@ -86,8 +81,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 		storage:          storage,
 		recallStorage:    recallStorage,
 		stickyMemory:     stickyMemoryTool,
-		codeReasoning:    codeReasoningTool,
-		sessionManager:   sessionManager,
 		profileTool:      profTool,
 		workflowTool:     wfTool,
 		initiativeTool:   initiativeToolInst,
@@ -127,43 +120,6 @@ func (s *Server) registerTools() {
 			),
 		)
 		s.mcpServer.AddTool(stickyTool, s.handleStickyMemory)
-	}
-
-	// Register code-reasoning tool
-	if s.config.IsToolEnabled("code-reasoning") {
-		reasoningDef := s.codeReasoning.Definition()
-		reasoningTool := mcp.NewTool(reasoningDef.Name,
-			mcp.WithDescription(reasoningDef.Description),
-			mcp.WithString("thought",
-				mcp.Required(),
-				mcp.Description("Your current reasoning step"),
-			),
-			mcp.WithNumber("thought_number",
-				mcp.Required(),
-				mcp.Description("Current number in sequence (1-indexed)"),
-			),
-			mcp.WithNumber("total_thoughts",
-				mcp.Required(),
-				mcp.Description("Estimated final count"),
-			),
-			mcp.WithBoolean("next_thought_needed",
-				mcp.Required(),
-				mcp.Description("Set to FALSE ONLY when completely done"),
-			),
-			mcp.WithBoolean("is_revision",
-				mcp.Description("When correcting earlier thinking"),
-			),
-			mcp.WithNumber("revises_thought",
-				mcp.Description("Which thought to revise"),
-			),
-			mcp.WithNumber("branch_from_thought",
-				mcp.Description("When exploring alternative approaches"),
-			),
-			mcp.WithString("branch_id",
-				mcp.Description("Branch identifier"),
-			),
-		)
-		s.mcpServer.AddTool(reasoningTool, s.handleCodeReasoning)
 	}
 
 	// Register profile tools
@@ -225,24 +181,6 @@ func (s *Server) handleSkillInstall(ctx context.Context, req mcp.CallToolRequest
 	}
 
 	result, err := s.skillInstallTool.Execute(ctx, args)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(result), nil
-}
-
-// handleCodeReasoning handles code-reasoning tool calls.
-func (s *Server) handleCodeReasoning(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok {
-		return mcp.NewToolResultError("invalid arguments format"), nil
-	}
-
-	// Use a default session ID (in real usage, this would come from connection context)
-	sessionID := "default"
-
-	result, err := s.codeReasoning.Execute(ctx, sessionID, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

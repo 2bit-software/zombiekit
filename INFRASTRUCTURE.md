@@ -141,7 +141,6 @@ The `brains serve --mode stdio` process exposes these tools to Claude Code:
 | `workflow-compose` | Load and return a workflow prompt |
 | `skill-install` | Install a profile as a Claude Code skill (writes `SKILL.md`) |
 | `initiative` | Workflow lifecycle: create, status, complete, list |
-| `code-reasoning` | Sequential thinking with branching |
 | `stickymemory` | Persistent key/value memory across sessions |
 | `git` | Git operations (status, log, diff, stage, commit, push) |
 | `recall-*` | Conversation search/memory (requires PostgreSQL + Ollama) |
