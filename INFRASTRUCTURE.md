@@ -144,7 +144,6 @@ The `brains serve --mode stdio` process exposes these tools to Claude Code:
 | `code-reasoning` | Sequential thinking with branching |
 | `stickymemory` | Persistent key/value memory across sessions |
 | `git` | Git operations (status, log, diff, stage, commit, push) |
-| `gh-pr` | GitHub PR operations (view, create, comment, edit) |
 | `recall-*` | Conversation search/memory (requires PostgreSQL + Ollama) |
 
 ---

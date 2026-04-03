@@ -13,7 +13,6 @@ import (
 	"github.com/2bit-software/zombiekit/internal/config"
 	internalgit "github.com/2bit-software/zombiekit/internal/git"
 	"github.com/2bit-software/zombiekit/internal/mcp/tools/codereasoning"
-	ghprtool "github.com/2bit-software/zombiekit/internal/mcp/tools/ghpr"
 	gittool "github.com/2bit-software/zombiekit/internal/mcp/tools/git"
 	initiativetool "github.com/2bit-software/zombiekit/internal/mcp/tools/initiative"
 	profiletool "github.com/2bit-software/zombiekit/internal/mcp/tools/profile"
@@ -38,7 +37,6 @@ type Server struct {
 	initiativeTool   *initiativetool.Tool
 	recallTool       *recalltool.Tool
 	gitTool          *gittool.Tool
-	ghPRTool         *ghprtool.Tool
 	skillInstallTool *skillinstalltool.Tool
 	config           *config.Config
 }
@@ -73,7 +71,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 
 	// Create git tools if a working directory is provided
 	var gitToolInst *gittool.Tool
-	var ghPRToolInst *ghprtool.Tool
 	gitWorkDir := ""
 	if len(workDir) > 0 && workDir[0] != "" {
 		gitWorkDir = workDir[0]
@@ -81,9 +78,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 	if gitWorkDir != "" {
 		if runner, err := internalgit.NewRunner(gitWorkDir); err == nil {
 			gitToolInst = gittool.NewTool(runner)
-		}
-		if prTool, err := ghprtool.NewTool(gitWorkDir); err == nil {
-			ghPRToolInst = prTool
 		}
 	}
 
@@ -99,7 +93,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 		initiativeTool:   initiativeToolInst,
 		recallTool:       recallToolInst,
 		gitTool:          gitToolInst,
-		ghPRTool:         ghPRToolInst,
 		skillInstallTool: skillinstalltool.NewTool(),
 		config:           cfg,
 	}
@@ -187,9 +180,6 @@ func (s *Server) registerTools() {
 
 	// Register git tools
 	s.registerGitTool()
-
-	// Register gh-pr tool
-	s.registerGHPRTool()
 
 	// Register skill-install tool
 	if s.config.IsToolEnabled("skill-install") {
@@ -604,54 +594,6 @@ func (s *Server) handleGit(ctx context.Context, req mcp.CallToolRequest) (*mcp.C
 	}
 
 	result, err := s.gitTool.Execute(ctx, args)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(result), nil
-}
-
-// registerGHPRTool registers the gh-pr MCP tool.
-func (s *Server) registerGHPRTool() {
-	if s.ghPRTool == nil || !s.config.IsToolEnabled("gh-pr") {
-		return
-	}
-
-	prDef := s.ghPRTool.Definition()
-	prMCPTool := mcp.NewTool(prDef.Name,
-		mcp.WithDescription(prDef.Description),
-		mcp.WithString("action",
-			mcp.Required(),
-			mcp.Description("PR operation to perform"),
-			mcp.Enum("view", "create", "comment", "edit"),
-		),
-		mcp.WithString("title",
-			mcp.Description("PR title (required for create, optional for edit)"),
-		),
-		mcp.WithString("body",
-			mcp.Description("PR body or comment text (required for create/comment, optional for edit)"),
-		),
-		mcp.WithString("base",
-			mcp.Description("Base branch for PR (default: main)"),
-		),
-		mcp.WithBoolean("draft",
-			mcp.Description("Create PR as draft (default: false)"),
-		),
-		mcp.WithNumber("pr_number",
-			mcp.Description("PR number (required for comment/edit)"),
-		),
-	)
-	s.mcpServer.AddTool(prMCPTool, s.handleGHPR)
-}
-
-// handleGHPR handles gh-pr tool calls.
-func (s *Server) handleGHPR(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok {
-		return mcp.NewToolResultError("invalid arguments format"), nil
-	}
-
-	result, err := s.ghPRTool.Execute(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
