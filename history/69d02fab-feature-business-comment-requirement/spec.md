@@ -137,17 +137,6 @@
   - The FR-to-Test mapping table below is for planning traceability only.
     It must NOT leak into generated code as comments.
 
-  Function Comment Style:
-  - Doc comments on functions and methods MUST describe the outcome from the
-    caller's perspective — NOT technical rephrasings of the implementation.
-  - Litmus test: would the comment still be true after a complete reimplementation?
-  - Good:  "// ImportMessages brings external conversation history into the system."
-  - Good:  "// ResolveConflict picks the most recent version when two edits collide."
-  - Bad:   "// ImportMessages iterates over the input slice and calls db.Insert for each."
-  - Bad:   "// ResolveConflict compares timestamps and returns the newer struct."
-  - Reuse spec language where it fits naturally.
-  - Generated code and test code are excluded (test code has its own rules above).
-
   If this feature requires NO tests (e.g., documentation-only change):
   - Replace this section with: "Testing Requirements: None - [justification]"
   - The justification must explain why no tests are needed

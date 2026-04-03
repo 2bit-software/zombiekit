@@ -25,21 +25,21 @@ description: "Task list template for feature implementation"
 - **Mobile**: `api/src/`, `ios/src/` or `android/src/`
 - Paths shown below assume single project - adjust based on plan.md structure
 
-<!-- 
+<!--
   ============================================================================
   IMPORTANT: The tasks below are SAMPLE TASKS for illustration purposes only.
-  
+
   The /speckit.tasks command MUST replace these with actual tasks based on:
   - User stories from spec.md (with their priorities P1, P2, P3...)
   - Feature requirements from plan.md
   - Entities from data-model.md
   - Endpoints from contracts/
-  
+
   Tasks MUST be organized by user story so each story can be:
   - Implemented independently
   - Tested independently
   - Delivered as an MVP increment
-  
+
   DO NOT keep these sample tasks in the generated tasks.md file.
   ============================================================================
 -->
@@ -249,3 +249,32 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+
+### Test Comment Style
+
+When writing tests, comments and section headers in code **MUST** use short
+business-language descriptions of what the scenario verifies. Do NOT reference
+task IDs (T010), story tags ([US1]), spec IDs (FR-001, BR-002), or any planning
+artifact identifiers in test code comments.
+
+- Good: `// Re-importing the same file skips already-stored messages`
+- Good: `// Unicode and special characters survive the migration round-trip`
+- Bad:  `// T009 [P] [US1]`
+- Bad:  `// BR-002 (No duplicates)`
+
+The task/story/FR mapping exists for planning traceability only and must not
+leak into generated source code.
+
+### Function Comment Style
+
+When creating or modifying functions and methods, doc comments **MUST** describe
+the outcome from the caller's perspective — not how it works internally. Litmus
+test: would the comment still be true after a complete reimplementation?
+
+- Good: `// ImportMessages brings external conversation history into the system.`
+- Good: `// ResolveConflict picks the most recent version when two edits collide.`
+- Bad: `// ImportMessages iterates over the input slice and calls db.Insert for each.`
+- Bad: `// ResolveConflict compares timestamps and returns the newer struct.`
+
+Reuse spec language where it fits naturally. Generated code and test code are
+excluded (test code has its own rules above).

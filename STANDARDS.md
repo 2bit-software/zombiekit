@@ -317,6 +317,22 @@ func Encode(w io.Writer, req *Request) error { ... }
 - Document function purpose and usage, not implementation details
 - Use examples in `_test.go` files for runnable documentation
 
+### Business-Language Framing
+
+Doc comments must describe the **outcome** from the caller's perspective, not the internal mechanism. Litmus test: would the comment still be true after a complete reimplementation?
+
+```go
+// Good — describes the outcome
+// ImportMessages brings external conversation history into the system.
+func ImportMessages(src io.Reader) error { ... }
+
+// Bad — describes the implementation
+// ImportMessages iterates over the input and calls db.Insert for each record.
+func ImportMessages(src io.Reader) error { ... }
+```
+
+This applies to all functions, methods, and interface method declarations. Generated code is excluded.
+
 ---
 
 ## Tooling
