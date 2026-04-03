@@ -5,7 +5,7 @@ import "time"
 
 // Request represents a request to the initiative tool.
 type Request struct {
-	Action      string `json:"action"`      // create | status | complete | list
+	Action      string `json:"action"`      // create | status | complete | abandon | list
 	Dir         string `json:"dir"`         // Working directory
 	Type        string `json:"type"`        // For create: feature | bug | refactor
 	Name        string `json:"name"`        // For create: initiative name
@@ -46,6 +46,14 @@ type CompleteResponse struct {
 	Action       string    `json:"action"`
 	InitiativeID string    `json:"initiative_id"`
 	CompletedAt  time.Time `json:"completed_at"`
+}
+
+// AbandonResponse is returned for action=abandon.
+type AbandonResponse struct {
+	Action       string    `json:"action"`
+	InitiativeID string    `json:"initiative_id"`
+	DeletedPath  string    `json:"deleted_path"`
+	AbandonedAt  time.Time `json:"abandoned_at"`
 }
 
 // ListResponse is returned for action=list.

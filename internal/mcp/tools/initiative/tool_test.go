@@ -9,9 +9,9 @@ import (
 	"testing/fstest"
 	"time"
 
+	internalInit "github.com/2bit-software/zombiekit/internal/initiative"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	internalInit "github.com/2bit-software/zombiekit/internal/initiative"
 )
 
 // testEmbeddedFS returns a mock embedded filesystem with templates for testing.
@@ -291,4 +291,133 @@ func TestHandleCreate_AfterComplete(t *testing.T) {
 	// Should be a new initiative (different ID), not idempotent return
 	assert.False(t, resp2.AlreadyExisted)
 	assert.NotEqual(t, firstID, resp2.InitiativeID)
+}
+
+func TestHandleAbandon_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+	tool := NewTool()
+	tool.SetEmbeddedFS(testEmbeddedFS())
+	ctx := context.Background()
+
+	// Create an initiative
+	createArgs := map[string]any{
+		"action": "create",
+		"dir":    tmpDir,
+		"type":   "feature",
+		"name":   "doomed",
+	}
+
+	result, err := tool.Execute(ctx, createArgs)
+	require.NoError(t, err)
+
+	var createResp CreateResponse
+	require.NoError(t, json.Unmarshal([]byte(result), &createResp))
+
+	// Verify history folder exists
+	_, err = os.Stat(createResp.InitiativePath)
+	require.NoError(t, err)
+
+	// Abandon it
+	abandonArgs := map[string]any{
+		"action": "abandon",
+		"dir":    tmpDir,
+	}
+
+	result, err = tool.Execute(ctx, abandonArgs)
+	require.NoError(t, err)
+
+	var abandonResp AbandonResponse
+	require.NoError(t, json.Unmarshal([]byte(result), &abandonResp))
+
+	assert.Equal(t, "abandon", abandonResp.Action)
+	assert.Equal(t, createResp.InitiativeID, abandonResp.InitiativeID)
+	assert.Equal(t, createResp.InitiativePath, abandonResp.DeletedPath)
+	assert.False(t, abandonResp.AbandonedAt.IsZero())
+
+	// Verify history folder is gone
+	_, err = os.Stat(createResp.InitiativePath)
+	assert.True(t, os.IsNotExist(err))
+
+	// Verify state is cleared
+	statusArgs := map[string]any{
+		"action": "status",
+		"dir":    tmpDir,
+	}
+	result, err = tool.Execute(ctx, statusArgs)
+	require.NoError(t, err)
+
+	var statusResp StatusResponse
+	require.NoError(t, json.Unmarshal([]byte(result), &statusResp))
+	assert.False(t, statusResp.Active)
+}
+
+func TestHandleAbandon_NoActive(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+	tool := NewTool()
+	tool.SetEmbeddedFS(testEmbeddedFS())
+	ctx := context.Background()
+
+	abandonArgs := map[string]any{
+		"action": "abandon",
+		"dir":    tmpDir,
+	}
+
+	_, err := tool.Execute(ctx, abandonArgs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "NO_ACTIVE_INITIATIVE")
+}
+
+func TestHandleAbandon_MissingHistoryFolder(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+	tool := NewTool()
+	tool.SetEmbeddedFS(testEmbeddedFS())
+	ctx := context.Background()
+
+	// Create an initiative
+	createArgs := map[string]any{
+		"action": "create",
+		"dir":    tmpDir,
+		"type":   "feature",
+		"name":   "ghost",
+	}
+
+	result, err := tool.Execute(ctx, createArgs)
+	require.NoError(t, err)
+
+	var createResp CreateResponse
+	require.NoError(t, json.Unmarshal([]byte(result), &createResp))
+
+	// Manually delete the history folder
+	require.NoError(t, os.RemoveAll(createResp.InitiativePath))
+
+	// Abandon should still succeed (clear state even though folder is gone)
+	abandonArgs := map[string]any{
+		"action": "abandon",
+		"dir":    tmpDir,
+	}
+
+	result, err = tool.Execute(ctx, abandonArgs)
+	require.NoError(t, err)
+
+	var abandonResp AbandonResponse
+	require.NoError(t, json.Unmarshal([]byte(result), &abandonResp))
+	assert.Equal(t, "abandon", abandonResp.Action)
+
+	// Verify state is cleared
+	statusArgs := map[string]any{
+		"action": "status",
+		"dir":    tmpDir,
+	}
+	result, err = tool.Execute(ctx, statusArgs)
+	require.NoError(t, err)
+
+	var statusResp StatusResponse
+	require.NoError(t, json.Unmarshal([]byte(result), &statusResp))
+	assert.False(t, statusResp.Active)
 }
