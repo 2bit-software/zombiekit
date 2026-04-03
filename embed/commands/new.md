@@ -56,6 +56,38 @@ Then:
 - **Type a branch name**: The user provides a branch name via the "Other" free-text option. Run `git checkout {input} && git pull`. If it fails, inform the user and re-prompt.
 - **Stay**: Proceed to Classification without switching.
 
+## Graphite Stacking Detection
+
+Check the startup hook output for graphite status and the user input for stacking keywords.
+
+### Detection Logic
+
+1. **Anti-stacking check**: If user input contains "no stack", "no graphite", or "git branch" (case-insensitive), set `USE_GRAPHITE = false` and skip all graphite logic below.
+
+2. **Explicit stacking**: If user input starts with "stack:" or contains "use graphite", "gt stack", or "graphite stack" (case-insensitive), set `USE_GRAPHITE = true`.
+
+3. **Implicit stacking**: If the startup hook output contains "stacked" (i.e., current branch is graphite-tracked), set `USE_GRAPHITE = true`.
+
+4. **Otherwise**: `USE_GRAPHITE = false`.
+
+### Uninitialized Repo Handling
+
+If `USE_GRAPHITE = true` (from explicit keyword, step 2) but the startup hook reported "not initialized":
+- Ask the user via `AskUserQuestion`: "Graphite is installed but this repo isn't initialized. Run `gt init`?"
+- If yes: Run `gt init --no-interactive` via Bash, then proceed with `USE_GRAPHITE = true`
+- If no: Set `USE_GRAPHITE = false`, proceed normally with a note that stacking was skipped
+
+### Metadata Append
+
+If `USE_GRAPHITE = true`, append to the user input before dispatching to the workflow:
+
+```
+---
+USE_GRAPHITE: true
+```
+
+This metadata is parsed by workflow files (feature.md, bug.md, etc.) to pass `use_graphite: true` to the `mcp__zombiekit__initiative` create call.
+
 ## Classification Task
 
 Analyze the user's input and determine which workflow type best matches their intent.
