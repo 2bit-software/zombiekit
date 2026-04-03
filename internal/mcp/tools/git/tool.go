@@ -260,7 +260,7 @@ func (t *Tool) handleStage(ctx context.Context, args map[string]any, runner *int
 		}
 	}
 
-	if err := validateFiles(runner.WorkDir(), files); err != nil {
+	if err := validateFiles(ctx, runner, files); err != nil {
 		return "", err
 	}
 
