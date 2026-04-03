@@ -151,7 +151,26 @@ Goal: Properly close out an initiative, archive artifacts, and clear active stat
    - If flimsy is not running (connection refused): Skip silently, do not block completion
    - If session ID is not available: Skip silently
 
-9. **Report Completion**
+9. **Risk Assessment** (only if a PR was opened in step 5)
+   - Skip this step entirely if step 5 did not result in an open PR
+   - Load the risk assessor profile:
+     ```
+     mcp__zombiekit__profile-compose with profiles: ["risk-assesor"]
+     ```
+   - Follow the profile's assessment process against the PR that was just created:
+     - Use `gh pr diff <PR-NUMBER>` to get the diff
+     - Run through all assessment steps (classify files, determine overall risk, identify
+       concerns, check modifiers)
+   - **Override the profile's interactive step 6**: Do NOT ask the user — post the
+     assessment comment automatically:
+     ```bash
+     gh pr comment <PR-NUMBER> --body "<full assessment output>"
+     ```
+   - If `gh` is unavailable or the comment fails: Display the assessment inline and
+     note that posting failed, then continue
+   - Surface the overall risk verdict (LOW / MEDIUM / HIGH) in the completion report
+
+10. **Report Completion**
    - Initiative name
    - Work items completed vs skipped
    - Total duration
