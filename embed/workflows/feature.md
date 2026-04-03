@@ -106,12 +106,12 @@ Goal: Produce a complete, audited feature spec through the research→create→a
 ### Artifact Structure
 
 ```
-history/{date}-{initiative}/
-  features/{number}-{name}/
-    business-spec.md
-    technical-requirements-research.md
-    research-summary.md
-    audit-reports/
+history/{id}-feature-{slug}/
+  INITIATIVE.md
+  business-spec.md
+  technical-requirements-research.md
+  research-summary.md
+  audit-reports/
 ```
 
 ### Behavior Rules

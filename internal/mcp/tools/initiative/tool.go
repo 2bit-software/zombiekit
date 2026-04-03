@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -31,8 +32,8 @@ func (t *Tool) SetEmbeddedFS(fsys fs.FS) {
 
 // ToolDefinition represents an MCP tool definition.
 type ToolDefinition struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 }
 
@@ -40,13 +41,13 @@ type ToolDefinition struct {
 func (t *Tool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "initiative",
-		Description: "Manage workflow initiative lifecycle. Actions: create (start new initiative), status (check current initiative), complete (finish initiative), list (show all initiatives).",
+		Description: "Manage workflow initiative lifecycle. Actions: create (start new initiative), status (check current initiative), complete (finish initiative), abandon (remove initiative and delete history), list (show all initiatives).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"action": map[string]any{
 					"type":        "string",
-					"enum":        []string{"create", "status", "complete", "list"},
+					"enum":        []string{"create", "status", "complete", "abandon", "list"},
 					"description": "The lifecycle action to perform",
 				},
 				"dir": map[string]any{
@@ -99,13 +100,15 @@ func (t *Tool) Execute(ctx context.Context, args map[string]any) (string, error)
 		return t.handleStatus(ctx, dir)
 	case "complete":
 		return t.handleComplete(ctx, dir)
+	case "abandon":
+		return t.handleAbandon(ctx, dir)
 	case "list":
 		return t.handleList(ctx, dir)
 	default:
 		return "", &ToolError{
 			Code:    "INVALID_ACTION",
 			Message: fmt.Sprintf("invalid action: '%s'", action),
-			Hint:    "Valid actions: create, status, complete, list",
+			Hint:    "Valid actions: create, status, complete, abandon, list",
 		}
 	}
 }
@@ -317,6 +320,36 @@ func (t *Tool) handleComplete(ctx context.Context, dir string) (string, error) {
 		Action:       "complete",
 		InitiativeID: initiativeID,
 		CompletedAt:  time.Now(),
+	}
+
+	return marshalResponse(resp)
+}
+
+// handleAbandon handles the abandon action — clears state and removes the history folder.
+func (t *Tool) handleAbandon(ctx context.Context, dir string) (string, error) {
+	initSvc, err := internalInit.NewService(dir)
+	if err != nil {
+		return "", fmt.Errorf("creating initiative service: %w", err)
+	}
+
+	result, err := initSvc.Abandon()
+	if err != nil {
+		var initErr *internalInit.InitiativeError
+		if errors.As(err, &initErr) {
+			return "", &ToolError{
+				Code:    initErr.Code,
+				Message: initErr.Message,
+				Hint:    initErr.Hint,
+			}
+		}
+		return "", err
+	}
+
+	resp := AbandonResponse{
+		Action:       "abandon",
+		InitiativeID: result.InitiativeID,
+		DeletedPath:  result.DeletedPath,
+		AbandonedAt:  time.Now(),
 	}
 
 	return marshalResponse(resp)

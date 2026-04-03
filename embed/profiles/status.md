@@ -77,7 +77,7 @@ Started: {date} | Last activity: {relative time}
 | Refactor | middleware | Pending | - |
 
 ## Current Focus
-**features/002-session-mgmt** - Planning phase
+**session-mgmt** - Planning phase
 
 Last action: Research completed
 Next: Run `/brains.plan` to create implementation plan

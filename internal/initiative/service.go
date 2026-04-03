@@ -240,6 +240,44 @@ func (s *Service) Complete() error {
 	return s.stateManager.Clear()
 }
 
+// AbandonResult contains the result of abandoning an initiative.
+type AbandonResult struct {
+	InitiativeID string
+	DeletedPath  string
+}
+
+// Abandon removes the active initiative entirely — clears state and deletes the history folder.
+func (s *Service) Abandon() (*AbandonResult, error) {
+	state, err := s.stateManager.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	if state.IsEmpty() {
+		return nil, &InitiativeError{
+			Code:    "NO_ACTIVE_INITIATIVE",
+			Message: "no active initiative to abandon",
+			Hint:    "There is no active initiative to abandon",
+		}
+	}
+
+	initPath := filepath.Join(s.workDir, state.Initiative)
+	initiativeID := filepath.Base(state.Initiative)
+
+	if err := os.RemoveAll(initPath); err != nil {
+		return nil, fmt.Errorf("removing initiative folder: %w", err)
+	}
+
+	if err := s.stateManager.Clear(); err != nil {
+		return nil, fmt.Errorf("clearing state: %w", err)
+	}
+
+	return &AbandonResult{
+		InitiativeID: initiativeID,
+		DeletedPath:  initPath,
+	}, nil
+}
+
 // StatusResult contains the status of the active initiative.
 type StatusResult struct {
 	Active         bool     `json:"active"`

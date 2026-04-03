@@ -106,10 +106,10 @@ stop and escalate to `/brains.new` instead of silently expanding scope.
 ### Artifact Structure
 
 ```
-history/{date}-{initiative}/
-  features/{number}-{name}/
-    notes.md
-    tasks.md
+history/{id}-feature-{slug}/
+  INITIATIVE.md
+  notes.md
+  tasks.md
 ```
 
 ### Behavior Rules

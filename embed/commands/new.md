@@ -11,6 +11,29 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding.
 
+## Pre-Classification: Active Initiative Check
+
+Before classifying the user's input, check for an active initiative:
+
+1. Call `mcp__zombiekit__initiative` with `action: "status"` and `dir` set to the working directory
+2. If `active: false` — skip to classification below
+3. If `active: true` — display the active initiative details and ask the user how to proceed:
+
+> **Active initiative detected:**
+> - **ID**: {initiative_id}
+> - **Type**: {initiative_type}
+> - **Current step**: {current_step} ({steps_completed}/{steps_total} steps)
+>
+> How would you like to proceed?
+> 1. **Close out early** — Mark the current initiative as complete (keeps history) and start new work
+> 2. **Delete history** — Remove the current initiative entirely and start fresh
+> 3. **Cancel** — Keep working on the current initiative
+
+Use `AskUserQuestion` to present these options. Then:
+- **Option 1**: Call `mcp__zombiekit__initiative` with `action: "complete"` and `dir`, then proceed to classification
+- **Option 2**: Call `mcp__zombiekit__initiative` with `action: "abandon"` and `dir`, then proceed to classification
+- **Option 3**: Stop execution. Tell the user: "Continuing with the current initiative. Use `/brains.next` to advance."
+
 ## Classification Task
 
 Analyze the user's input and determine which workflow type best matches their intent.
