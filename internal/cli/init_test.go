@@ -130,7 +130,7 @@ func TestInitCommand_DirectoryAlreadyExists(t *testing.T) {
 	// Verify files were copied again
 	entries, err = os.ReadDir(commandsDir)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(entries), "should have 4 command files")
+	assert.Equal(t, 5, len(entries), "should have 5 command files")
 }
 
 func TestInitCommand_FileCount(t *testing.T) {
@@ -143,7 +143,7 @@ func TestInitCommand_FileCount(t *testing.T) {
 	commandsDir := filepath.Join(tmpDir, ".claude", "commands")
 	entries, err := os.ReadDir(commandsDir)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(entries), "should have 4 command files")
+	assert.Equal(t, 5, len(entries), "should have 5 command files")
 
 	// Count template entries (7 files + init-spec-creator/ subdirectory = 8)
 	templatesDir := filepath.Join(tmpDir, ".brains", "templates")

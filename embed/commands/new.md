@@ -19,19 +19,25 @@ Analyze the user's input and determine which workflow type best matches their in
 
 | Workflow | Use When | Examples |
 |----------|----------|----------|
-| **feature** | Adding NEW functionality | "add notifications", "implement search", "create dashboard" |
+| **feature-light** | Small, well-understood feature — no research or audit needed | "quick feature", "feature-light", "fl: add X" |
+| **feature** | Adding NEW functionality with unknown scope | "add notifications", "implement search", "create dashboard" |
 | **bug** | Fixing BROKEN behavior | "fix login", "error when clicking", "doesn't work" |
 | **refactor** | Restructuring WITHOUT changing behavior | "cleanup auth code", "reorganize modules", "improve performance" |
+| **unmanaged** | User handles implementation independently — just scaffold the branch and bookkeeping | "unmanaged", "manual", "self-managed" |
 
 ### Classification Rules
 
-1. **feature**: User wants functionality that doesn't currently exist
-2. **bug**: User reports something that should work but doesn't
-3. **refactor**: User wants to improve code structure/quality without changing what it does
+1. **unmanaged**: User explicitly requests it ("unmanaged", "manual", "self-managed"). Never infer this — only route here on explicit request.
+2. **feature-light**: User explicitly requests it ("feature-light", "fl:", "quick feature") OR the work is clearly small and well-understood (single file change, trivial addition). When in doubt between feature and feature-light, prefer **feature**.
+3. **feature**: User wants functionality that doesn't currently exist and scope is uncertain
+4. **bug**: User reports something that should work but doesn't
+5. **refactor**: User wants to improve code structure/quality without changing what it does
 
 ### Decision Process
 
 1. Look for explicit keywords:
+   - "unmanaged", "manual", "self-managed" -> **unmanaged** (explicit only)
+   - "feature-light", "fl:", "quick feature", "small feature" -> **feature-light**
    - "add", "create", "implement", "new", "build" -> likely **feature**
    - "fix", "bug", "broken", "error", "failing", "doesn't work" -> likely **bug**
    - "refactor", "cleanup", "reorganize", "simplify", "improve" -> likely **refactor**
@@ -49,7 +55,7 @@ Before classification, check if the user input contains the keyword **automode**
 - If detected: Strip "automode" from the input text and set `AUTOMODE = true` for this session.
 - If not detected: Set `AUTOMODE = false`.
 
-When `AUTOMODE = true`, **every** call to `mcp__zombiekit__profile-compose` for the remainder of this workflow MUST include `"automode"` as an additional profile. For example, instead of `profiles: ["feature"]`, use `profiles: ["feature", "automode"]`.
+When `AUTOMODE = true`, every `mcp__zombiekit__workflow-load` call for `feature`/`bug`/`refactor` must also load the automode profile via `mcp__zombiekit__profile-compose` with `profiles: ["automode"]` immediately after.
 
 ### After Classification
 
@@ -57,9 +63,10 @@ Once you've determined the type:
 
 1. State your classification and brief rationale
 2. Check for Linear ticket reference (see below)
-3. Load the corresponding profile using `mcp__zombiekit__profile-compose`:
-   - Normal mode: `profiles: ["{detected_type}"]`
-   - AutoMode: `profiles: ["{detected_type}", "automode"]`
+3. Dispatch based on type — all use `mcp__zombiekit__workflow-load` with `type: "workflow"`:
+   - **unmanaged**: `name: "unmanaged"`. No automode support.
+   - **feature-light**: `name: "feature-light"`. AutoMode is handled inside the workflow — do not add it here.
+   - **feature / bug / refactor**: `name: "{detected_type}"`. After loading, if AUTOMODE is true also load `mcp__zombiekit__profile-compose` with `profiles: ["automode"]`.
 
 Example output:
 
@@ -105,4 +112,4 @@ User input: "work on DEV-101 add commit offer"
    LINEAR_TITLE: Have the /brains.complete command also offer to write a commit"
 ```
 
-Then call `mcp__zombiekit__profile-compose` with the detected profile name (and `"automode"` if active) and the enriched arguments.
+Then dispatch using `mcp__zombiekit__workflow-load` with `type: "workflow"` for all types, passing the enriched arguments. If AUTOMODE is active and the type is `feature`/`bug`/`refactor`, also call `mcp__zombiekit__profile-compose` with `profiles: ["automode"]`.

@@ -14,6 +14,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v2"
 
+	zombiekit "github.com/2bit-software/zombiekit"
 	"github.com/2bit-software/zombiekit/internal/config"
 	"github.com/2bit-software/zombiekit/internal/database"
 	"github.com/2bit-software/zombiekit/internal/logging"
@@ -151,7 +152,7 @@ func runServe(c *cli.Context) error {
 	workDir, _ := os.Getwd()
 
 	// Create MCP server with tool configuration
-	server := mcp.NewServer(storage, recallStorage, toolCfg, workDir)
+	server := mcp.NewServer(storage, recallStorage, toolCfg, zombiekit.EmbeddedBrainsCommands, zombiekit.EmbeddedWorkflows, workDir)
 	defer server.Close()
 
 	port := c.Int("port")

@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit"
 	"github.com/2bit-software/zombiekit/internal/profile"
+	"github.com/urfave/cli/v2"
 )
 
 // copyResult tracks the outcome of file copying operations.
@@ -219,7 +219,7 @@ func initLocal(force bool) error {
 		return fmt.Errorf("getting current directory: %w", err)
 	}
 
-	if err := validateEmbeddedFS(zombiekit.EmbeddedCommands, "integrations/claude/commands", "commands"); err != nil {
+	if err := validateEmbeddedFS(zombiekit.EmbeddedClaudeCommands, "integrations/claude/commands", "commands"); err != nil {
 		return err
 	}
 	if err := validateEmbeddedFS(zombiekit.EmbeddedTemplates, "templates", "templates"); err != nil {
@@ -230,7 +230,7 @@ func initLocal(force bool) error {
 
 	claudeDir := filepath.Join(cwd, ".claude")
 	commandsDir := filepath.Join(claudeDir, "commands")
-	if err := copyToDir(&total, zombiekit.EmbeddedCommands, "integrations/claude/commands", []string{claudeDir, commandsDir}, force); err != nil {
+	if err := copyToDir(&total, zombiekit.EmbeddedClaudeCommands, "integrations/claude/commands", []string{claudeDir, commandsDir}, force); err != nil {
 		return err
 	}
 
