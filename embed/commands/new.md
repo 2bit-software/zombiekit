@@ -34,6 +34,28 @@ Use `AskUserQuestion` to present these options. Then:
 - **Option 2**: Call `mcp__zombiekit__initiative` with `action: "abandon"` and `dir`, then proceed to classification
 - **Option 3**: Stop execution. Tell the user: "Continuing with the current initiative. Use `/brains.next` to advance."
 
+## Pre-Classification: Branch Check
+
+Before classifying, check if the current branch might cause stacked PRs:
+
+1. Get the current branch name via `mcp__zombiekit__git` with `action: "status"` (or use Bash: `git branch --show-current`)
+2. If the branch is `main`, `master`, or `develop` — skip to Classification below
+3. If on any other branch, warn the user and offer options via `AskUserQuestion`:
+
+> **You're currently on branch `{branch_name}`.**
+> Starting new work here will stack changes on top of this branch.
+
+Present these options:
+- **Switch to `main`** — Check out main and pull latest
+- **Switch to `develop`** — Check out develop and pull latest
+- **Type a branch name** — Switch to a custom base branch (for non-standard main branches)
+- **Stay on `{branch_name}`** — Continue on the current branch (stack intentionally)
+
+Then:
+- **Switch to main/develop**: Run `git checkout {branch} && git pull` via Bash. If checkout fails (branch doesn't exist), inform the user and re-prompt.
+- **Type a branch name**: The user provides a branch name via the "Other" free-text option. Run `git checkout {input} && git pull`. If it fails, inform the user and re-prompt.
+- **Stay**: Proceed to Classification without switching.
+
 ## Classification Task
 
 Analyze the user's input and determine which workflow type best matches their intent.
