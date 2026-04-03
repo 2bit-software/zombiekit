@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -99,7 +100,7 @@ func fileExists(path string) bool {
 
 // initGlobal implements the --global flag behavior.
 // Creates ~/.brains/ with profiles/, scripts/, and templates/.
-func initGlobal(c *cli.Context) error {
+func initGlobal(c *cli.Context, claude bool) error {
 	force := c.Bool("force")
 
 	homeDir, err := os.UserHomeDir()
@@ -138,6 +139,22 @@ func initGlobal(c *cli.Context) error {
 	}
 	if err := copyToDir(&total, zombiekit.EmbeddedTemplates, "templates", []string{templatesDir}, force); err != nil {
 		return err
+	}
+
+	if claude {
+		if err := validateEmbeddedFS(zombiekit.EmbeddedClaudeCommands, "integrations/claude/commands", "commands"); err != nil {
+			return err
+		}
+		claudeDir := filepath.Join(homeDir, ".claude")
+		commandsDir := filepath.Join(claudeDir, "commands")
+		if err := copyToDir(&total, zombiekit.EmbeddedClaudeCommands, "integrations/claude/commands", []string{claudeDir, commandsDir}, force); err != nil {
+			return err
+		}
+
+		settingsPath := filepath.Join(claudeDir, "settings.json")
+		if err := ensureMCPServer(settingsPath); err != nil {
+			total.errors = append(total.errors, fmt.Errorf("configuring MCP server: %w", err))
+		}
 	}
 
 	// Register in registry (best effort)
@@ -213,25 +230,32 @@ func printInitSummary(total copyResult) {
 
 // initLocal performs full ZombieKit setup in the current directory.
 // Creates .claude/commands/ with embedded commands and .brains/templates/ with templates.
-func initLocal(force bool) error {
+func initLocal(force, claude bool) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getting current directory: %w", err)
 	}
 
-	if err := validateEmbeddedFS(zombiekit.EmbeddedClaudeCommands, "integrations/claude/commands", "commands"); err != nil {
-		return err
-	}
 	if err := validateEmbeddedFS(zombiekit.EmbeddedTemplates, "templates", "templates"); err != nil {
 		return err
 	}
 
 	total := copyResult{}
 
-	claudeDir := filepath.Join(cwd, ".claude")
-	commandsDir := filepath.Join(claudeDir, "commands")
-	if err := copyToDir(&total, zombiekit.EmbeddedClaudeCommands, "integrations/claude/commands", []string{claudeDir, commandsDir}, force); err != nil {
-		return err
+	if claude {
+		if err := validateEmbeddedFS(zombiekit.EmbeddedClaudeCommands, "integrations/claude/commands", "commands"); err != nil {
+			return err
+		}
+		claudeDir := filepath.Join(cwd, ".claude")
+		commandsDir := filepath.Join(claudeDir, "commands")
+		if err := copyToDir(&total, zombiekit.EmbeddedClaudeCommands, "integrations/claude/commands", []string{claudeDir, commandsDir}, force); err != nil {
+			return err
+		}
+
+		settingsPath := filepath.Join(claudeDir, "settings.json")
+		if err := ensureMCPServer(settingsPath); err != nil {
+			total.errors = append(total.errors, fmt.Errorf("configuring MCP server: %w", err))
+		}
 	}
 
 	brainsDir := filepath.Join(cwd, ".brains")
@@ -246,6 +270,55 @@ func initLocal(force bool) error {
 	}
 
 	printInitSummary(total)
+	return nil
+}
+
+// ensureMCPServer adds the zombiekit MCP server entry to a Claude settings.json file.
+// Creates the file if it doesn't exist. Preserves all existing settings.
+func ensureMCPServer(settingsPath string) error {
+	var settings map[string]any
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading %s: %w", settingsPath, err)
+	}
+
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return fmt.Errorf("parsing %s: %w", settingsPath, err)
+		}
+	}
+
+	if settings == nil {
+		settings = make(map[string]any)
+	}
+
+	servers, _ := settings["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = make(map[string]any)
+	}
+
+	if _, exists := servers["zombiekit"]; exists {
+		fmt.Println("  MCP server zombiekit already configured")
+		return nil
+	}
+
+	servers["zombiekit"] = map[string]any{
+		"command": "brains",
+		"args":    []string{"serve", "--mode", "stdio"},
+	}
+	settings["mcpServers"] = servers
+
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling settings: %w", err)
+	}
+
+	if err := os.WriteFile(settingsPath, append(out, '\n'), 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", settingsPath, err)
+	}
+
+	fmt.Printf("  Configured MCP server in %s\n", settingsPath)
 	return nil
 }
 
@@ -289,6 +362,10 @@ func newInitCommand() *cli.Command {
 				Name:  "force",
 				Usage: "Overwrite existing files",
 			},
+			&cli.BoolFlag{
+				Name:  "claude",
+				Usage: "Install Claude Code slash commands to .claude/commands/",
+			},
 			&cli.StringFlag{
 				Name:    "source",
 				Aliases: []string{"s"},
@@ -298,14 +375,13 @@ func newInitCommand() *cli.Command {
 		},
 		Action: func(c *cli.Context) error {
 			force := c.Bool("force")
+			claude := c.Bool("claude")
 
-			// If --global is specified, use existing behavior (profile directory only)
 			if c.Bool("global") {
-				return initGlobal(c)
+				return initGlobal(c, claude)
 			}
 
-			// Full local setup: .claude/commands/ and .brains/templates/
-			return initLocal(force)
+			return initLocal(force, claude)
 		},
 	}
 }
