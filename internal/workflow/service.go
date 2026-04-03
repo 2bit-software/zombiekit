@@ -34,6 +34,8 @@ type Workflow struct {
 type Service struct {
 	workingDir string
 	homeDir    string
+	subdir     string // filesystem subdirectory name: "workflows" or "commands"
+	embeddedFS fs.FS  // embedded FS for this type; nil falls back to globalEmbeddedFS
 }
 
 // Global registry for embedded workflows filesystem
@@ -63,9 +65,17 @@ func ResetEmbeddedFS() {
 	globalEmbeddedFS = nil
 }
 
-// NewService creates a new workflow Service.
+// NewService creates a new workflow Service using the global embedded FS.
 // If workingDir is empty, it uses the current working directory.
 func NewService(workingDir string) (*Service, error) {
+	return NewServiceForSubdir(workingDir, "workflows", nil)
+}
+
+// NewServiceForSubdir creates a Service for a specific content type.
+// subdir controls the directory name used in both filesystem and embedded resolution
+// (e.g., "workflows" resolves .brains/workflows/ and embedded workflows/).
+// embeddedFS overrides the global embedded FS; pass nil to use the global.
+func NewServiceForSubdir(workingDir, subdir string, embeddedFS fs.FS) (*Service, error) {
 	if workingDir == "" {
 		var err error
 		workingDir, err = os.Getwd()
@@ -79,20 +89,22 @@ func NewService(workingDir string) (*Service, error) {
 	return &Service{
 		workingDir: workingDir,
 		homeDir:    homeDir,
+		subdir:     subdir,
+		embeddedFS: embeddedFS,
 	}, nil
 }
 
 // Load loads a workflow by name.
-// Resolution order: local (.brains/workflows/) > global (~/.brains/workflows/) > embedded.
+// Resolution order: local (.brains/{subdir}/) > global (~/.brains/{subdir}/) > embedded.
 func (s *Service) Load(name string) (*Workflow, error) {
 	// Try local first
-	if wf := s.loadFromDir(filepath.Join(s.workingDir, ".brains", "workflows"), name, "local"); wf != nil {
+	if wf := s.loadFromDir(filepath.Join(s.workingDir, ".brains", s.subdir), name, "local"); wf != nil {
 		return wf, nil
 	}
 
 	// Try global
 	if s.homeDir != "" {
-		if wf := s.loadFromDir(filepath.Join(s.homeDir, ".brains", "workflows"), name, "global"); wf != nil {
+		if wf := s.loadFromDir(filepath.Join(s.homeDir, ".brains", s.subdir), name, "global"); wf != nil {
 			return wf, nil
 		}
 	}
@@ -123,15 +135,18 @@ func (s *Service) loadFromDir(dir, name, source string) *Workflow {
 
 // loadFromEmbedded loads a workflow from the embedded filesystem.
 func (s *Service) loadFromEmbedded(name string) *Workflow {
-	globalEmbeddedMu.RLock()
-	fsys := globalEmbeddedFS
-	globalEmbeddedMu.RUnlock()
+	fsys := s.embeddedFS
+	if fsys == nil {
+		globalEmbeddedMu.RLock()
+		fsys = globalEmbeddedFS
+		globalEmbeddedMu.RUnlock()
+	}
 
 	if fsys == nil {
 		return nil
 	}
 
-	filePath := "workflows/" + name + ".md"
+	filePath := s.subdir + "/" + name + ".md"
 	content, err := fs.ReadFile(fsys, filePath)
 	if err != nil {
 		return nil
@@ -206,11 +221,11 @@ func (s *Service) List() ([]*Workflow, error) {
 
 	// 2. Global
 	if s.homeDir != "" {
-		s.loadAllFromDir(filepath.Join(s.homeDir, ".brains", "workflows"), "global", workflowMap)
+		s.loadAllFromDir(filepath.Join(s.homeDir, ".brains", s.subdir), "global", workflowMap)
 	}
 
 	// 1. Local (highest)
-	s.loadAllFromDir(filepath.Join(s.workingDir, ".brains", "workflows"), "local", workflowMap)
+	s.loadAllFromDir(filepath.Join(s.workingDir, ".brains", s.subdir), "local", workflowMap)
 
 	// Convert to slice
 	workflows := make([]*Workflow, 0, len(workflowMap))
@@ -240,15 +255,18 @@ func (s *Service) loadAllFromDir(dir, source string, out map[string]*Workflow) {
 }
 
 func (s *Service) loadAllFromEmbedded(out map[string]*Workflow) {
-	globalEmbeddedMu.RLock()
-	fsys := globalEmbeddedFS
-	globalEmbeddedMu.RUnlock()
+	fsys := s.embeddedFS
+	if fsys == nil {
+		globalEmbeddedMu.RLock()
+		fsys = globalEmbeddedFS
+		globalEmbeddedMu.RUnlock()
+	}
 
 	if fsys == nil {
 		return
 	}
 
-	entries, err := fs.ReadDir(fsys, "workflows")
+	entries, err := fs.ReadDir(fsys, s.subdir)
 	if err != nil {
 		return
 	}

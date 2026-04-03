@@ -10,7 +10,10 @@ import (
 var embeddedProfiles embed.FS
 
 //go:embed embed/integrations/claude/commands/*
-var embeddedCommands embed.FS
+var embeddedClaudeCommands embed.FS
+
+//go:embed embed/commands/*
+var embeddedBrainsCommands embed.FS
 
 //go:embed embed/templates embed/templates/init-spec-creator/*
 var embeddedTemplates embed.FS
@@ -24,11 +27,12 @@ var embeddedWorkflows embed.FS
 // Exported filesystems with embed/ prefix stripped via fs.Sub.
 // Consumers see the same paths they expect (e.g., "profiles/*", "workflows/*").
 var (
-	EmbeddedProfiles  fs.FS
-	EmbeddedCommands  fs.FS
-	EmbeddedTemplates fs.FS
-	EmbeddedScripts   fs.FS
-	EmbeddedWorkflows fs.FS
+	EmbeddedProfiles       fs.FS
+	EmbeddedClaudeCommands fs.FS
+	EmbeddedBrainsCommands fs.FS
+	EmbeddedTemplates      fs.FS
+	EmbeddedScripts        fs.FS
+	EmbeddedWorkflows      fs.FS
 )
 
 func init() {
@@ -37,9 +41,13 @@ func init() {
 	if err != nil {
 		panic("embed: profiles: " + err.Error())
 	}
-	EmbeddedCommands, err = fs.Sub(embeddedCommands, "embed")
+	EmbeddedClaudeCommands, err = fs.Sub(embeddedClaudeCommands, "embed")
 	if err != nil {
-		panic("embed: commands: " + err.Error())
+		panic("embed: claude commands: " + err.Error())
+	}
+	EmbeddedBrainsCommands, err = fs.Sub(embeddedBrainsCommands, "embed")
+	if err != nil {
+		panic("embed: brains commands: " + err.Error())
 	}
 	EmbeddedTemplates, err = fs.Sub(embeddedTemplates, "embed")
 	if err != nil {

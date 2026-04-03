@@ -36,28 +36,7 @@ tasks:
         echo ""
         {{.INSTALL_DIR}}/brains version
         echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "Would you like to add zombiekit as an MCP server"
-        echo "for Claude Code? (user scope, available in all projects)"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
-        printf "Add to Claude Code? [y/N] "
-        read -r REPLY
-        if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
-          if command -v claude >/dev/null 2>&1; then
-            claude mcp add --transport stdio --scope user zombiekit -- {{.INSTALL_DIR}}/brains serve --mode stdio
-            echo "Added zombiekit MCP server (user scope)."
-            echo "Restart Claude Code to pick up the new MCP server."
-          else
-            echo "claude CLI not found. Add manually by running:"
-            echo ""
-            echo "  claude mcp add --transport stdio --scope user zombiekit -- {{.INSTALL_DIR}}/brains serve --mode stdio"
-          fi
-        else
-          echo "Skipped. You can add it later by running:"
-          echo ""
-          echo "  claude mcp add --transport stdio --scope user zombiekit -- {{.INSTALL_DIR}}/brains serve --mode stdio"
-        fi
+      - task --taskfile Taskfile.dev.yml mcp:register
 
   up:
     desc: Start ZombieKit stack

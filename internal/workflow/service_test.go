@@ -253,6 +253,9 @@ This is the LOCAL override.
 		ResetEmbeddedFS()
 		defer ResetEmbeddedFS()
 
+		// Isolate from real ~/.brains/workflows/ which may exist on the test machine.
+		t.Setenv("HOME", t.TempDir())
+
 		tempDir := t.TempDir()
 		svc, err := NewService(tempDir)
 		require.NoError(t, err)

@@ -5,6 +5,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"io/fs"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -12,7 +13,6 @@ import (
 	"github.com/2bit-software/zombiekit/internal/config"
 	internalgit "github.com/2bit-software/zombiekit/internal/git"
 	"github.com/2bit-software/zombiekit/internal/mcp/tools/codereasoning"
-	ghprtool "github.com/2bit-software/zombiekit/internal/mcp/tools/ghpr"
 	gittool "github.com/2bit-software/zombiekit/internal/mcp/tools/git"
 	initiativetool "github.com/2bit-software/zombiekit/internal/mcp/tools/initiative"
 	profiletool "github.com/2bit-software/zombiekit/internal/mcp/tools/profile"
@@ -37,7 +37,6 @@ type Server struct {
 	initiativeTool   *initiativetool.Tool
 	recallTool       *recalltool.Tool
 	gitTool          *gittool.Tool
-	ghPRTool         *ghprtool.Tool
 	skillInstallTool *skillinstalltool.Tool
 	config           *config.Config
 }
@@ -45,8 +44,9 @@ type Server struct {
 // NewServer creates a new MCP server with the given storage backend and configuration.
 // If cfg is nil, all tools are enabled by default.
 // recallStorage may be nil if recall features are not needed.
+// commandsFS and workflowsFS are the embedded filesystems for commands and workflows respectively.
 // workDir is the working directory for git operations (empty string disables git tools).
-func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config.Config, workDir ...string) *Server {
+func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config.Config, commandsFS, workflowsFS fs.FS, workDir ...string) *Server {
 	if cfg == nil {
 		cfg = config.NewDefaultConfig()
 	}
@@ -61,7 +61,7 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 	stickyMemoryTool := stickymemory.NewTool(storage)
 	codeReasoningTool := codereasoning.NewTool(sessionManager)
 	profTool := profiletool.NewTool()
-	wfTool := workflowtool.NewTool()
+	wfTool := workflowtool.NewTool(commandsFS, workflowsFS)
 	initiativeToolInst := initiativetool.NewTool()
 
 	var recallToolInst *recalltool.Tool
@@ -71,7 +71,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 
 	// Create git tools if a working directory is provided
 	var gitToolInst *gittool.Tool
-	var ghPRToolInst *ghprtool.Tool
 	gitWorkDir := ""
 	if len(workDir) > 0 && workDir[0] != "" {
 		gitWorkDir = workDir[0]
@@ -79,9 +78,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 	if gitWorkDir != "" {
 		if runner, err := internalgit.NewRunner(gitWorkDir); err == nil {
 			gitToolInst = gittool.NewTool(runner)
-		}
-		if prTool, err := ghprtool.NewTool(gitWorkDir); err == nil {
-			ghPRToolInst = prTool
 		}
 	}
 
@@ -97,7 +93,6 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 		initiativeTool:   initiativeToolInst,
 		recallTool:       recallToolInst,
 		gitTool:          gitToolInst,
-		ghPRTool:         ghPRToolInst,
 		skillInstallTool: skillinstalltool.NewTool(),
 		config:           cfg,
 	}
@@ -185,9 +180,6 @@ func (s *Server) registerTools() {
 
 	// Register git tools
 	s.registerGitTool()
-
-	// Register gh-pr tool
-	s.registerGHPRTool()
 
 	// Register skill-install tool
 	if s.config.IsToolEnabled("skill-install") {
@@ -430,9 +422,9 @@ func (s *Server) handleInitiative(ctx context.Context, req mcp.CallToolRequest) 
 	return mcp.NewToolResultText(result), nil
 }
 
-// registerWorkflowTool registers the workflow-compose MCP tool.
+// registerWorkflowTool registers the workflow-load MCP tool.
 func (s *Server) registerWorkflowTool() {
-	if !s.config.IsToolEnabled("workflow-compose") {
+	if !s.config.IsToolEnabled("workflow-load") {
 		return
 	}
 
@@ -441,7 +433,12 @@ func (s *Server) registerWorkflowTool() {
 		mcp.WithDescription(wfDef.Description),
 		mcp.WithString("name",
 			mcp.Required(),
-			mcp.Description("Workflow name to load"),
+			mcp.Description("Name of the command or workflow to load"),
+		),
+		mcp.WithString("type",
+			mcp.Required(),
+			mcp.Description("Content type to load"),
+			mcp.Enum("command", "workflow"),
 		),
 		mcp.WithString("working_directory",
 			mcp.Description("Working directory for resolution"),
@@ -450,14 +447,14 @@ func (s *Server) registerWorkflowTool() {
 	s.mcpServer.AddTool(wfMCPTool, s.handleWorkflow)
 }
 
-// handleWorkflow handles workflow-compose tool calls.
+// handleWorkflow handles workflow-load tool calls.
 func (s *Server) handleWorkflow(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	args, ok := req.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError("invalid arguments format"), nil
 	}
 
-	result, err := s.workflowTool.HandleCompose(ctx, args)
+	result, err := s.workflowTool.HandleLoad(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -597,54 +594,6 @@ func (s *Server) handleGit(ctx context.Context, req mcp.CallToolRequest) (*mcp.C
 	}
 
 	result, err := s.gitTool.Execute(ctx, args)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(result), nil
-}
-
-// registerGHPRTool registers the gh-pr MCP tool.
-func (s *Server) registerGHPRTool() {
-	if s.ghPRTool == nil || !s.config.IsToolEnabled("gh-pr") {
-		return
-	}
-
-	prDef := s.ghPRTool.Definition()
-	prMCPTool := mcp.NewTool(prDef.Name,
-		mcp.WithDescription(prDef.Description),
-		mcp.WithString("action",
-			mcp.Required(),
-			mcp.Description("PR operation to perform"),
-			mcp.Enum("view", "create", "comment", "edit"),
-		),
-		mcp.WithString("title",
-			mcp.Description("PR title (required for create, optional for edit)"),
-		),
-		mcp.WithString("body",
-			mcp.Description("PR body or comment text (required for create/comment, optional for edit)"),
-		),
-		mcp.WithString("base",
-			mcp.Description("Base branch for PR (default: main)"),
-		),
-		mcp.WithBoolean("draft",
-			mcp.Description("Create PR as draft (default: false)"),
-		),
-		mcp.WithNumber("pr_number",
-			mcp.Description("PR number (required for comment/edit)"),
-		),
-	)
-	s.mcpServer.AddTool(prMCPTool, s.handleGHPR)
-}
-
-// handleGHPR handles gh-pr tool calls.
-func (s *Server) handleGHPR(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok {
-		return mcp.NewToolResultError("invalid arguments format"), nil
-	}
-
-	result, err := s.ghPRTool.Execute(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

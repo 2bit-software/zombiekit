@@ -19,6 +19,40 @@ tasks:
     cmds:
       - task --taskfile Taskfile.dev.yml --sort alphanumeric --list
 
+  # === MCP ===
+
+  mcp:register:
+    desc: Register zombiekit as a Claude Code MCP server (skips if already registered)
+    vars:
+      INSTALL_DIR:
+        sh: go env GOBIN || echo "$HOME/go/bin"
+    status:
+      - command -v claude >/dev/null 2>&1 && claude mcp list 2>/dev/null | grep -q "^zombiekit"
+    cmds:
+      - |
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Would you like to add zombiekit as an MCP server"
+        echo "for Claude Code? (user scope, available in all projects)"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        printf "Add to Claude Code? [y/N] "
+        read -r REPLY
+        if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
+          if command -v claude >/dev/null 2>&1; then
+            claude mcp add --transport stdio --scope user zombiekit -- {{.INSTALL_DIR}}/brains serve --mode stdio
+            echo "Added zombiekit MCP server (user scope)."
+            echo "Restart Claude Code to pick up the new MCP server."
+          else
+            echo "claude CLI not found. Add manually by running:"
+            echo ""
+            echo "  claude mcp add --transport stdio --scope user zombiekit -- {{.INSTALL_DIR}}/brains serve --mode stdio"
+          fi
+        else
+          echo "Skipped. You can add it later by running:"
+          echo ""
+          echo "  claude mcp add --transport stdio --scope user zombiekit -- {{.INSTALL_DIR}}/brains serve --mode stdio"
+        fi
+
   # === Setup ===
 
   setup:
@@ -168,29 +202,32 @@ tasks:
 
   proto:
     desc: Generate Go code from proto files
+    dir: proto
     cmds:
       - buf generate
     sources:
       - proto/**/*.proto
-      - buf.yaml
-      - buf.gen.yaml
+      - proto/buf.yaml
+      - proto/buf.gen.yaml
     generates:
-      - gen/**/*.go
+      - proto/gen/**/*.go
 
   proto:lint:
     desc: Lint proto files
+    dir: proto
     cmds:
       - buf lint
 
   proto:breaking:
     desc: Check for breaking changes against git HEAD
+    dir: proto
     cmds:
-      - buf breaking --against '.git#branch=main'
+      - buf breaking --against '../.git#branch=main,subdir=proto'
 
   proto:clean:
     desc: Remove generated proto files
     cmds:
-      - rm -rf gen/
+      - rm -rf proto/gen/
 
   # === Quality ===
 

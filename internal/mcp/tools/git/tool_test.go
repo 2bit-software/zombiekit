@@ -162,6 +162,34 @@ func TestStageRejectsNonexistentFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not exist")
 }
 
+func TestStageDeletedFile(t *testing.T) {
+	dir := initTestRepo(t)
+	tool := newTool(t, dir)
+
+	// Create and commit a file
+	trackedFile := filepath.Join(dir, "tracked.txt")
+	require.NoError(t, os.WriteFile(trackedFile, []byte("hello"), 0644))
+	for _, args := range [][]string{
+		{"git", "add", "tracked.txt"},
+		{"git", "commit", "-m", "add tracked file"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		require.NoError(t, cmd.Run())
+	}
+
+	// Delete the file from disk
+	require.NoError(t, os.Remove(trackedFile))
+
+	// Stage the deletion via the tool
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action": "stage",
+		"files":  "tracked.txt",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "tracked.txt")
+}
+
 func TestCommit(t *testing.T) {
 	dir := initTestRepo(t)
 	tool := newTool(t, dir)
@@ -204,7 +232,6 @@ func TestCommitRejectsNoStagedChanges(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "nothing staged")
 }
-
 
 func TestInvalidAction(t *testing.T) {
 	dir := initTestRepo(t)
