@@ -413,7 +413,7 @@ const file_zombiekit_brains_common_v1_common_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value\x12\x16\n" +
 	"\x06weight\x18\x03 \x01(\x02R\x06weightB\x84\x02\n" +
-	"\x1ecom.zombiekit.brains.common.v1B\vCommonProtoP\x01ZJgithub.com/2bit-software/zombiekit/gen/zombiekit/brains/common/v1;commonv1\xa2\x02\x03ZBC\xaa\x02\x1aZombiekit.Brains.Common.V1\xca\x02\x1aZombiekit\\Brains\\Common\\V1\xe2\x02&Zombiekit\\Brains\\Common\\V1\\GPBMetadata\xea\x02\x1dZombiekit::Brains::Common::V1b\x06proto3"
+	"\x1ecom.zombiekit.brains.common.v1B\vCommonProtoP\x01ZJgithub.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/common/v1;commonv1\xa2\x02\x03ZBC\xaa\x02\x1aZombiekit.Brains.Common.V1\xca\x02\x1aZombiekit\\Brains\\Common\\V1\xe2\x02&Zombiekit\\Brains\\Common\\V1\\GPBMetadata\xea\x02\x1dZombiekit::Brains::Common::V1b\x06proto3"
 
 var (
 	file_zombiekit_brains_common_v1_common_proto_rawDescOnce sync.Once

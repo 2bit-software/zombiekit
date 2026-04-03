@@ -7,7 +7,7 @@
 package workflowv1
 
 import (
-	v1 "github.com/2bit-software/zombiekit/gen/zombiekit/brains/common/v1"
+	v1 "github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -975,7 +975,7 @@ const file_zombiekit_brains_workflow_v1_workflow_proto_rawDesc = "" +
 	"UpdateStep\x12/.zombiekit.brains.workflow.v1.UpdateStepRequest\x1a0.zombiekit.brains.workflow.v1.UpdateStepResponse\x12\x87\x01\n" +
 	"\x12CompleteInitiative\x127.zombiekit.brains.workflow.v1.CompleteInitiativeRequest\x1a8.zombiekit.brains.workflow.v1.CompleteInitiativeResponse\x12~\n" +
 	"\x0fListInitiatives\x124.zombiekit.brains.workflow.v1.ListInitiativesRequest\x1a5.zombiekit.brains.workflow.v1.ListInitiativesResponseB\x94\x02\n" +
-	" com.zombiekit.brains.workflow.v1B\rWorkflowProtoP\x01ZNgithub.com/2bit-software/zombiekit/gen/zombiekit/brains/workflow/v1;workflowv1\xa2\x02\x03ZBW\xaa\x02\x1cZombiekit.Brains.Workflow.V1\xca\x02\x1cZombiekit\\Brains\\Workflow\\V1\xe2\x02(Zombiekit\\Brains\\Workflow\\V1\\GPBMetadata\xea\x02\x1fZombiekit::Brains::Workflow::V1b\x06proto3"
+	" com.zombiekit.brains.workflow.v1B\rWorkflowProtoP\x01ZNgithub.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/workflow/v1;workflowv1\xa2\x02\x03ZBW\xaa\x02\x1cZombiekit.Brains.Workflow.V1\xca\x02\x1cZombiekit\\Brains\\Workflow\\V1\xe2\x02(Zombiekit\\Brains\\Workflow\\V1\\GPBMetadata\xea\x02\x1fZombiekit::Brains::Workflow::V1b\x06proto3"
 
 var (
 	file_zombiekit_brains_workflow_v1_workflow_proto_rawDescOnce sync.Once
