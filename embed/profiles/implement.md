@@ -97,3 +97,21 @@ Execution steps:
 - Document every decision in progress.md
 - Stop and escalate if spec issues discovered
 - Never guess at unclear requirements
+
+## Function Comment Style
+
+When creating or materially modifying functions and methods, every non-test function MUST have a doc comment that describes the outcome from the caller's perspective — not how it works internally.
+
+**Litmus test**: Would the comment still be true after a complete reimplementation of the function's internals? If yes, it's business-language. If not, it's a technical description.
+
+- Good: `// ImportMessages brings external conversation history into the system.`
+- Good: `// ResolveConflict picks the most recent version when two edits collide.`
+- Bad: `// ImportMessages iterates over the input slice and calls db.Insert for each.`
+- Bad: `// ResolveConflict compares timestamps and returns the newer struct.`
+
+**Rules:**
+- Reuse spec language where it fits naturally
+- Interface method declarations follow the same rule — describe the contract
+- Generated code (`_gen.go`, `.pb.go`, `_string.go`, or files with `// Code generated ... DO NOT EDIT.`) is excluded
+- Test code follows its own existing comment conventions (see "Test Comment Style" in spec/task templates)
+- "Creates or updates" means material changes to a function signature or body — trivial edits (typo fixes, whitespace) do not trigger this requirement
