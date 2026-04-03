@@ -17,6 +17,7 @@ var KnownTools = []string{
 	"recall-list-conversations",
 	"recall-read-conversation",
 	"git",
+	"gh-pr",
 	"skill-install",
 }
 
