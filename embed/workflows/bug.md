@@ -112,14 +112,14 @@ Goal: Investigate a bug, determine root cause, classify the failure, and produce
 ### Artifact Structure
 
 ```
-history/{date}-{initiative}/
-  bugs/{number}-{name}/
-    report.md
-    reproduction.md
-    investigation.md
-    classification.md
-    fix-plan.md
-    spec-update.md  (if spec gap)
+history/{id}-bug-{slug}/
+  INITIATIVE.md
+  report.md
+  reproduction.md
+  investigation.md
+  classification.md
+  fix-plan.md
+  spec-update.md  (if spec gap)
 ```
 
 ### Behavior Rules

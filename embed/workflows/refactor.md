@@ -102,14 +102,14 @@ Goal: Create a safe refactoring specification that restructures code while prese
 ### Artifact Structure
 
 ```
-history/{date}-{initiative}/
-  refactors/{number}-{name}/
-    goal.md
-    constraints.md
-    dependency-analysis.md
-    refactor-plan.md
-    safety-net.md
-    progress.md
+history/{id}-refactor-{slug}/
+  INITIATIVE.md
+  goal.md
+  constraints.md
+  dependency-analysis.md
+  refactor-plan.md
+  safety-net.md
+  progress.md
 ```
 
 ### Behavior Rules

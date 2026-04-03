@@ -86,15 +86,15 @@ Execution steps:
 ## Artifact Structure
 
 ```
-history/{date}-{initiative}/
-  bugs/{number}-{name}/
-    report.md
-    reproduction.md
-    investigation.md
-    classification.md
-    fix-plan.md
-    spec-update.md (if spec gap)
-    verification.md
+history/{id}-bug-{slug}/
+  INITIATIVE.md
+  report.md
+  reproduction.md
+  investigation.md
+  classification.md
+  fix-plan.md
+  spec-update.md (if spec gap)
+  verification.md
 ```
 
 ## Behavior Rules
