@@ -29,6 +29,7 @@ Goal: Create a safe refactoring specification that restructures code while prese
    - If no active initiative: Create one with an auto-generated name derived from the user input
    - If active and `--new` flag present: Complete current, create new
    - If active: Add this refactor to the current initiative
+   - Check if user input contains `USE_GRAPHITE: true` metadata block — if present, pass `use_graphite: true` when calling `mcp__zombiekit__initiative` create
 
 2. **Source Section** (if Linear ticket metadata present)
    - Check if user input contains `LINEAR_TICKET:` metadata block

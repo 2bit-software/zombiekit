@@ -371,6 +371,129 @@ func TestHandleAbandon_NoActive(t *testing.T) {
 	assert.Contains(t, err.Error(), "NO_ACTIVE_INITIATIVE")
 }
 
+func TestGetBoolArg(t *testing.T) {
+	t.Run("returns true for boolean true", func(t *testing.T) {
+		args := map[string]any{"flag": true}
+		assert.True(t, getBoolArg(args, "flag"))
+	})
+
+	t.Run("returns false for boolean false", func(t *testing.T) {
+		args := map[string]any{"flag": false}
+		assert.False(t, getBoolArg(args, "flag"))
+	})
+
+	t.Run("returns false for missing key", func(t *testing.T) {
+		args := map[string]any{}
+		assert.False(t, getBoolArg(args, "flag"))
+	})
+
+	t.Run("returns false for non-boolean value", func(t *testing.T) {
+		args := map[string]any{"flag": "true"}
+		assert.False(t, getBoolArg(args, "flag"))
+	})
+}
+
+func TestCreateResponse_BranchingFields(t *testing.T) {
+	t.Run("branching fields present when set", func(t *testing.T) {
+		resp := CreateResponse{
+			Action:          "create",
+			BranchingMethod: "graphite",
+		}
+		data, err := json.Marshal(resp)
+		require.NoError(t, err)
+
+		var parsed map[string]any
+		require.NoError(t, json.Unmarshal(data, &parsed))
+		assert.Equal(t, "graphite", parsed["branching_method"])
+		_, hasWarning := parsed["branching_warning"]
+		assert.False(t, hasWarning, "branching_warning should be omitted when empty")
+	})
+
+	t.Run("branching fields omitted when empty", func(t *testing.T) {
+		resp := CreateResponse{
+			Action: "create",
+		}
+		data, err := json.Marshal(resp)
+		require.NoError(t, err)
+
+		var parsed map[string]any
+		require.NoError(t, json.Unmarshal(data, &parsed))
+		_, hasMethod := parsed["branching_method"]
+		assert.False(t, hasMethod, "branching_method should be omitted when empty")
+	})
+
+	t.Run("warning present on fallback", func(t *testing.T) {
+		resp := CreateResponse{
+			Action:           "create",
+			BranchingMethod:  "git",
+			BranchingWarning: "graphite failed: exit status 1",
+		}
+		data, err := json.Marshal(resp)
+		require.NoError(t, err)
+
+		var parsed map[string]any
+		require.NoError(t, json.Unmarshal(data, &parsed))
+		assert.Equal(t, "git", parsed["branching_method"])
+		assert.Equal(t, "graphite failed: exit status 1", parsed["branching_warning"])
+	})
+}
+
+func TestHandleCreate_UseGraphiteParam(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+	tool := NewTool()
+	tool.SetEmbeddedFS(testEmbeddedFS())
+	ctx := context.Background()
+
+	// Create with use_graphite=true — will likely fallback to git since no graphite init
+	args := map[string]interface{}{
+		"action":       "create",
+		"dir":          tmpDir,
+		"type":         "feature",
+		"name":         "gt-test",
+		"use_graphite": true,
+	}
+
+	result, err := tool.Execute(ctx, args)
+	require.NoError(t, err)
+
+	var resp CreateResponse
+	require.NoError(t, json.Unmarshal([]byte(result), &resp))
+	assert.False(t, resp.AlreadyExisted)
+	// BranchingMethod should be set (either "graphite" or "git" depending on environment)
+	// In most test environments without graphite, it will be "git" or empty (no git repo)
+}
+
+func TestHandleCreate_IdempotentBranchingMethod(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))
+
+	tool := NewTool()
+	tool.SetEmbeddedFS(testEmbeddedFS())
+	ctx := context.Background()
+
+	args := map[string]interface{}{
+		"action": "create",
+		"dir":    tmpDir,
+		"type":   "feature",
+		"name":   "idempotent-test",
+	}
+
+	// First create
+	_, err := tool.Execute(ctx, args)
+	require.NoError(t, err)
+
+	// Second create (idempotent) — branching_method should be empty
+	result, err := tool.Execute(ctx, args)
+	require.NoError(t, err)
+
+	var resp CreateResponse
+	require.NoError(t, json.Unmarshal([]byte(result), &resp))
+	assert.True(t, resp.AlreadyExisted)
+	assert.Empty(t, resp.BranchingMethod, "idempotent response should have empty branching_method")
+}
+
 func TestHandleAbandon_MissingHistoryFolder(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".brains"), 0755))

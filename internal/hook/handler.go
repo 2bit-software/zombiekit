@@ -65,6 +65,10 @@ func (h *Handler) handleSessionStart(event *HookEvent) (string, error) {
 		return "", err
 	}
 
+	if graphiteStatus := DetectGraphiteStatus(event.CWD); graphiteStatus != "" {
+		bodies = append(bodies, graphiteStatus)
+	}
+
 	return FormatOutput(h.agent, bodies), nil
 }
 

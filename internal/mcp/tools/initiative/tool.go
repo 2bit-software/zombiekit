@@ -67,6 +67,10 @@ func (t *Tool) Definition() ToolDefinition {
 					"type":        "string",
 					"description": "Optional for create: Description of the initiative",
 				},
+				"use_graphite": map[string]any{
+					"type":        "boolean",
+					"description": "Use graphite (gt) for branch creation to enable stacking",
+				},
 			},
 			"required": []string{"action", "dir"},
 		},
@@ -170,13 +174,14 @@ func (t *Tool) handleCreate(ctx context.Context, dir string, args map[string]any
 		return marshalResponse(resp)
 	}
 
-	return t.createNewInitiative(dir, initSvc, initType, name)
+	useGraphite := getBoolArg(args, "use_graphite")
+	return t.createNewInitiative(dir, initSvc, initType, name, useGraphite)
 }
 
 // createNewInitiative handles the second half of create: validates no conflicting
 // active initiative exists, loads workflow steps, creates the initiative record,
 // copies templates, and creates the git branch.
-func (t *Tool) createNewInitiative(dir string, initSvc *internalInit.Service, initType, name string) (string, error) {
+func (t *Tool) createNewInitiative(dir string, initSvc *internalInit.Service, initType, name string, useGraphite bool) (string, error) {
 	active, err := initSvc.GetActive()
 	if err != nil {
 		return "", fmt.Errorf("checking active initiative: %w", err)
@@ -211,21 +216,31 @@ func (t *Tool) createNewInitiative(dir string, initSvc *internalInit.Service, in
 		return "", fmt.Errorf("copying templates: %w", err)
 	}
 
-	// Best-effort git branch creation
+	// Best-effort branch creation
 	gitSvc := step.NewGitService(dir)
-	_ = gitSvc.EnsureBranch(initType, name)
+	var branchingMethod, branchingWarning string
+	if useGraphite {
+		method, warning, _ := gitSvc.EnsureBranchGraphite(initType, name)
+		branchingMethod = method
+		branchingWarning = warning
+	} else {
+		_ = gitSvc.EnsureBranch(initType, name)
+		branchingMethod = "git"
+	}
 
 	resp := CreateResponse{
-		Action:         "create",
-		InitiativeID:   initiative.ID,
-		InitiativePath: initiative.Path,
-		Branch:         initiative.ID,
-		Type:           initType,
-		Name:           name,
-		NextStep:       initType,
-		AlreadyExisted: false,
-		SkippedFiles:   skipped,
-		CopiedFiles:    copied,
+		Action:           "create",
+		InitiativeID:     initiative.ID,
+		InitiativePath:   initiative.Path,
+		Branch:           initiative.ID,
+		Type:             initType,
+		Name:             name,
+		NextStep:         initType,
+		AlreadyExisted:   false,
+		SkippedFiles:     skipped,
+		CopiedFiles:      copied,
+		BranchingMethod:  branchingMethod,
+		BranchingWarning: branchingWarning,
 	}
 
 	return marshalResponse(resp)
@@ -480,6 +495,16 @@ func getStringArg(args map[string]any, key string) string {
 		}
 	}
 	return ""
+}
+
+// getBoolArg extracts a boolean argument from the args map.
+func getBoolArg(args map[string]any, key string) bool {
+	if val, ok := args[key]; ok {
+		if b, ok := val.(bool); ok {
+			return b
+		}
+	}
+	return false
 }
 
 // ToolError represents an error in the initiative tool with an error code.

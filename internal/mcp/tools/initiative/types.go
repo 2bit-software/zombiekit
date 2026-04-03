@@ -25,6 +25,9 @@ type CreateResponse struct {
 	AlreadyExisted bool     `json:"already_existed"`
 	SkippedFiles   []string `json:"skipped_files,omitempty"`
 	CopiedFiles    []string `json:"copied_files,omitempty"`
+	// Branching fields - indicate which method was used for branch creation
+	BranchingMethod  string `json:"branching_method,omitempty"`
+	BranchingWarning string `json:"branching_warning,omitempty"`
 }
 
 // StatusResponse is returned for action=status.

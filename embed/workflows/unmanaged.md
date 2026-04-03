@@ -22,6 +22,7 @@ Goal: Scaffold the branch and initiative tracking, then hand off. No spec, no pl
    - If no active initiative: Create one with an auto-generated name derived from the user input
    - If active and `--new` flag present: Complete current, create new
    - If active: Confirm with the user before proceeding (an active initiative already exists)
+   - Check if user input contains `USE_GRAPHITE: true` metadata block — if present, pass `use_graphite: true` when calling `mcp__zombiekit__initiative` create
 
 2. **Source Section** (if Linear ticket metadata present)
    - Check if user input contains `LINEAR_TICKET:` metadata block

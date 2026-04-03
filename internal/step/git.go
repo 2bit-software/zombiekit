@@ -78,6 +78,79 @@ func (g *GitService) createBranch(branchName string) error {
 	return nil
 }
 
+// EnsureBranchGraphite creates a branch using graphite stacking, with fallback to git.
+// Returns:
+//   - method: "graphite", "git", or "" (graceful degradation)
+//   - warning: non-empty when graphite failed but git succeeded (non-fatal)
+//   - err: only for truly fatal errors (both graphite and git failed)
+func (g *GitService) EnsureBranchGraphite(initType, name string) (method, warning string, err error) {
+	if !g.isGitAvailable() || !g.isGitRepository() {
+		return "", "", nil
+	}
+
+	branchName, err := g.formatBranchName(initType, name)
+	if err != nil {
+		return "", "", err
+	}
+
+	if g.branchExists(branchName) {
+		if switchErr := g.switchToBranch(branchName); switchErr != nil {
+			return "", "", switchErr
+		}
+		// Best-effort: track existing branch with graphite
+		if g.isGraphiteAvailable() {
+			_ = g.trackBranchGraphite()
+		}
+		return "git", "", nil
+	}
+
+	if !g.isGraphiteAvailable() {
+		if createErr := g.createBranch(branchName); createErr != nil {
+			return "", "", createErr
+		}
+		return "git", "", nil
+	}
+
+	if gtErr := g.createBranchGraphite(branchName); gtErr != nil {
+		// Graphite failed — fall back to git
+		if createErr := g.createBranch(branchName); createErr != nil {
+			return "", "", fmt.Errorf("graphite failed: %w; git fallback also failed: %w", gtErr, createErr)
+		}
+		return "git", fmt.Sprintf("graphite branch creation failed: %v; fell back to git", gtErr), nil
+	}
+
+	return "graphite", "", nil
+}
+
+// isGraphiteAvailable checks if the gt CLI is in PATH.
+func (g *GitService) isGraphiteAvailable() bool {
+	_, err := exec.LookPath("gt")
+	return err == nil
+}
+
+// createBranchGraphite creates a branch using gt create.
+func (g *GitService) createBranchGraphite(branchName string) error {
+	cmd := exec.Command("gt", "create", branchName, "--no-interactive")
+	cmd.Dir = g.workDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("gt create %s: %w\nOutput: %s", branchName, err, output)
+	}
+	return nil
+}
+
+// trackBranchGraphite attempts to track the current branch with graphite.
+// Best-effort: errors are silently ignored.
+func (g *GitService) trackBranchGraphite() error {
+	cmd := exec.Command("gt", "track", "--force", "--no-interactive")
+	cmd.Dir = g.workDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("gt track: %w\nOutput: %s", err, output)
+	}
+	return nil
+}
+
 // formatBranchName formats the branch name based on initiative type.
 // Maps: feature → feat/, bug → fix/, refactor → ref/
 func (g *GitService) formatBranchName(initType, name string) (string, error) {

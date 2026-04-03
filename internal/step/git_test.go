@@ -185,3 +185,119 @@ func TestGitService_EnsureBranch_SwitchesExistingBranch(t *testing.T) {
 	err = svc.EnsureBranch("feature", "existing-feature")
 	assert.NoError(t, err)
 }
+
+func TestGitService_IsGraphiteAvailable(t *testing.T) {
+	tmpDir := t.TempDir()
+	svc := NewGitService(tmpDir)
+
+	if _, err := exec.LookPath("gt"); err == nil {
+		assert.True(t, svc.isGraphiteAvailable())
+	} else {
+		assert.False(t, svc.isGraphiteAvailable())
+	}
+}
+
+func TestGitService_EnsureBranchGraphite_GracefulDegradation(t *testing.T) {
+	t.Run("returns empty when not a git repository", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		svc := NewGitService(tmpDir)
+
+		method, warning, err := svc.EnsureBranchGraphite("feature", "test")
+		assert.NoError(t, err)
+		assert.Empty(t, method)
+		assert.Empty(t, warning)
+	})
+}
+
+func TestGitService_EnsureBranchGraphite_FallbackWhenNoGraphite(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Initialize git repository
+	cmd := exec.Command("git", "init")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	cmd = exec.Command("git", "config", "user.email", "test@test.com")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	// Create initial commit
+	dummyFile := filepath.Join(tmpDir, "dummy.txt")
+	require.NoError(t, os.WriteFile(dummyFile, []byte("dummy"), 0644))
+
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	cmd = exec.Command("git", "commit", "-m", "initial")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	svc := NewGitService(tmpDir)
+
+	// Even if gt is available, without graphite init, gt create will fail
+	// and should fall back to git
+	method, _, err := svc.EnsureBranchGraphite("feature", "graphite-test")
+	require.NoError(t, err)
+
+	// Branch should exist regardless of which method was used
+	assert.True(t, svc.branchExists("feat/graphite-test"))
+
+	// Method should be either "graphite" or "git" depending on environment
+	assert.Contains(t, []string{"graphite", "git"}, method)
+}
+
+func TestGitService_EnsureBranchGraphite_ExistingBranch(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	tmpDir := t.TempDir()
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	cmd = exec.Command("git", "config", "user.email", "test@test.com")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	dummyFile := filepath.Join(tmpDir, "dummy.txt")
+	require.NoError(t, os.WriteFile(dummyFile, []byte("dummy"), 0644))
+
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	cmd = exec.Command("git", "commit", "-m", "initial")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	svc := NewGitService(tmpDir)
+
+	// Create branch first
+	require.NoError(t, svc.createBranch("feat/existing"))
+
+	// Switch back
+	cmd = exec.Command("git", "checkout", "-")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	// EnsureBranchGraphite should switch to existing branch
+	method, warning, err := svc.EnsureBranchGraphite("feature", "existing")
+	assert.NoError(t, err)
+	assert.Equal(t, "git", method)
+	assert.Empty(t, warning)
+}
