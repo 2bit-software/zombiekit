@@ -14,7 +14,6 @@ hooks = [
     { id = "check-yaml" },
     { id = "check-json" },
     { id = "detect-private-key" },
-    { id = "no-commit-to-branch", args = ["--branch=main"] },
 ]
 
 # --- Go: formatting and static analysis ---

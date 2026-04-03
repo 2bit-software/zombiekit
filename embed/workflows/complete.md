@@ -58,8 +58,8 @@ Goal: Properly close out an initiative, archive artifacts, and clear active stat
    {Any closing notes}
    ```
 
-5. **Offer Commit** (if in git repository)
-   - Run `git status --porcelain` via Bash tool
+5. **Offer Commit / Push / PR** (if in git repository)
+   - Run `git status --porcelain` via the `mcp__zombiekit__git` tool (or Bash fallback)
    - If command fails (not a git repo): Skip to step 6
    - If output is empty (no changes): Skip to step 6
    - If output is non-empty (changes detected):
@@ -72,22 +72,30 @@ Goal: Properly close out an initiative, archive artifacts, and clear active stat
         ```json
         {
           "questions": [{
-            "question": "Would you like to commit your changes before completing?",
-            "header": "Commit",
+            "question": "How would you like to handle these changes?",
+            "header": "Commit & Publish",
             "multiSelect": false,
             "options": [
-              {"label": "Yes, commit changes", "description": "Stage all and generate commit message"},
-              {"label": "No, skip commit", "description": "Complete without committing"}
+              {"label": "Commit, push, and open PR", "description": "Stage, commit, push branch, then open a pull request"},
+              {"label": "Commit only", "description": "Stage all and generate commit message — no push"},
+              {"label": "Do nothing", "description": "Complete the initiative without touching git"}
             ]
           }]
         }
         ```
-     d. If "Yes, commit changes":
+     d. If "Commit, push, and open PR":
         - **IMPORTANT**: Stage BOTH implementation files AND the initiative's `history/{initiative}/` directory. The spec, research, plan, tasks, and INITIATIVE.md are part of the feature work and must be committed together. Never commit implementation files without their corresponding history artifacts.
-        - Stage the relevant files via Bash (prefer explicit paths over `git add -A`)
+        - Stage the relevant files via `mcp__zombiekit__git` (prefer explicit paths over `git add -A`)
+        - Use `Skill` tool with `skill: "commit-message"` to generate and execute commit
+        - Push the current branch via `mcp__zombiekit__git` (equivalent to `git push -u origin <branch>`)
+        - Use `Skill` tool with `skill: "create-pr"` to open the pull request
+        - If any step fails: Display error message, proceed to step 6
+     e. If "Commit only":
+        - **IMPORTANT**: Stage BOTH implementation files AND the initiative's `history/{initiative}/` directory (same rule as above).
+        - Stage the relevant files via `mcp__zombiekit__git`
         - Use `Skill` tool with `skill: "commit-message"` to generate and execute commit
         - If commit fails: Display error message, proceed to step 6
-     e. Proceed to step 6
+     f. If "Do nothing": Proceed to step 6
 
 6. **Offer Linear Update** (if source ticket exists)
    - Read INITIATIVE.md and look for Source section with `**Linear Ticket**: [TICKET-ID]` pattern
@@ -132,7 +140,18 @@ Goal: Properly close out an initiative, archive artifacts, and clear active stat
    - Remove or clear `.brains/active.json`
    - Initiative remains in history (never deleted)
 
-8. **Report Completion**
+8. **Update Flimsy** (conversation index)
+   - The current session ID is available from the startup hook context (check `$SESSION_ID` or the session start system reminder)
+   - Tag this conversation in flimsy with the initiative name and outcome:
+     ```bash
+     curl -s -X PUT "http://localhost:8090/api/v1/conversations/{session-id}/annotations" \
+       -H "Content-Type: application/json" \
+       -d '{"annotations": [{"key": "initiative", "value": "{initiative-name}"}, {"key": "status", "value": "complete"}]}'
+     ```
+   - If flimsy is not running (connection refused): Skip silently, do not block completion
+   - If session ID is not available: Skip silently
+
+9. **Report Completion**
    - Initiative name
    - Work items completed vs skipped
    - Total duration
