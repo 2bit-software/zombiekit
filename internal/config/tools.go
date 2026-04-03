@@ -9,7 +9,6 @@ import (
 // KnownTools is the list of known tool names for validation.
 var KnownTools = []string{
 	"stickymemory",
-	"code-reasoning",
 	"profile-compose",
 	"profile-list",
 	"profile-save",
@@ -29,7 +28,6 @@ var KnownTools = []string{
 //   - "profile-compose" -> "profile"
 //   - "profile-list" -> "profile"
 //   - "stickymemory" -> "stickymemory"
-//   - "code-reasoning" -> "code"
 func ToolCategory(toolName string) string {
 	if idx := strings.Index(toolName, "-"); idx > 0 {
 		return toolName[:idx]

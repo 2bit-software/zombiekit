@@ -61,23 +61,6 @@ func TestServer_ToolCall_StickyMemory_Success(t *testing.T) {
 	assert.Contains(t, result, "test-key")
 }
 
-func TestServer_ToolCall_CodeReasoning_Success(t *testing.T) {
-	server := setupTestServer(t)
-	ctx := context.Background()
-
-	args := map[string]interface{}{
-		"thought":             "First thought",
-		"thought_number":      float64(1),
-		"total_thoughts":      float64(3),
-		"next_thought_needed": true,
-	}
-
-	result, err := server.codeReasoning.Execute(ctx, "test-session", args)
-	require.NoError(t, err)
-	assert.Contains(t, result, "First thought")
-	assert.Contains(t, result, "in_progress")
-}
-
 func TestServer_ToolCall_InvalidTool_Error(t *testing.T) {
 	server := setupTestServer(t)
 	ctx := context.Background()
