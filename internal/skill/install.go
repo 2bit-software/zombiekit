@@ -57,6 +57,12 @@ func GenerateContent(name, description string) string {
 	)
 }
 
+// IsShim returns true if the body content delegates to profile-compose,
+// indicating this is a zombiekit shim rather than a standalone skill.
+func IsShim(body string) bool {
+	return strings.Contains(body, "mcp__zombiekit__profile-compose")
+}
+
 // WriteSkill creates {targetDir}/{name}/SKILL.md with the given content.
 // Creates intermediate directories as needed. Idempotent — overwrites existing SKILL.md.
 // Returns the full path to the written file on success.
