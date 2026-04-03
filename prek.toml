@@ -23,7 +23,7 @@ rev = "v0.5.1"
 hooks = [
     { id = "go-fmt" },
     { id = "go-vet" },
-    { id = "go-build", stages = ["pre-push"] },
+    { id = "go-build", stages = ["pre-push"], args = ["-o", "bin/"] },
 ]
 
 # --- Go: linting via golangci-lint ---

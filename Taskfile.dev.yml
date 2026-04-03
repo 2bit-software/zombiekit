@@ -202,29 +202,32 @@ tasks:
 
   proto:
     desc: Generate Go code from proto files
+    dir: proto
     cmds:
       - buf generate
     sources:
       - proto/**/*.proto
-      - buf.yaml
-      - buf.gen.yaml
+      - proto/buf.yaml
+      - proto/buf.gen.yaml
     generates:
-      - gen/**/*.go
+      - proto/gen/**/*.go
 
   proto:lint:
     desc: Lint proto files
+    dir: proto
     cmds:
       - buf lint
 
   proto:breaking:
     desc: Check for breaking changes against git HEAD
+    dir: proto
     cmds:
-      - buf breaking --against '.git#branch=main'
+      - buf breaking --against '../.git#branch=main,subdir=proto'
 
   proto:clean:
     desc: Remove generated proto files
     cmds:
-      - rm -rf gen/
+      - rm -rf proto/gen/
 
   # === Quality ===
 

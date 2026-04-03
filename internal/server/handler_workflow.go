@@ -7,8 +7,8 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	workflowv1 "github.com/2bit-software/zombiekit/gen/zombiekit/brains/workflow/v1"
-	"github.com/2bit-software/zombiekit/gen/zombiekit/brains/workflow/v1/workflowv1connect"
+	workflowv1 "github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/workflow/v1"
+	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/workflow/v1/workflowv1connect"
 	"github.com/2bit-software/zombiekit/internal/server/storage"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
