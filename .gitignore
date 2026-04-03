@@ -36,10 +36,7 @@ coverage.html
 *.prof
 
 # Environment
-.env
-.env.local
-.env.*.local
-.env.orchestrator
+.env*
 
 # Logs
 *.log
