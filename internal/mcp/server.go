@@ -17,6 +17,7 @@ import (
 	initiativetool "github.com/2bit-software/zombiekit/internal/mcp/tools/initiative"
 	profiletool "github.com/2bit-software/zombiekit/internal/mcp/tools/profile"
 	recalltool "github.com/2bit-software/zombiekit/internal/mcp/tools/recall"
+	skillimporttool "github.com/2bit-software/zombiekit/internal/mcp/tools/skillimport"
 	skillinstalltool "github.com/2bit-software/zombiekit/internal/mcp/tools/skillinstall"
 	"github.com/2bit-software/zombiekit/internal/mcp/tools/stickymemory"
 	workflowtool "github.com/2bit-software/zombiekit/internal/mcp/tools/workflow"
@@ -37,6 +38,7 @@ type Server struct {
 	gitTool          *gittool.Tool
 	ghPRTool         *ghprtool.Tool
 	skillInstallTool *skillinstalltool.Tool
+	skillImportTool  *skillimporttool.Tool
 	config           *config.Config
 }
 
@@ -94,6 +96,7 @@ func NewServer(storage memory.Storage, recallStorage recall.Storage, cfg *config
 		gitTool:          gitToolInst,
 		ghPRTool:         ghPRToolInst,
 		skillInstallTool: skillinstalltool.NewTool(),
+		skillImportTool:  skillimporttool.NewTool(),
 		config:           cfg,
 	}
 
@@ -166,6 +169,41 @@ func (s *Server) registerTools() {
 		)
 		s.mcpServer.AddTool(skillInstallTool, s.handleSkillInstall)
 	}
+
+	// Register skill-import-list tool
+	if s.config.IsToolEnabled("skill-import-list") {
+		skillImportListTool := mcp.NewTool("skill-import-list",
+			mcp.WithDescription("List Claude Code skills and agents available for import into zombiekit profiles"),
+			mcp.WithString("working_directory",
+				mcp.Description("Working directory for local discovery (defaults to process CWD)"),
+			),
+		)
+		s.mcpServer.AddTool(skillImportListTool, s.handleSkillImportList)
+	}
+
+	// Register skill-import tool
+	if s.config.IsToolEnabled("skill-import") {
+		skillImportTool := mcp.NewTool("skill-import",
+			mcp.WithDescription("Import Claude Code skills and agents into zombiekit profiles"),
+			mcp.WithArray("names",
+				mcp.Required(),
+				mcp.Description("Names of skills/agents to import"),
+				mcp.Items(map[string]any{"type": "string"}),
+			),
+			mcp.WithString("scope",
+				mcp.Required(),
+				mcp.Description("Destination: 'local' or 'global'"),
+				mcp.Enum("local", "global"),
+			),
+			mcp.WithBoolean("shim",
+				mcp.Description("Write shims in original Claude locations (default: false)"),
+			),
+			mcp.WithString("working_directory",
+				mcp.Description("Working directory for local scope resolution (defaults to process CWD)"),
+			),
+		)
+		s.mcpServer.AddTool(skillImportTool, s.handleSkillImport)
+	}
 }
 
 // handleStickyMemory handles stickymemory tool calls.
@@ -191,6 +229,36 @@ func (s *Server) handleSkillInstall(ctx context.Context, req mcp.CallToolRequest
 	}
 
 	result, err := s.skillInstallTool.Execute(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// handleSkillImportList handles skill-import-list tool calls.
+func (s *Server) handleSkillImportList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	result, err := s.skillImportTool.ExecuteList(ctx, args)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(result), nil
+}
+
+// handleSkillImport handles skill-import tool calls.
+func (s *Server) handleSkillImport(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	result, err := s.skillImportTool.ExecuteImport(ctx, args)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
