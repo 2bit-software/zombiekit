@@ -68,6 +68,16 @@ func TestCreateValidation(t *testing.T) {
 			args:    map[string]any{"action": "comment", "pr_number": float64(1)},
 			wantErr: "body is required",
 		},
+		{
+			name:    "edit missing pr_number",
+			args:    map[string]any{"action": "edit", "title": "new title"},
+			wantErr: "pr_number is required",
+		},
+		{
+			name:    "edit missing title and body",
+			args:    map[string]any{"action": "edit", "pr_number": float64(1)},
+			wantErr: "at least one of title or body is required",
+		},
 	}
 
 	for _, tt := range tests {

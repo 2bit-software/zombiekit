@@ -39,7 +39,7 @@ func NewTool(workDir string) (*Tool, error) {
 func (t *Tool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "gh-pr",
-		Description: "GitHub PR operations via the gh CLI: view (check if PR exists), create (open a new PR), comment (add a comment to a PR).",
+		Description: "GitHub PR operations via the gh CLI: view (check if PR exists), create (open a new PR), comment (add a comment to a PR), edit (update PR title/body).",
 	}
 }
 
@@ -61,11 +61,13 @@ func (t *Tool) Execute(ctx context.Context, args map[string]any) (string, error)
 		return t.handleCreate(ctx, args)
 	case "comment":
 		return t.handleComment(ctx, args)
+	case "edit":
+		return t.handleEdit(ctx, args)
 	default:
 		return "", &ToolError{
 			Code:    "INVALID_ACTION",
 			Message: fmt.Sprintf("invalid action: %q", action),
-			Hint:    "Valid actions: view, create, comment",
+			Hint:    "Valid actions: view, create, comment, edit",
 		}
 	}
 }
@@ -273,5 +275,72 @@ func (t *Tool) handleComment(ctx context.Context, args map[string]any) (string, 
 		Action:   "comment",
 		Success:  true,
 		PRNumber: prNumber,
+	})
+}
+
+// handleEdit updates a PR's title and/or body.
+func (t *Tool) handleEdit(ctx context.Context, args map[string]any) (string, error) {
+	prNumber := getIntArg(args, "pr_number", 0)
+	if prNumber <= 0 {
+		return "", &ToolError{
+			Code:    "VALIDATION_ERROR",
+			Message: "pr_number is required and must be a positive integer",
+		}
+	}
+
+	title := getStringArg(args, "title")
+	body := getStringArg(args, "body")
+
+	if strings.TrimSpace(title) == "" && strings.TrimSpace(body) == "" {
+		return "", &ToolError{
+			Code:    "VALIDATION_ERROR",
+			Message: "at least one of title or body is required for edit",
+		}
+	}
+
+	ghArgs := []string{"pr", "edit", fmt.Sprintf("%d", prNumber)}
+
+	if strings.TrimSpace(title) != "" {
+		ghArgs = append(ghArgs, "--title", title)
+	}
+
+	if strings.TrimSpace(body) != "" {
+		tmpFile, err := os.CreateTemp("", "gh-pr-edit-*.md")
+		if err != nil {
+			return "", fmt.Errorf("creating temp file: %w", err)
+		}
+		tmpPath := tmpFile.Name()
+		defer os.Remove(tmpPath)
+
+		if _, err := tmpFile.WriteString(body); err != nil {
+			tmpFile.Close()
+			return "", fmt.Errorf("writing PR body: %w", err)
+		}
+		tmpFile.Close()
+
+		ghArgs = append(ghArgs, "--body-file", tmpPath)
+	}
+
+	if _, err := t.run(ctx, ghArgs...); err != nil {
+		return "", fmt.Errorf("editing PR: %w", err)
+	}
+
+	// Fetch updated PR info for the response
+	prInfo, infoErr := t.run(ctx, "pr", "view", fmt.Sprintf("%d", prNumber), "--json", "url")
+	url := ""
+	if infoErr == nil {
+		var prData struct {
+			URL string `json:"url"`
+		}
+		if json.Unmarshal([]byte(prInfo), &prData) == nil {
+			url = prData.URL
+		}
+	}
+
+	return marshalResponse(EditResponse{
+		Action:   "edit",
+		Success:  true,
+		PRNumber: prNumber,
+		URL:      url,
 	})
 }

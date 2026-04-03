@@ -31,6 +31,14 @@ type CommentResponse struct {
 	PRNumber int    `json:"pr_number"`
 }
 
+// EditResponse is returned for action=edit.
+type EditResponse struct {
+	Action   string `json:"action"`
+	Success  bool   `json:"success"`
+	PRNumber int    `json:"pr_number"`
+	URL      string `json:"url,omitempty"`
+}
+
 // ToolError represents a structured error from the gh-pr tool.
 type ToolError struct {
 	Code    string `json:"code"`
