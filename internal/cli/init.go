@@ -155,6 +155,9 @@ func initGlobal(c *cli.Context, claude bool) error {
 		if err := ensureMCPServer(settingsPath); err != nil {
 			total.errors = append(total.errors, fmt.Errorf("configuring MCP server: %w", err))
 		}
+		if err := ensureHooks(settingsPath); err != nil {
+			total.errors = append(total.errors, fmt.Errorf("configuring hooks: %w", err))
+		}
 	}
 
 	// Register in registry (best effort)
@@ -256,6 +259,9 @@ func initLocal(force, claude bool) error {
 		if err := ensureMCPServer(settingsPath); err != nil {
 			total.errors = append(total.errors, fmt.Errorf("configuring MCP server: %w", err))
 		}
+		if err := ensureHooks(settingsPath); err != nil {
+			total.errors = append(total.errors, fmt.Errorf("configuring hooks: %w", err))
+		}
 	}
 
 	brainsDir := filepath.Join(cwd, ".brains")
@@ -320,6 +326,112 @@ func ensureMCPServer(settingsPath string) error {
 
 	fmt.Printf("  Configured MCP server in %s\n", settingsPath)
 	return nil
+}
+
+// brainsHookDefs defines the hook entries that brains init --claude installs.
+var brainsHookDefs = []struct {
+	event   string // Claude hook event name (e.g. "SessionStart")
+	matcher string // tool matcher pattern ("" = match all)
+	command string
+	timeout int
+}{
+	{event: "SessionStart", matcher: "startup|resume|compact", command: "brains hook --event session-start", timeout: 10},
+	{event: "PreToolUse", matcher: "Read|Write|Edit|MultiEdit", command: "brains hook --event pre-tool-use", timeout: 10},
+	{event: "SessionEnd", matcher: "", command: "brains hook --event session-end", timeout: 5},
+}
+
+// ensureHooks idempotently adds brains hook entries to a Claude settings.json file.
+// Existing hooks (including other brains hooks with different matchers) are preserved.
+func ensureHooks(settingsPath string) error {
+	var settings map[string]any
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading %s: %w", settingsPath, err)
+	}
+
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return fmt.Errorf("parsing %s: %w", settingsPath, err)
+		}
+	}
+
+	if settings == nil {
+		settings = make(map[string]any)
+	}
+
+	hooks, _ := settings["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = make(map[string]any)
+	}
+
+	added := 0
+	for _, def := range brainsHookDefs {
+		entries, _ := hooks[def.event].([]any)
+
+		if hookEntryExists(entries, def.command, def.matcher) {
+			continue
+		}
+
+		entry := map[string]any{
+			"matcher": def.matcher,
+			"hooks": []any{
+				map[string]any{
+					"type":    "command",
+					"command": def.command,
+					"timeout": def.timeout,
+				},
+			},
+		}
+		entries = append(entries, entry)
+		hooks[def.event] = entries
+		added++
+	}
+
+	if added == 0 {
+		fmt.Println("  Hooks already configured")
+		return nil
+	}
+
+	settings["hooks"] = hooks
+
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling settings: %w", err)
+	}
+
+	if err := os.WriteFile(settingsPath, append(out, '\n'), 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", settingsPath, err)
+	}
+
+	fmt.Printf("  Configured %d hook(s) in %s\n", added, settingsPath)
+	return nil
+}
+
+// hookEntryExists checks whether an entry with the given command and matcher
+// already exists in a list of hook event entries.
+func hookEntryExists(entries []any, command, matcher string) bool {
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		entryMatcher, _ := entry["matcher"].(string)
+		if entryMatcher != matcher {
+			continue
+		}
+		hooksList, _ := entry["hooks"].([]any)
+		for _, h := range hooksList {
+			hookMap, ok := h.(map[string]any)
+			if !ok {
+				continue
+			}
+			if hookMap["command"] == command {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // createDirIfNeeded creates a directory if it doesn't exist, printing status.

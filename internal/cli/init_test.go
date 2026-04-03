@@ -383,6 +383,102 @@ func TestInitCommand_ClaudeMCPServer_SkipsIfExists(t *testing.T) {
 	assert.Equal(t, "custom-brains", zk["command"], "should not overwrite existing zombiekit config")
 }
 
+func TestInitCommand_ClaudeHooks(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := runInitCmd(t, tmpDir, "--claude")
+	require.NoError(t, err)
+
+	settingsPath := filepath.Join(tmpDir, ".claude", "settings.json")
+	data, err := os.ReadFile(settingsPath)
+	require.NoError(t, err)
+
+	var settings map[string]any
+	require.NoError(t, json.Unmarshal(data, &settings))
+
+	hooks, ok := settings["hooks"].(map[string]any)
+	require.True(t, ok, "hooks should exist")
+
+	// Verify all three hook events are present
+	for _, event := range []string{"SessionStart", "PreToolUse", "SessionEnd"} {
+		entries, ok := hooks[event].([]any)
+		require.True(t, ok, "hook event %s should exist", event)
+		assert.GreaterOrEqual(t, len(entries), 1, "hook event %s should have at least one entry", event)
+	}
+}
+
+func TestInitCommand_ClaudeHooks_Idempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Run twice
+	err := runInitCmd(t, tmpDir, "--claude")
+	require.NoError(t, err)
+	err = runInitCmd(t, tmpDir, "--claude")
+	require.NoError(t, err)
+
+	settingsPath := filepath.Join(tmpDir, ".claude", "settings.json")
+	data, err := os.ReadFile(settingsPath)
+	require.NoError(t, err)
+
+	var settings map[string]any
+	require.NoError(t, json.Unmarshal(data, &settings))
+
+	hooks, _ := settings["hooks"].(map[string]any)
+
+	// Each event should have exactly one entry (no duplicates)
+	for _, event := range []string{"SessionStart", "PreToolUse", "SessionEnd"} {
+		entries, _ := hooks[event].([]any)
+		assert.Equal(t, 1, len(entries), "hook event %s should have exactly one entry after two runs", event)
+	}
+}
+
+func TestInitCommand_ClaudeHooks_PreservesExisting(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	claudeDir := filepath.Join(tmpDir, ".claude")
+	require.NoError(t, os.MkdirAll(claudeDir, 0o755))
+
+	existing := map[string]any{
+		"hooks": map[string]any{
+			"SessionStart": []any{
+				map[string]any{
+					"matcher": "",
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": "echo custom-hook",
+							"timeout": 5,
+						},
+					},
+				},
+			},
+		},
+	}
+	data, _ := json.MarshalIndent(existing, "", "  ")
+	require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "settings.json"), data, 0o644))
+
+	err := runInitCmd(t, tmpDir, "--claude")
+	require.NoError(t, err)
+
+	result, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	require.NoError(t, err)
+
+	var settings map[string]any
+	require.NoError(t, json.Unmarshal(result, &settings))
+
+	hooks, _ := settings["hooks"].(map[string]any)
+	sessionStart, _ := hooks["SessionStart"].([]any)
+
+	// Should have 2 entries: the existing custom one + the brains one
+	assert.Equal(t, 2, len(sessionStart), "should preserve existing hook and add brains hook")
+
+	// Verify custom hook is still there
+	first, _ := sessionStart[0].(map[string]any)
+	firstHooks, _ := first["hooks"].([]any)
+	firstHook, _ := firstHooks[0].(map[string]any)
+	assert.Equal(t, "echo custom-hook", firstHook["command"], "existing hook should be preserved")
+}
+
 func TestInitCommand_GlobalClaudeMCPServer(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
