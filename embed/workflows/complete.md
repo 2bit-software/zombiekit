@@ -170,7 +170,25 @@ Goal: Properly close out an initiative, archive artifacts, and clear active stat
      note that posting failed, then continue
    - Surface the overall risk verdict (LOW / MEDIUM / HIGH) in the completion report
 
-10. **Report Completion**
+10. **Conversation Audit**
+   - Export the current conversation to a temp file using `ccexport`:
+     ```bash
+     ccexport -f markdown --no-thinking -o /tmp/initiative-audit.md {session-id}
+     ```
+     The session ID is available from the startup hook context in the system reminder.
+   - If `ccexport` fails or the session ID is unavailable: Skip silently, do not block completion
+   - If export succeeds:
+     - Load the conversation auditor profile:
+       ```
+       mcp__zombiekit__profile-compose with profiles: ["conversation-auditor"]
+       ```
+     - Provide the exported file path as the conversation source — the profile will
+       read it and run its full friction analysis (phases 2–4)
+     - Present the audit findings inline in this conversation
+     - **Do NOT write any rule files automatically** — follow the profile's rule: always
+       present proposals and wait for explicit user confirmation before creating files
+
+11. **Report Completion**
    - Initiative name
    - Work items completed vs skipped
    - Total duration
