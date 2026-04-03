@@ -187,6 +187,12 @@ Goal: Properly close out an initiative, archive artifacts, and clear active stat
      - Present the audit findings inline in this conversation
      - **Do NOT write any rule files automatically** — follow the profile's rule: always
        present proposals and wait for explicit user confirmation before creating files
+     - If a PR was opened in step 5: Post the friction summary (the "Findings" section
+       of the audit output, not the proposed rules) as a PR comment automatically:
+       ```bash
+       gh pr comment <PR-NUMBER> --body "## Conversation Friction Summary\n\n{findings section}"
+       ```
+       If the comment fails: Display the summary inline and note that posting failed
 
 11. **Report Completion**
    - Initiative name
