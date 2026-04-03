@@ -62,8 +62,10 @@ Goal: Investigate a bug, determine root cause, classify the failure, and produce
      | Step | Status | Updated |
      |------|--------|---------|
      | investigate | in_progress | {now} |
-     | implement | pending | - |
-     | audit | pending | - |
+     | plan | pending | - |
+     | tasks | pending | - |
+     | fix | pending | - |
+     | verify | pending | - |
      ```
 
 5. **Report Phase**

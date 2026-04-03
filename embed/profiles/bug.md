@@ -5,6 +5,10 @@ type: skill
 steps:
   - name: investigate
     profile: bug
+  - name: plan
+    profile: plan
+  - name: tasks
+    profile: tasks
   - name: fix
     profile: implement
   - name: verify

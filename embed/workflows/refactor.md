@@ -62,8 +62,9 @@ Goal: Create a safe refactoring specification that restructures code while prese
      | Step | Status | Updated |
      |------|--------|---------|
      | analyze | in_progress | {now} |
+     | plan | pending | - |
+     | tasks | pending | - |
      | implement | pending | - |
-     | audit | pending | - |
      ```
 
 5. **Goal Definition**
