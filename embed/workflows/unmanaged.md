@@ -40,38 +40,40 @@ Goal: Scaffold the branch and initiative tracking, then hand off. No spec, no pl
      d. Proceed to step 3
 
 3. **Create Branch**
-   - Infer branch type prefix from the user input:
+   - If the initiative was just created in step 1 (i.e., `initiative create` was called and returned a `branch` field): the branch is already created and checked out. **Skip branch creation entirely.**
+   - If joining an existing initiative (step 1 found an active initiative and did not call `create`):
+     - Infer branch type prefix from the user input:
 
-     | Inferred type | Prefix | Signal words |
-     |---------------|--------|--------------|
-     | feature | `feat/` | "add", "implement", "create", "new", "build", "support" |
-     | bug fix | `fix/` | "fix", "bug", "broken", "error", "crash", "failing", "wrong", "incorrect" |
-     | refactor | `refactor/` | "refactor", "cleanup", "reorganize", "simplify", "restructure", "rename", "move" |
-     | chore | `chore/` | "chore", "bump", "upgrade", "update deps", "ci", "release", "version" |
+       | Inferred type | Prefix | Signal words |
+       |---------------|--------|--------------|
+       | feature | `feat/` | "add", "implement", "create", "new", "build", "support" |
+       | bug fix | `fix/` | "fix", "bug", "broken", "error", "crash", "failing", "wrong", "incorrect" |
+       | refactor | `refactor/` | "refactor", "cleanup", "reorganize", "simplify", "restructure", "rename", "move" |
+       | chore | `chore/` | "chore", "bump", "upgrade", "update deps", "ci", "release", "version" |
 
-   - If the type is clear from the input: use the corresponding prefix without asking.
-   - If the type cannot be confidently inferred: ask the user once with `AskUserQuestion`:
-     ```json
-     {
-       "questions": [{
-         "question": "What type of change is this?",
-         "header": "Branch type",
-         "multiSelect": false,
-         "options": [
-           {"label": "feat", "description": "New feature or addition"},
-           {"label": "fix", "description": "Bug fix"},
-           {"label": "refactor", "description": "Restructuring without behaviour change"},
-           {"label": "chore", "description": "Tooling, deps, CI, or housekeeping"}
-         ]
-       }]
-     }
-     ```
-   - Construct branch name: `{prefix}{initiative-slug}/{description-slug}`
-     (e.g., `fix/auth-api/session-token-expiry`, `chore/deps/bump-go-1-23`)
-   - Create and check out the branch via `mcp__zombiekit__git`:
-     - Use Bash `git checkout -b <name>` if the MCP tool does not support branch creation
-   - If already on a non-main branch that matches the initiative: Skip, use current branch
-   - If the branch already exists remotely: Check it out without creating
+     - If the type is clear from the input: use the corresponding prefix without asking.
+     - If the type cannot be confidently inferred: ask the user once with `AskUserQuestion`:
+       ```json
+       {
+         "questions": [{
+           "question": "What type of change is this?",
+           "header": "Branch type",
+           "multiSelect": false,
+           "options": [
+             {"label": "feat", "description": "New feature or addition"},
+             {"label": "fix", "description": "Bug fix"},
+             {"label": "refactor", "description": "Restructuring without behaviour change"},
+             {"label": "chore", "description": "Tooling, deps, CI, or housekeeping"}
+           ]
+         }]
+       }
+       ```
+     - Construct branch name: `{prefix}{initiative-slug}/{description-slug}`
+       (e.g., `fix/auth-api/session-token-expiry`, `chore/deps/bump-go-1-23`)
+     - Create and check out the branch via `mcp__zombiekit__git`:
+       - Use Bash `git checkout -b <name>` if the MCP tool does not support branch creation
+     - If already on a non-main branch that matches the initiative: Skip, use current branch
+     - If the branch already exists remotely: Check it out without creating
 
 4. **Write INITIATIVE.md**
    - Create INITIATIVE.md in the initiative directory with an empty step table:

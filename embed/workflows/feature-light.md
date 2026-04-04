@@ -50,13 +50,15 @@ stop and escalate to `/brains.new` instead of silently expanding scope.
      d. Proceed to step 3
 
 3. **Create Branch**
-   - Derive a branch name from the initiative and feature name:
-     `feat/{initiative-slug}/{feature-slug}` (e.g., `feat/auth-api/add-refresh-endpoint`)
-   - Create and check out the branch via `mcp__zombiekit__git`:
-     - action: `branch` (or equivalent — use Bash `git checkout -b <name>` if the MCP
-       tool does not support branch creation)
-   - If already on a non-main branch that matches the initiative: Skip, use current branch
-   - If the branch already exists remotely: Check it out without creating
+   - If the initiative was just created in step 1 (i.e., `initiative create` was called and returned a `branch` field): the branch is already created and checked out. **Skip branch creation entirely.**
+   - If joining an existing initiative (step 1 found an active initiative and did not call `create`):
+     - Derive a branch name from the initiative and feature name:
+       `feat/{initiative-slug}/{feature-slug}` (e.g., `feat/auth-api/add-refresh-endpoint`)
+     - Create and check out the branch via `mcp__zombiekit__git`:
+       - action: `branch` (or equivalent — use Bash `git checkout -b <name>` if the MCP
+         tool does not support branch creation)
+     - If already on a non-main branch that matches the initiative: Skip, use current branch
+     - If the branch already exists remotely: Check it out without creating
 
 4. **Spec + Plan** (single pass — no agents, no delegation)
    - In one focused step, produce two artifacts in the feature directory:

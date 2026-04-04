@@ -47,12 +47,14 @@ Goal: Create a safe refactoring specification that restructures code while prese
      d. Proceed to step 3
 
 3. **Create Branch**
-   - Derive a branch name: `refactor/{initiative-slug}/{refactor-slug}`
-     (e.g., `refactor/auth-api/extract-session-middleware`)
-   - Create and check out the branch via `mcp__zombiekit__git`:
-     - Use Bash `git checkout -b <name>` if the MCP tool does not support branch creation
-   - If already on a non-main branch that matches the initiative: Skip, use current branch
-   - If the branch already exists remotely: Check it out without creating
+   - If the initiative was just created in step 1 (i.e., `initiative create` was called and returned a `branch` field): the branch is already created and checked out. **Skip branch creation entirely.**
+   - If joining an existing initiative (step 1 found an active initiative and did not call `create`):
+     - Derive a branch name: `refactor/{initiative-slug}/{refactor-slug}`
+       (e.g., `refactor/auth-api/extract-session-middleware`)
+     - Create and check out the branch via `mcp__zombiekit__git`:
+       - Use Bash `git checkout -b <name>` if the MCP tool does not support branch creation
+     - If already on a non-main branch that matches the initiative: Skip, use current branch
+     - If the branch already exists remotely: Check it out without creating
 
 4. **Write INITIATIVE.md Step Table**
    - Create or update INITIATIVE.md in the initiative directory with a cycle entry:
