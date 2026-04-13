@@ -152,8 +152,9 @@ Both Claude Code and Gemini CLI are supported. Pass `--editor claude` or `--edit
 | Event | What fires | Purpose |
 |-------|-----------|---------|
 | `SessionStart` | `brains hook --editor <e> --event session-start` | Injects **unconditional rules** (no path/command triggers) into the system prompt at session start, resume, and compaction. |
-| `PreToolUse` (`Read`/`Write`/`Edit`/`MultiEdit`) | `brains hook --editor <e> --event pre-tool-use` | Injects **path-matched rules** before file operations — e.g. a rule scoped to `internal/mcp/**` fires only when those files are touched. |
+| `PreToolUse` (`Read`/`Write`/`Edit`/`MultiEdit`) | `brains hook --editor <e> --event pre-tool-use` | Injects **path-matched rules** before file operations (primary rule injection point for **Claude Code**). |
 | `PreToolUse` (`Bash`) | same | Injects **command-matched rules** when a bash invocation matches a rule's `commands:` prefix (e.g. `go build` → Taskfile reminder). |
+| `PostToolUse` (`Read`/`Write`/`Edit`/`MultiEdit`) | `brains hook --editor <e> --event post-tool-use` | Injects **path-matched rules** after file operations (primary rule injection point for **Gemini CLI**). |
 | `SessionEnd` | `brains hook --editor <e> --event session-end` | Cleanup / session-state teardown. |
 
 The `--event` flag is zombiekit's canonical event name; when wiring into Gemini CLI, map Gemini's `BeforeTool` to `--event pre-tool-use` in `settings.json`.
@@ -172,6 +173,12 @@ Add to `.gemini/settings.json` (or `~/.gemini/settings.json`):
       {
         "matcher": ".*",
         "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event pre-tool-use" }]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": ".*",
+        "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event post-tool-use" }]
       }
     ],
     "SessionEnd": [

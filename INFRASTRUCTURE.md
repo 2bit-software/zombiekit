@@ -34,18 +34,22 @@ zombiekit   stdio   user-scope   ~/.local/bin/brains serve --mode stdio
 
 | Event | Matcher | Command | Timeout |
 |-------|---------|---------|---------|
-| `SessionStart` | `startup\|resume\|compact` | `brains hook --event session-start` | 10s |
-| `PreToolUse` | `Read\|Write\|Edit\|MultiEdit` | `brains hook --event pre-tool-use` | 10s |
+| `SessionStart` | `startup\|resume\|compact` | `brains hook --editor <e> --event session-start` | 10s |
+| `PreToolUse` | `Read\|Write\|Edit\|MultiEdit` | `brains hook --editor <e> --event pre-tool-use` | 10s |
+| `PostToolUse` | `Read\|Write\|Edit\|MultiEdit` | `brains hook --editor <e> --event post-tool-use` | 10s |
 | `PostToolUse` | `Write\|Edit` | `prek-check.sh`, `sentrux-gate.sh` | 30s / 60s |
 | `PostToolUse` | `Grep` | `grep-mcp-hint.sh` | 5s |
 | `PostToolUse` | `*` | `codeforge-hook.sh` (async) | 10s |
 | `PostToolUseFailure` | — | `codeforge-hook.sh` (async) | — |
-| `SessionEnd` | — | `brains hook --event session-end` | 5s |
+| `SessionEnd` | — | `brains hook --editor <e> --event session-end` | 5s |
 | `TaskCompleted`, `Notification`, `SubagentStop` | — | `codeforge-hook.sh` (async) | — |
 
 `SessionStart` injects unconditional rules into the system prompt.
-`PreToolUse` injects path-matched rules before file operations.
-Both use session-state tracking to avoid duplicate injection; state resets on compaction.
+`PreToolUse` injects path-matched rules before file operations (primary for Claude).
+`PostToolUse` injects path-matched rules after file operations (primary for Gemini).
+All use session-state tracking to avoid duplicate injection; state resets on compaction.
+
+Each editor (Claude Code, Gemini CLI) has its own tool-naming vocabulary and data extraction logic. Use `--editor <claude|gemini>` to select the appropriate response format; detection falls back to `CLAUDE_CODE_ENTRYPOINT` and then to Claude as default.
 
 ### Folders
 
