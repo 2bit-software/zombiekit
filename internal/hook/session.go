@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/2bit-software/zombiekit/internal/rules"
@@ -15,7 +16,9 @@ func stateFilePath(sessionID string) string {
 }
 
 // LoadState reads the session state from disk. Returns a fresh state if
-// the file is missing or corrupt.
+// the file is missing or corrupt. Legacy state files whose InjectedRules
+// keys are bare rule IDs are migrated in-place to the composite
+// "ruleID|trigger" form used by the current dedup scheme.
 func LoadState(sessionID string, agent Agent) *rules.SessionState {
 	path := stateFilePath(sessionID)
 
@@ -29,6 +32,7 @@ func LoadState(sessionID string, agent Agent) *rules.SessionState {
 		return newState(sessionID, agent)
 	}
 
+	migrateInjectedKeys(&state)
 	return &state
 }
 
@@ -59,18 +63,31 @@ func DeleteState(sessionID string) error {
 	return err
 }
 
-// IsRuleInjected reports whether a rule has already been injected this session.
+// IsRuleInjected reports whether a file-glob rule (empty trigger) has
+// already been injected this session.
 func IsRuleInjected(state *rules.SessionState, ruleID string) bool {
-	_, ok := state.InjectedRules[ruleID]
+	return IsRuleInjectedFor(state, ruleID, "")
+}
+
+// IsRuleInjectedFor reports whether a rule has already fired for a
+// specific trigger this session. The trigger is empty for file-glob rules
+// and the matched command prefix for command rules.
+func IsRuleInjectedFor(state *rules.SessionState, ruleID, trigger string) bool {
+	_, ok := state.InjectedRules[injectionKey(ruleID, trigger)]
 	return ok
 }
 
-// MarkRuleInjected records that a rule has been injected.
+// MarkRuleInjected records that a file-glob rule has been injected.
 func MarkRuleInjected(state *rules.SessionState, ruleID string) {
+	MarkRuleInjectedFor(state, ruleID, "")
+}
+
+// MarkRuleInjectedFor records that a rule has fired for the given trigger.
+func MarkRuleInjectedFor(state *rules.SessionState, ruleID, trigger string) {
 	if state.InjectedRules == nil {
 		state.InjectedRules = make(map[string]time.Time)
 	}
-	state.InjectedRules[ruleID] = time.Now()
+	state.InjectedRules[injectionKey(ruleID, trigger)] = time.Now()
 }
 
 // ResetInjectedRules clears the injected rules set and increments the
@@ -86,5 +103,28 @@ func newState(sessionID string, agent Agent) *rules.SessionState {
 		Agent:         string(agent),
 		StartedAt:     time.Now(),
 		InjectedRules: make(map[string]time.Time),
+	}
+}
+
+// injectionKey builds the composite key used in SessionState.InjectedRules.
+// The pipe separator is not valid in either a rule ID (which is
+// "source:filename") or a command matcher (which shell-splits earlier in
+// the pipeline), so collisions are structurally impossible.
+func injectionKey(ruleID, trigger string) string {
+	return ruleID + "|" + trigger
+}
+
+// migrateInjectedKeys rewrites legacy state entries whose keys are bare
+// rule IDs (no pipe separator) into the composite form with an empty
+// trigger, so older state files load cleanly.
+func migrateInjectedKeys(state *rules.SessionState) {
+	if state.InjectedRules == nil {
+		return
+	}
+	for key, ts := range state.InjectedRules {
+		if !strings.Contains(key, "|") {
+			delete(state.InjectedRules, key)
+			state.InjectedRules[key+"|"] = ts
+		}
 	}
 }

@@ -27,11 +27,14 @@ func ParseRule(content []byte, name, filePath string, source RuleSource) (*Rule,
 	}
 
 	return &Rule{
-		Name:     name,
-		FileName: fileName,
-		Source:   source,
-		FilePath: filePath,
-		Paths:    fm.NormalizedPaths(),
-		Body:     body,
+		Name:                name,
+		FileName:            fileName,
+		Source:              source,
+		FilePath:            filePath,
+		Paths:               fm.NormalizedPaths(),
+		Commands:            fm.NormalizedCommands(),
+		RequiresFiles:       fm.NormalizedRequiresFiles(),
+		RequiresFilesAbsent: fm.NormalizedRequiresFilesAbsent(),
+		Body:                body,
 	}, nil
 }

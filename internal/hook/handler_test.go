@@ -9,6 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// handleText is a test helper that drops the HandleResult metadata and
+// returns only the injected output, since most tests assert on text only.
+func handleText(t *testing.T, h *Handler, e *HookEvent) (string, error) {
+	t.Helper()
+	r, err := h.Handle(e)
+	return r.Output, err
+}
+
 func setupTestRules(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -54,7 +62,7 @@ func TestHandler_SessionStart_InjectsUnconditional(t *testing.T) {
 	defer func() { _ = DeleteState(sessionID) }()
 
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "SessionStart",
 		CWD:           dir,
@@ -75,7 +83,7 @@ func TestHandler_PreToolUse_Read_InjectsMatchingRules(t *testing.T) {
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
 	// First read — should inject Go rules
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -95,7 +103,7 @@ func TestHandler_PreToolUse_Deduplication(t *testing.T) {
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
 	// First read
-	output1, err := handler.Handle(&HookEvent{
+	output1, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -106,7 +114,7 @@ func TestHandler_PreToolUse_Deduplication(t *testing.T) {
 	assert.NotEmpty(t, output1)
 
 	// Second read — should be empty (dedup)
-	output2, err := handler.Handle(&HookEvent{
+	output2, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -125,7 +133,7 @@ func TestHandler_PreToolUse_DifferentTypes(t *testing.T) {
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
 	// Read Go file
-	output1, err := handler.Handle(&HookEvent{
+	output1, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -137,7 +145,7 @@ func TestHandler_PreToolUse_DifferentTypes(t *testing.T) {
 	assert.NotContains(t, output1, "TypeScript")
 
 	// Read TS file — should inject TS rules only
-	output2, err := handler.Handle(&HookEvent{
+	output2, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -157,7 +165,7 @@ func TestHandler_Compaction_ResetsTracking(t *testing.T) {
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
 	// Inject Go rules
-	_, err := handler.Handle(&HookEvent{
+	_, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -167,7 +175,7 @@ func TestHandler_Compaction_ResetsTracking(t *testing.T) {
 	require.NoError(t, err)
 
 	// Compaction
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "SessionStart",
 		CWD:           dir,
@@ -177,7 +185,7 @@ func TestHandler_Compaction_ResetsTracking(t *testing.T) {
 	assert.Contains(t, output, "General Rules") // unconditional re-injected
 
 	// Read Go file again — should re-inject after compaction
-	output2, err := handler.Handle(&HookEvent{
+	output2, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -195,7 +203,7 @@ func TestHandler_MultiEdit(t *testing.T) {
 
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -219,7 +227,7 @@ func TestHandler_SessionEnd_DeletesState(t *testing.T) {
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
 	// Create state
-	_, err := handler.Handle(&HookEvent{
+	_, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "SessionStart",
 		CWD:           dir,
@@ -228,7 +236,7 @@ func TestHandler_SessionEnd_DeletesState(t *testing.T) {
 	require.NoError(t, err)
 
 	// End session
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "SessionEnd",
 		CWD:           dir,
@@ -249,7 +257,7 @@ func TestHandler_EmptyBodyRules_Skipped(t *testing.T) {
 
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -267,7 +275,7 @@ func TestHandler_Write_InjectsIfNotSeen(t *testing.T) {
 
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -286,7 +294,7 @@ func TestHandler_Resume_ResetsTracking(t *testing.T) {
 	handler := NewHandler(dir, t.TempDir(), AgentGemini)
 
 	// Inject Go rules
-	_, err := handler.Handle(&HookEvent{
+	_, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -296,7 +304,7 @@ func TestHandler_Resume_ResetsTracking(t *testing.T) {
 	require.NoError(t, err)
 
 	// Resume
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "SessionStart",
 		CWD:           dir,
@@ -306,7 +314,7 @@ func TestHandler_Resume_ResetsTracking(t *testing.T) {
 	assert.Contains(t, output, "General Rules")
 
 	// Read Go file again — should re-inject after resume
-	output2, err := handler.Handle(&HookEvent{
+	output2, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,
@@ -324,7 +332,7 @@ func TestHandler_ClaudeFormat_SessionStart(t *testing.T) {
 
 	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "SessionStart",
 		CWD:           dir,
@@ -336,6 +344,170 @@ func TestHandler_ClaudeFormat_SessionStart(t *testing.T) {
 	assert.Contains(t, output, "General Rules")
 }
 
+// setupBashRulesRepo wires a temp repo with a Taskfile-aware command rule
+// and a symmetrical absent-Taskfile rule, returning the dir for event cwd.
+func setupBashRulesRepo(t *testing.T, withTaskfile bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".git"), 0o755))
+
+	rulesDir := filepath.Join(dir, ".brains", "rules")
+	require.NoError(t, os.MkdirAll(rulesDir, 0o755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(rulesDir, "tf-present.md"), []byte(`---
+commands:
+  - "go test"
+  - "go run"
+requires_files:
+  - Taskfile.yml
+---
+# Use the Taskfile
+
+Run `+"`task dev -- test`"+` instead.
+`), 0o644))
+
+	require.NoError(t, os.WriteFile(filepath.Join(rulesDir, "tf-absent.md"), []byte(`---
+commands:
+  - "go test"
+requires_files_absent:
+  - Taskfile.yml
+---
+# No Taskfile
+
+Consider adding one.
+`), 0o644))
+
+	if withTaskfile {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: 3\n"), 0o644))
+	}
+
+	return dir
+}
+
+func TestHandler_PreToolUse_Bash_FiresOnMatch(t *testing.T) {
+	dir := setupBashRulesRepo(t, true)
+	sessionID := "test-bash-fires-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	result, err := handler.Handle(&HookEvent{
+		SessionID:     sessionID,
+		HookEventName: "PreToolUse",
+		CWD:           dir,
+		ToolName:      "Bash",
+		ToolInput:     &ToolInput{Command: "go test ./..."},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result.Output, "task dev -- test")
+	require.Len(t, result.MatchedRules, 1)
+	assert.Equal(t, "go test", result.MatchedRules[0].Trigger)
+}
+
+func TestHandler_PreToolUse_Bash_DedupPerTrigger(t *testing.T) {
+	dir := setupBashRulesRepo(t, true)
+	sessionID := "test-bash-dedup-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+
+	r1, err := handler.Handle(&HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Bash", ToolInput: &ToolInput{Command: "go test ./..."},
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, r1.Output)
+
+	r2, err := handler.Handle(&HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Bash", ToolInput: &ToolInput{Command: "go test -count=1 ./..."},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, r2.Output)
+	require.Len(t, r2.SkippedRules, 1)
+	assert.Equal(t, "go test", r2.SkippedRules[0].Trigger)
+
+	r3, err := handler.Handle(&HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Bash", ToolInput: &ToolInput{Command: "go run main.go"},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, r3.Output, "task dev -- test")
+	require.Len(t, r3.MatchedRules, 1)
+	assert.Equal(t, "go run", r3.MatchedRules[0].Trigger)
+}
+
+func TestHandler_PreToolUse_Bash_NoMatch(t *testing.T) {
+	dir := setupBashRulesRepo(t, true)
+	sessionID := "test-bash-nomatch-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	result, err := handler.Handle(&HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Bash", ToolInput: &ToolInput{Command: "ls -la"},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Output)
+	assert.Empty(t, result.MatchedRules)
+}
+
+func TestHandler_PreToolUse_Bash_TaskfileGateAbsent(t *testing.T) {
+	dir := setupBashRulesRepo(t, false)
+	sessionID := "test-bash-gate-off-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	result, err := handler.Handle(&HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Bash", ToolInput: &ToolInput{Command: "go test ./..."},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result.Output, "No Taskfile")
+	assert.NotContains(t, result.Output, "task dev -- test")
+}
+
+func TestHandler_PreToolUse_Bash_EnvPrefixStripped(t *testing.T) {
+	dir := setupBashRulesRepo(t, true)
+	sessionID := "test-bash-env-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	result, err := handler.Handle(&HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Bash", ToolInput: &ToolInput{Command: "CGO_ENABLED=0 go test ./..."},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result.Output, "task dev -- test")
+}
+
+func TestHandler_PreToolUse_Bash_ChainedCommand(t *testing.T) {
+	dir := setupBashRulesRepo(t, true)
+	sessionID := "test-bash-chain-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	result, err := handler.Handle(&HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Bash", ToolInput: &ToolInput{Command: "cd pkg && go test ./..."},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result.Output, "task dev -- test")
+}
+
+func TestHandler_PreToolUse_Bash_EmptyCommand(t *testing.T) {
+	dir := setupBashRulesRepo(t, true)
+	sessionID := "test-bash-empty-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	result, err := handler.Handle(&HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Bash", ToolInput: &ToolInput{Command: ""},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Output)
+}
+
 func TestHandler_ClaudeFormat_PreToolUse(t *testing.T) {
 	dir := setupTestRules(t)
 	sessionID := "test-claude-ptu-" + t.Name()
@@ -343,7 +515,7 @@ func TestHandler_ClaudeFormat_PreToolUse(t *testing.T) {
 
 	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
-	output, err := handler.Handle(&HookEvent{
+	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
 		CWD:           dir,

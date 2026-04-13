@@ -71,3 +71,42 @@ func TestMarkRuleInjected_NilMap(t *testing.T) {
 	MarkRuleInjected(state, "project:go.md")
 	assert.True(t, IsRuleInjected(state, "project:go.md"))
 }
+
+// A session file written before the per-trigger dedup key format must
+// still load correctly, with bare rule IDs rewritten to empty-trigger keys.
+func TestLoadState_MigratesLegacyKeys(t *testing.T) {
+	sessionID := "test-legacy-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	path := filepath.Join(os.TempDir(), "zk-session-"+sessionID+".json")
+	legacy := `{
+  "session_id": "` + sessionID + `",
+  "agent": "claude",
+  "started_at": "2024-01-01T00:00:00Z",
+  "compaction_count": 0,
+  "injected_rules": {
+    "project:go.md": "2024-01-01T00:00:01Z",
+    "global:general.md": "2024-01-01T00:00:02Z"
+  }
+}`
+	require.NoError(t, os.WriteFile(path, []byte(legacy), 0o600))
+
+	state := LoadState(sessionID, AgentClaude)
+	assert.True(t, IsRuleInjectedFor(state, "project:go.md", ""))
+	assert.True(t, IsRuleInjected(state, "project:go.md"))
+	assert.True(t, IsRuleInjected(state, "global:general.md"))
+	_, bareStillThere := state.InjectedRules["project:go.md"]
+	assert.False(t, bareStillThere, "bare-key entry should have been migrated away")
+}
+
+// Per-trigger dedup: two triggers mapped to the same rule inject
+// independently, while the same trigger seen twice is suppressed.
+func TestMarkRuleInjectedFor_PerTriggerDedup(t *testing.T) {
+	state := &rules.SessionState{}
+	MarkRuleInjectedFor(state, "project:tf.md", "go test")
+	assert.True(t, IsRuleInjectedFor(state, "project:tf.md", "go test"))
+	assert.False(t, IsRuleInjectedFor(state, "project:tf.md", "go run"))
+
+	MarkRuleInjectedFor(state, "project:tf.md", "go run")
+	assert.True(t, IsRuleInjectedFor(state, "project:tf.md", "go run"))
+}
