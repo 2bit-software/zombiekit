@@ -61,3 +61,4 @@ tmp/
 
 # Orchestrator worktrees (runtime directory)
 worktrees/
+.gemini

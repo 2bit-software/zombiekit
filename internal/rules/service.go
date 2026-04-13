@@ -101,7 +101,8 @@ func (s *Service) loadAll() ([]*Rule, error) {
 	}
 
 	dirs := resolver.FindRulesDirs()
-	return resolver.LoadRules(dirs), nil
+	allRules := resolver.LoadRules(dirs)
+	return allRules, nil
 }
 
 func filterEmptyBody(rules []*Rule) []*Rule {

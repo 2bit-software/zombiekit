@@ -64,3 +64,18 @@ func TestMatchRules_DirectoryPattern(t *testing.T) {
 	assert.Len(t, MatchRules(rules, "src/api/handler.go"), 1)
 	assert.Len(t, MatchRules(rules, "src/cli/main.go"), 0)
 }
+
+func TestMatchRules_PathNormalization(t *testing.T) {
+	rules := []*Rule{
+		{FileName: "go.md", Paths: []string{"**/*.go"}, Body: "go rules"},
+	}
+
+	// Relative path
+	assert.Len(t, MatchRules(rules, "internal/rules/service.go"), 1)
+
+	// Absolute path
+	assert.Len(t, MatchRules(rules, "/Users/morgan/Projects/personal/zombiekit/internal/rules/service.go"), 1)
+
+	// Path with backslashes (Windows style, should be normalized)
+	assert.Len(t, MatchRules(rules, "internal\\rules\\service.go"), 1)
+}

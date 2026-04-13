@@ -33,10 +33,6 @@ func NewResolver(workingDir, homeDir string) (*Resolver, error) {
 		return nil, err
 	}
 
-	if homeDir == "" {
-		homeDir, _ = os.UserHomeDir()
-	}
-
 	return &Resolver{
 		workingDir: absWorkingDir,
 		homeDir:    homeDir,

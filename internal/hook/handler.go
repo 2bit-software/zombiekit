@@ -40,6 +40,8 @@ func (h *Handler) Handle(event *HookEvent) (HandleResult, error) {
 		return h.handleSessionStart(event)
 	case "PreToolUse":
 		return h.handlePreToolUse(event)
+	case "PostToolUse":
+		return h.handlePostToolUse(event)
 	case "SessionEnd":
 		return h.handleSessionEnd(event)
 	default:
@@ -90,11 +92,16 @@ func (h *Handler) handleSessionStart(event *HookEvent) (HandleResult, error) {
 }
 
 func (h *Handler) handlePreToolUse(event *HookEvent) (HandleResult, error) {
-	if event.ToolName == "Bash" {
+	editor, ok := LookupEditor(h.agent)
+	if !ok {
+		return HandleResult{}, fmt.Errorf("hook: editor not registered: %s", h.agent)
+	}
+
+	if editor.IsShellTool(event.ToolName) {
 		return h.handlePreBash(event)
 	}
 
-	filePaths := event.ExtractFilePaths()
+	filePaths := editor.ExtractFilePaths(event)
 	if len(filePaths) == 0 {
 		return HandleResult{}, nil
 	}
@@ -175,4 +182,50 @@ func (h *Handler) handlePreBash(event *HookEvent) (HandleResult, error) {
 
 func (h *Handler) handleSessionEnd(event *HookEvent) (HandleResult, error) {
 	return HandleResult{}, DeleteState(event.SessionID)
+}
+
+func (h *Handler) handlePostToolUse(event *HookEvent) (HandleResult, error) {
+	editor, ok := LookupEditor(h.agent)
+	if !ok {
+		return HandleResult{}, fmt.Errorf("hook: editor not registered: %s", h.agent)
+	}
+
+	// We don't inject rules for failed tool calls
+	if event.ToolResponse != nil && event.ToolResponse.Success != nil && !*event.ToolResponse.Success {
+		return HandleResult{}, nil
+	}
+
+	filePaths := editor.ExtractFilePaths(event)
+	if len(filePaths) == 0 {
+		return HandleResult{}, nil
+	}
+
+	state := LoadState(event.SessionID, h.agent)
+
+	matchedRules, err := h.rules.ResolveForFiles(filePaths)
+	if err != nil {
+		return HandleResult{}, err
+	}
+
+	var bodies []string
+	var matched, skipped []MatchedRule
+	for _, rule := range matchedRules {
+		if IsRuleInjected(state, rule.ID()) {
+			skipped = append(skipped, MatchedRule{ID: rule.ID()})
+			continue
+		}
+		MarkRuleInjected(state, rule.ID())
+		matched = append(matched, MatchedRule{ID: rule.ID()})
+		bodies = append(bodies, rule.Body)
+	}
+
+	if err := SaveState(state); err != nil {
+		return HandleResult{}, err
+	}
+
+	return HandleResult{
+		Bodies:       bodies,
+		MatchedRules: matched,
+		SkippedRules: skipped,
+	}, nil
 }

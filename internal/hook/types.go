@@ -15,22 +15,40 @@ type HookEvent struct {
 
 // ToolInput contains the input parameters passed to the tool.
 type ToolInput struct {
-	FilePath string      `json:"file_path,omitempty"`
-	Edits    []EditEntry `json:"edits,omitempty"`
-	Command  string      `json:"command,omitempty"`
+	FilePath    string      `json:"file_path,omitempty"`
+	FilePathAlt string      `json:"filePath,omitempty"`
+	Edits       []EditEntry `json:"edits,omitempty"`
+	Command     string      `json:"command,omitempty"`
+}
+
+// GetFilePath returns the file path from either snake_case or camelCase field.
+func (t *ToolInput) GetFilePath() string {
+	if t.FilePath != "" {
+		return t.FilePath
+	}
+	return t.FilePathAlt
 }
 
 // EditEntry represents a single file edit in a MultiEdit operation.
 type EditEntry struct {
-	FilePath  string `json:"file_path"`
-	OldString string `json:"old_string"`
-	NewString string `json:"new_string"`
+	FilePath    string `json:"file_path"`
+	FilePathAlt string `json:"filePath"`
+	OldString   string `json:"old_string"`
+	NewString   string `json:"new_string"`
+}
+
+// GetFilePath returns the file path from either snake_case or camelCase field.
+func (e *EditEntry) GetFilePath() string {
+	if e.FilePath != "" {
+		return e.FilePath
+	}
+	return e.FilePathAlt
 }
 
 // ToolResponse contains the output returned by the tool.
 type ToolResponse struct {
-	FilePath string `json:"filePath,omitempty"` // camelCase per Claude Code protocol
-	Success  bool   `json:"success,omitempty"`
+	FilePath string `json:"filePath,omitempty"`
+	Success  *bool  `json:"success,omitempty"`
 }
 
 // Agent identifies which AI coding agent is running.
@@ -49,33 +67,3 @@ type MatchedRule struct {
 	Trigger string `json:"trigger,omitempty"`
 }
 
-// ExtractFilePaths returns all file paths from the hook event based on tool type.
-func (e *HookEvent) ExtractFilePaths() []string {
-	if e.ToolInput == nil {
-		return nil
-	}
-
-	switch e.ToolName {
-	case "Read":
-		if e.ToolInput.FilePath != "" {
-			return []string{e.ToolInput.FilePath}
-		}
-	case "Write", "Edit":
-		if e.ToolInput.FilePath != "" {
-			return []string{e.ToolInput.FilePath}
-		}
-		if e.ToolResponse != nil && e.ToolResponse.FilePath != "" {
-			return []string{e.ToolResponse.FilePath}
-		}
-	case "MultiEdit":
-		var paths []string
-		for _, edit := range e.ToolInput.Edits {
-			if edit.FilePath != "" {
-				paths = append(paths, edit.FilePath)
-			}
-		}
-		return paths
-	}
-
-	return nil
-}

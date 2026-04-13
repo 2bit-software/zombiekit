@@ -7,7 +7,24 @@ import "sort"
 type Formatter interface {
 	FormatSessionStart(bodies []string) string
 	FormatPreToolUse(bodies []string) string
+	FormatPostToolUse(bodies []string) string
 	FormatSessionEnd(bodies []string) string
+}
+
+// Editor describes an editor's full hook contract: the output formatter,
+// the tool-name vocabulary for file operations, and the shell-tool
+// identifier. Each supported editor registers one implementation via
+// RegisterEditor during package init.
+type Editor interface {
+	Formatter
+	// ExtractFilePaths returns the file paths referenced by a tool event
+	// according to this editor's tool naming and tool_input schema.
+	// Events whose ToolName is not a file-operation tool for this editor
+	// return nil.
+	ExtractFilePaths(event *HookEvent) []string
+	// IsShellTool reports whether toolName is this editor's
+	// shell-command execution tool.
+	IsShellTool(toolName string) bool
 }
 
 // EditorSource describes how an editor was chosen for a hook invocation.
@@ -22,21 +39,21 @@ const (
 	EditorSourceDefault EditorSource = "default"
 )
 
-var editors = map[Agent]Formatter{}
+var editors = map[Agent]Editor{}
 
-// RegisterEditor adds a formatter to the editor registry. It panics if id is
+// RegisterEditor adds an editor to the registry. It panics if id is
 // already registered, since duplicate registration is a programmer error.
-func RegisterEditor(id Agent, f Formatter) {
+func RegisterEditor(id Agent, e Editor) {
 	if _, exists := editors[id]; exists {
 		panic("hook: editor already registered: " + string(id))
 	}
-	editors[id] = f
+	editors[id] = e
 }
 
-// LookupEditor returns the formatter for id and reports whether it was found.
-func LookupEditor(id Agent) (Formatter, bool) {
-	f, ok := editors[id]
-	return f, ok
+// LookupEditor returns the editor for id and reports whether it was found.
+func LookupEditor(id Agent) (Editor, bool) {
+	e, ok := editors[id]
+	return e, ok
 }
 
 // KnownEditors returns the registered editor IDs in sorted order, for use in

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"io"
 
 	"github.com/urfave/cli/v2"
 
@@ -44,21 +45,29 @@ func runHook(c *cli.Context) error {
 	}
 
 	var event hook.HookEvent
-	if err := json.NewDecoder(os.Stdin).Decode(&event); err != nil {
+	raw, _ := io.ReadAll(os.Stdin)
+	f, _ := os.OpenFile("/tmp/zk-hook-debug.jsonl", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	_, _ = f.Write(append(raw, '\n'))
+	_ = f.Close()
+	if err := json.Unmarshal(raw, &event); err != nil {
 		return fmt.Errorf("reading hook event from stdin: %w", err)
 	}
 
-	if event.HookEventName == "" {
-		switch eventType {
-		case "session-start":
-			event.HookEventName = "SessionStart"
-		case "pre-tool-use":
-			event.HookEventName = "PreToolUse"
-		case "session-end":
-			event.HookEventName = "SessionEnd"
-		default:
-			return fmt.Errorf("unknown event type: %s", eventType)
-		}
+	// The --event flag is the canonical event identifier regardless of what
+	// the editor wrote into hook_event_name. This lets editors with
+	// different lifecycle vocabularies (Gemini's BeforeTool, Claude's
+	// PreToolUse) share a single handler switch.
+	switch eventType {
+	case "session-start":
+		event.HookEventName = "SessionStart"
+	case "pre-tool-use":
+		event.HookEventName = "PreToolUse"
+	case "post-tool-use":
+		event.HookEventName = "PostToolUse"
+	case "session-end":
+		event.HookEventName = "SessionEnd"
+	default:
+		return fmt.Errorf("unknown event type: %s", eventType)
 	}
 
 	homeDir, _ := os.UserHomeDir()
@@ -76,6 +85,11 @@ func runHook(c *cli.Context) error {
 		command = event.ToolInput.Command
 	}
 
+	var filePaths []string
+	if ed, ok := hook.LookupEditor(editor); ok {
+		filePaths = ed.ExtractFilePaths(&event)
+	}
+
 	_ = sink.Write(hook.AuditRecord{
 		Timestamp:      start.UTC(),
 		Event:          event.HookEventName,
@@ -86,7 +100,7 @@ func runHook(c *cli.Context) error {
 		Source:         event.Source,
 		ToolName:       event.ToolName,
 		Command:        command,
-		FilePaths:      event.ExtractFilePaths(),
+		FilePaths:      filePaths,
 		MatchedRules:   result.MatchedRules,
 		SkippedRules:   result.SkippedRules,
 		OutputBytes:    len(output),
@@ -119,6 +133,8 @@ func formatHookOutput(editor hook.Agent, eventName string, bodies []string) stri
 		return formatter.FormatSessionStart(bodies)
 	case "PreToolUse":
 		return formatter.FormatPreToolUse(bodies)
+	case "PostToolUse":
+		return formatter.FormatPostToolUse(bodies)
 	case "SessionEnd":
 		return formatter.FormatSessionEnd(bodies)
 	}

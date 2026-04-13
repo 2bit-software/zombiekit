@@ -120,9 +120,10 @@ func emitLine(w io.Writer, line []byte, session string, raw bool) error {
 func printPretty(w io.Writer, rec hook.AuditRecord) error {
 	ts := rec.Timestamp.Local().Format("15:04:05.000")
 	_, err := fmt.Fprintf(w,
-		"%s  %-12s  session=%s  output=%dB  dur=%dµs  matched=%s  skipped=%s%s\n",
+		"%s  %-12s  %-15s  session=%s  output=%dB  dur=%dµs  matched=%s  skipped=%s%s\n",
 		ts,
 		rec.Event,
+		formatEditor(rec.Agent, rec.EditorSource),
 		shortSession(rec.SessionID),
 		rec.OutputBytes,
 		rec.DurationMicros,
@@ -131,6 +132,19 @@ func printPretty(w io.Writer, rec hook.AuditRecord) error {
 		errSuffix(rec.Err),
 	)
 	return err
+}
+
+// formatEditor renders the editor ID with its selection source annotation
+// (e.g. "gemini(flag)"). Records written before the EditorSource field
+// existed just show the agent name.
+func formatEditor(agent, source string) string {
+	if agent == "" {
+		agent = "-"
+	}
+	if source == "" {
+		return agent
+	}
+	return fmt.Sprintf("%s(%s)", agent, source)
 }
 
 // formatMatchedRules renders a slice of MatchedRule entries for the pretty

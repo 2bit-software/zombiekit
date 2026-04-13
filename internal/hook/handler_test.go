@@ -63,7 +63,7 @@ func TestHandler_SessionStart_InjectsUnconditional(t *testing.T) {
 	sessionID := "test-ss-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "SessionStart",
@@ -82,7 +82,7 @@ func TestHandler_PreToolUse_Read_InjectsMatchingRules(t *testing.T) {
 	sessionID := "test-ptr-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	// First read — should inject Go rules
 	output, err := handleText(t, handler, &HookEvent{
@@ -102,7 +102,7 @@ func TestHandler_PreToolUse_Deduplication(t *testing.T) {
 	sessionID := "test-dedup-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	// First read
 	output1, err := handleText(t, handler, &HookEvent{
@@ -132,7 +132,7 @@ func TestHandler_PreToolUse_DifferentTypes(t *testing.T) {
 	sessionID := "test-diff-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	// Read Go file
 	output1, err := handleText(t, handler, &HookEvent{
@@ -164,7 +164,7 @@ func TestHandler_Compaction_ResetsTracking(t *testing.T) {
 	sessionID := "test-compact-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	// Inject Go rules
 	_, err := handleText(t, handler, &HookEvent{
@@ -203,7 +203,7 @@ func TestHandler_MultiEdit(t *testing.T) {
 	sessionID := "test-multi-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
@@ -226,7 +226,7 @@ func TestHandler_SessionEnd_DeletesState(t *testing.T) {
 	dir := setupTestRules(t)
 	sessionID := "test-end-" + t.Name()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	// Create state
 	_, err := handleText(t, handler, &HookEvent{
@@ -257,7 +257,7 @@ func TestHandler_EmptyBodyRules_Skipped(t *testing.T) {
 	sessionID := "test-empty-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
@@ -275,7 +275,7 @@ func TestHandler_Write_InjectsIfNotSeen(t *testing.T) {
 	sessionID := "test-write-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	output, err := handleText(t, handler, &HookEvent{
 		SessionID:     sessionID,
@@ -293,7 +293,7 @@ func TestHandler_Resume_ResetsTracking(t *testing.T) {
 	sessionID := "test-resume-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	// Inject Go rules
 	_, err := handleText(t, handler, &HookEvent{
@@ -386,7 +386,7 @@ func TestHandler_PreToolUse_Bash_FiresOnMatch(t *testing.T) {
 	sessionID := "test-bash-fires-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 	result, err := handler.Handle(&HookEvent{
 		SessionID:     sessionID,
 		HookEventName: "PreToolUse",
@@ -405,7 +405,7 @@ func TestHandler_PreToolUse_Bash_DedupPerTrigger(t *testing.T) {
 	sessionID := "test-bash-dedup-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
 	r1, err := handler.Handle(&HookEvent{
 		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
@@ -438,7 +438,7 @@ func TestHandler_PreToolUse_Bash_NoMatch(t *testing.T) {
 	sessionID := "test-bash-nomatch-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 	result, err := handler.Handle(&HookEvent{
 		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "ls -la"},
@@ -453,7 +453,7 @@ func TestHandler_PreToolUse_Bash_TaskfileGateAbsent(t *testing.T) {
 	sessionID := "test-bash-gate-off-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 	result, err := handler.Handle(&HookEvent{
 		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "go test ./..."},
@@ -469,7 +469,7 @@ func TestHandler_PreToolUse_Bash_EnvPrefixStripped(t *testing.T) {
 	sessionID := "test-bash-env-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 	result, err := handler.Handle(&HookEvent{
 		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "CGO_ENABLED=0 go test ./..."},
@@ -483,7 +483,7 @@ func TestHandler_PreToolUse_Bash_ChainedCommand(t *testing.T) {
 	sessionID := "test-bash-chain-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 	result, err := handler.Handle(&HookEvent{
 		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "cd pkg && go test ./..."},
@@ -497,7 +497,7 @@ func TestHandler_PreToolUse_Bash_EmptyCommand(t *testing.T) {
 	sessionID := "test-bash-empty-" + t.Name()
 	defer func() { _ = DeleteState(sessionID) }()
 
-	handler := NewHandler(dir, t.TempDir(), AgentGemini)
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 	result, err := handler.Handle(&HookEvent{
 		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
 		ToolName: "Bash", ToolInput: &ToolInput{Command: ""},
@@ -505,4 +505,3 @@ func TestHandler_PreToolUse_Bash_EmptyCommand(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.Bodies)
 }
-

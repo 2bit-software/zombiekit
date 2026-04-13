@@ -44,9 +44,51 @@ func (claudeFormatter) FormatPreToolUse(bodies []string) string {
 	return string(out)
 }
 
+// FormatPostToolUse is a no-op for Claude — the protocol typically handles
+// rule injection during PreToolUse permissions.
+func (claudeFormatter) FormatPostToolUse([]string) string { return "" }
+
 // FormatSessionEnd is a no-op for Claude — the protocol does not consume
 // output from SessionEnd hooks.
 func (claudeFormatter) FormatSessionEnd([]string) string { return "" }
+
+// ExtractFilePaths returns the file paths referenced by a Claude Code tool
+// event. Recognizes the Read, Write, Edit, and MultiEdit tool names; other
+// tool names (including any Gemini-style tool names) return nil.
+func (claudeFormatter) ExtractFilePaths(event *HookEvent) []string {
+	if event.ToolInput == nil {
+		return nil
+	}
+
+	switch event.ToolName {
+	case "Read":
+		if path := event.ToolInput.GetFilePath(); path != "" {
+			return []string{path}
+		}
+	case "Write", "Edit":
+		if path := event.ToolInput.GetFilePath(); path != "" {
+			return []string{path}
+		}
+		if event.ToolResponse != nil && event.ToolResponse.FilePath != "" {
+			return []string{event.ToolResponse.FilePath}
+		}
+	case "MultiEdit":
+		var paths []string
+		for _, edit := range event.ToolInput.Edits {
+			if path := edit.GetFilePath(); path != "" {
+				paths = append(paths, path)
+			}
+		}
+		return paths
+	}
+
+	return nil
+}
+
+// IsShellTool reports whether toolName is Claude Code's Bash tool.
+func (claudeFormatter) IsShellTool(toolName string) bool {
+	return toolName == "Bash"
+}
 
 type claudeHookResponse struct {
 	HookSpecificOutput claudeHookSpecificOutput `json:"hookSpecificOutput"`
