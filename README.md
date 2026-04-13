@@ -143,6 +143,37 @@ Configuration is in `.env` (copied from `.env.example` by `task dev -- setup`). 
 | `BRAINS_BACKEND` | postgres | Storage backend (sqlite/postgres) |
 | `BRAINS_OLLAMA_URL` | http://localhost:11434 | Ollama API endpoint |
 
+## Hooks
+
+ZombieKit registers Claude Code hooks that inject rules into the conversation at the right moments. Rules live in `.brains/rules/` (project-local) and `~/.brains/rules/` (global), and accumulate — all matching rules fire, none shadow.
+
+| Event | What fires | Purpose |
+|-------|-----------|---------|
+| `SessionStart` | `brains hook --event session-start` | Injects **unconditional rules** (no path/command triggers) into the system prompt at session start, resume, and compaction. |
+| `PreToolUse` (`Read`/`Write`/`Edit`/`MultiEdit`) | `brains hook --event pre-tool-use` | Injects **path-matched rules** before file operations — e.g. a rule scoped to `internal/mcp/**` fires only when those files are touched. |
+| `PreToolUse` (`Bash`) | same | Injects **command-matched rules** when a bash invocation matches a rule's `commands:` prefix (e.g. `go build` → Taskfile reminder). |
+| `SessionEnd` | `brains hook --event session-end` | Cleanup / session-state teardown. |
+
+**Hooks are warnings, not hard stops.** A matched rule surfaces guidance alongside the tool call — the agent still executes the command. Each `(rule, trigger)` fires at most once per session; state resets on compaction.
+
+### Bash command rules
+
+Rules can declare command prefixes and file-existence gates:
+
+```yaml
+---
+commands: ["go test", "go run", "go build"]
+requires_files: [Taskfile.yml]
+---
+# Use the Taskfile
+Prefer `task dev -- test` over bare `go` invocations.
+```
+
+- Commands match as whole-token prefixes; chained commands (`&&`, `||`, `;`, `|`) are split and matched independently.
+- `requires_files` / `requires_files_absent` walk up from `cwd` to the enclosing git root, so subdirectory invocations still resolve a top-level `Taskfile.yml`.
+
+See [INFRASTRUCTURE.md](INFRASTRUCTURE.md#hooks) for the full hook table, rule resolution order, and matching semantics.
+
 ## Learn More
 
 - [Architecture and Design](docs/DESIGN.md) — Full architecture, all skills, configuration options
