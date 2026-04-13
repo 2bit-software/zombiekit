@@ -17,6 +17,7 @@ type HookEvent struct {
 type ToolInput struct {
 	FilePath string      `json:"file_path,omitempty"`
 	Edits    []EditEntry `json:"edits,omitempty"`
+	Command  string      `json:"command,omitempty"`
 }
 
 // EditEntry represents a single file edit in a MultiEdit operation.
@@ -39,6 +40,14 @@ const (
 	AgentClaude Agent = "claude"
 	AgentGemini Agent = "gemini"
 )
+
+// MatchedRule records that a rule fired (or was deduped) for a specific
+// trigger. File-glob rules use an empty trigger; command rules carry the
+// command prefix that caused the match.
+type MatchedRule struct {
+	ID      string `json:"id"`
+	Trigger string `json:"trigger,omitempty"`
+}
 
 // ExtractFilePaths returns all file paths from the hook event based on tool type.
 func (e *HookEvent) ExtractFilePaths() []string {

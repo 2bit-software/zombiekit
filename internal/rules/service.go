@@ -66,6 +66,34 @@ func (s *Service) ResolveForFiles(filePaths []string) ([]*Rule, error) {
 	return filterEmptyBody(matched), nil
 }
 
+// ResolveForCommand returns rule/trigger pairs whose command triggers match
+// any top-level segment of cmd and whose file-existence gates pass for cwd.
+// Rules with empty body are filtered out.
+func (s *Service) ResolveForCommand(cmd, cwd string) ([]RuleMatch, error) {
+	allRules, err := s.loadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	gate := NewGateResolver(cwd)
+
+	eligible := make([]*Rule, 0, len(allRules))
+	for _, rule := range allRules {
+		if len(rule.Commands) == 0 {
+			continue
+		}
+		if rule.Body == "" {
+			continue
+		}
+		if !gate.Passes(rule) {
+			continue
+		}
+		eligible = append(eligible, rule)
+	}
+
+	return MatchRulesByCommand(eligible, cmd), nil
+}
+
 func (s *Service) loadAll() ([]*Rule, error) {
 	resolver, err := NewResolver(s.workingDir, s.homeDir)
 	if err != nil {

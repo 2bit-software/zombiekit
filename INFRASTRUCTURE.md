@@ -123,9 +123,61 @@ Implemented in `internal/workflow/service.go`.
 3. ~/.brains/rules/           global (~25 rule files, symlinked)
 ```
 
-All matching rules are injected; there is no shadowing. Rules are matched by path pattern at `PreToolUse` time. Unconditional rules (no path pattern) fire at `SessionStart`.
+All matching rules are injected; there is no shadowing. Rules are matched by path pattern at `PreToolUse` time. Unconditional rules (no path pattern or command trigger) fire at `SessionStart`.
 
 Implemented in `internal/rules/resolver.go` + `internal/rules/matcher.go`.
+
+#### Bash command rules
+
+Rules can also fire on Bash tool invocations. Use the `commands:` frontmatter field to declare command prefixes that should trigger the rule, and optionally gate the rule on the presence or absence of files in the project.
+
+```yaml
+---
+commands:
+  - "go test"
+  - "go run"
+  - "go build"
+requires_files:
+  - Taskfile.yml
+---
+# Use the Taskfile
+
+Prefer `task dev -- test` / `task dev -- run` / `task dev -- build` over
+bare `go` invocations — the Taskfile wraps container, env, and build tags
+you'll otherwise miss.
+```
+
+Pair with a symmetrical rule for projects without a Taskfile:
+
+```yaml
+---
+commands:
+  - "go test"
+requires_files_absent:
+  - Taskfile.yml
+---
+# Consider a Taskfile
+
+Bare `go test` is fine for now, but if you find yourself repeating the
+same flags, add a `Taskfile.dev.yml` entry so the invocation lives in
+source control.
+```
+
+**Matching semantics:**
+- Commands are **whole-token prefixes**: `go test` matches `go test ./...` but not `gopher test-helper`.
+- Chained commands are split on top-level `&&`, `||`, `;`, `|` — each segment is matched independently.
+- Leading `VAR=value` environment assignments are stripped before matching.
+- No shell parsing — quoted strings, subshells, `bash -c "..."`, and heredocs are not understood. Rules fire silently when in doubt rather than false-positive.
+
+**Gate semantics:**
+- `requires_files` — ALL listed files must exist. Paths are resolved by walking from the event's `cwd` up to the enclosing repo root (first `.git` ancestor), so subdirectory invocations still find a top-level `Taskfile.yml`.
+- `requires_files_absent` — ALL listed files must be missing. Same walk-up resolution.
+- Both gates can be set on the same rule; both must pass.
+
+**Dedup:**
+- Each `(rule, trigger)` pair fires at most once per session. Declaring `commands: ["go test", "go run"]` on the same rule means the rule fires twice — once when the user runs `go test`, and again when they run `go run` — but a second `go test` in the same session is suppressed.
+
+Implemented in `internal/rules/command_matcher.go` + `internal/rules/gate.go` + `internal/hook/handler.go`.
 
 ---
 

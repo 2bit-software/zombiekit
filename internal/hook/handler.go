@@ -12,6 +12,16 @@ type Handler struct {
 	agent Agent
 }
 
+// HandleResult is returned from Handle with both the injected output and
+// audit data describing which rules fired (or were deduped) for this
+// invocation. Each entry carries the trigger that caused the match —
+// empty for file-glob rules, a command prefix for Bash rules.
+type HandleResult struct {
+	Output       string
+	MatchedRules []MatchedRule
+	SkippedRules []MatchedRule
+}
+
 // NewHandler creates a new Handler.
 func NewHandler(workingDir, homeDir string, agent Agent) *Handler {
 	return &Handler{
@@ -20,9 +30,9 @@ func NewHandler(workingDir, homeDir string, agent Agent) *Handler {
 	}
 }
 
-// Handle dispatches the hook event and returns text to write to stdout.
-// Returns empty string when no rules need injection.
-func (h *Handler) Handle(event *HookEvent) (string, error) {
+// Handle dispatches the hook event and returns the text to write to stdout
+// along with the rule IDs that were injected or skipped due to deduplication.
+func (h *Handler) Handle(event *HookEvent) (HandleResult, error) {
 	switch event.HookEventName {
 	case "SessionStart":
 		return h.handleSessionStart(event)
@@ -31,11 +41,11 @@ func (h *Handler) Handle(event *HookEvent) (string, error) {
 	case "SessionEnd":
 		return h.handleSessionEnd(event)
 	default:
-		return "", fmt.Errorf("unknown hook event: %s", event.HookEventName)
+		return HandleResult{}, fmt.Errorf("unknown hook event: %s", event.HookEventName)
 	}
 }
 
-func (h *Handler) handleSessionStart(event *HookEvent) (string, error) {
+func (h *Handler) handleSessionStart(event *HookEvent) (HandleResult, error) {
 	state := LoadState(event.SessionID, h.agent)
 
 	// Reset tracking for all sources (startup, resume, compact)
@@ -52,55 +62,115 @@ func (h *Handler) handleSessionStart(event *HookEvent) (string, error) {
 
 	unconditional, err := h.rules.ResolveUnconditional()
 	if err != nil {
-		return "", err
+		return HandleResult{}, err
 	}
 
 	var bodies []string
+	var matched []MatchedRule
 	for _, rule := range unconditional {
 		MarkRuleInjected(state, rule.ID())
+		matched = append(matched, MatchedRule{ID: rule.ID()})
 		bodies = append(bodies, rule.Body)
 	}
 
 	if err := SaveState(state); err != nil {
-		return "", err
+		return HandleResult{}, err
 	}
 
 	if graphiteStatus := DetectGraphiteStatus(event.CWD); graphiteStatus != "" {
 		bodies = append(bodies, graphiteStatus)
 	}
 
-	return FormatOutput(h.agent, bodies), nil
+	return HandleResult{
+		Output:       FormatOutput(h.agent, bodies),
+		MatchedRules: matched,
+	}, nil
 }
 
-func (h *Handler) handlePreToolUse(event *HookEvent) (string, error) {
+func (h *Handler) handlePreToolUse(event *HookEvent) (HandleResult, error) {
+	if event.ToolName == "Bash" {
+		return h.handlePreBash(event)
+	}
+
 	filePaths := event.ExtractFilePaths()
 	if len(filePaths) == 0 {
-		return "", nil
+		return HandleResult{}, nil
 	}
 
 	state := LoadState(event.SessionID, h.agent)
 
-	matched, err := h.rules.ResolveForFiles(filePaths)
+	matchedRules, err := h.rules.ResolveForFiles(filePaths)
 	if err != nil {
-		return "", err
+		return HandleResult{}, err
 	}
 
 	var bodies []string
-	for _, rule := range matched {
+	var matched, skipped []MatchedRule
+	for _, rule := range matchedRules {
 		if IsRuleInjected(state, rule.ID()) {
+			skipped = append(skipped, MatchedRule{ID: rule.ID()})
 			continue
 		}
 		MarkRuleInjected(state, rule.ID())
+		matched = append(matched, MatchedRule{ID: rule.ID()})
 		bodies = append(bodies, rule.Body)
 	}
 
 	if err := SaveState(state); err != nil {
-		return "", err
+		return HandleResult{}, err
 	}
 
-	return FormatPreToolOutput(h.agent, bodies), nil
+	return HandleResult{
+		Output:       FormatPreToolOutput(h.agent, bodies),
+		MatchedRules: matched,
+		SkippedRules: skipped,
+	}, nil
 }
 
-func (h *Handler) handleSessionEnd(event *HookEvent) (string, error) {
-	return "", DeleteState(event.SessionID)
+// handlePreBash inspects a Bash tool invocation and injects non-blocking
+// warnings for every command rule whose trigger matches the invocation
+// and whose file-existence gates are satisfied. Each (rule, trigger)
+// combination fires at most once per session.
+func (h *Handler) handlePreBash(event *HookEvent) (HandleResult, error) {
+	if event.ToolInput == nil || event.ToolInput.Command == "" {
+		return HandleResult{}, nil
+	}
+
+	state := LoadState(event.SessionID, h.agent)
+
+	cwd := event.CWD
+	if cwd == "" {
+		cwd = "."
+	}
+	ruleMatches, err := h.rules.ResolveForCommand(event.ToolInput.Command, cwd)
+	if err != nil {
+		return HandleResult{}, err
+	}
+
+	var bodies []string
+	var matched, skipped []MatchedRule
+	for _, m := range ruleMatches {
+		entry := MatchedRule{ID: m.Rule.ID(), Trigger: m.Trigger}
+		if IsRuleInjectedFor(state, m.Rule.ID(), m.Trigger) {
+			skipped = append(skipped, entry)
+			continue
+		}
+		MarkRuleInjectedFor(state, m.Rule.ID(), m.Trigger)
+		matched = append(matched, entry)
+		bodies = append(bodies, m.Rule.Body)
+	}
+
+	if err := SaveState(state); err != nil {
+		return HandleResult{}, err
+	}
+
+	return HandleResult{
+		Output:       FormatPreToolOutput(h.agent, bodies),
+		MatchedRules: matched,
+		SkippedRules: skipped,
+	}, nil
+}
+
+func (h *Handler) handleSessionEnd(event *HookEvent) (HandleResult, error) {
+	return HandleResult{}, DeleteState(event.SessionID)
 }
