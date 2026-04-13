@@ -145,14 +145,41 @@ Configuration is in `.env` (copied from `.env.example` by `task dev -- setup`). 
 
 ## Hooks
 
-ZombieKit registers Claude Code hooks that inject rules into the conversation at the right moments. Rules live in `.brains/rules/` (project-local) and `~/.brains/rules/` (global), and accumulate — all matching rules fire, none shadow.
+ZombieKit registers coding-agent hooks that inject rules into the conversation at the right moments. Rules live in `.brains/rules/` (project-local) and `~/.brains/rules/` (global), and accumulate — all matching rules fire, none shadow.
+
+Both Claude Code and Gemini CLI are supported. Pass `--editor claude` or `--editor gemini` to tell `brains hook` which output format to emit; when the flag is omitted, the command falls back to env detection (`CLAUDE_CODE_ENTRYPOINT`) and ultimately to Claude as the default.
 
 | Event | What fires | Purpose |
 |-------|-----------|---------|
-| `SessionStart` | `brains hook --event session-start` | Injects **unconditional rules** (no path/command triggers) into the system prompt at session start, resume, and compaction. |
-| `PreToolUse` (`Read`/`Write`/`Edit`/`MultiEdit`) | `brains hook --event pre-tool-use` | Injects **path-matched rules** before file operations — e.g. a rule scoped to `internal/mcp/**` fires only when those files are touched. |
+| `SessionStart` | `brains hook --editor <e> --event session-start` | Injects **unconditional rules** (no path/command triggers) into the system prompt at session start, resume, and compaction. |
+| `PreToolUse` (`Read`/`Write`/`Edit`/`MultiEdit`) | `brains hook --editor <e> --event pre-tool-use` | Injects **path-matched rules** before file operations — e.g. a rule scoped to `internal/mcp/**` fires only when those files are touched. |
 | `PreToolUse` (`Bash`) | same | Injects **command-matched rules** when a bash invocation matches a rule's `commands:` prefix (e.g. `go build` → Taskfile reminder). |
-| `SessionEnd` | `brains hook --event session-end` | Cleanup / session-state teardown. |
+| `SessionEnd` | `brains hook --editor <e> --event session-end` | Cleanup / session-state teardown. |
+
+The `--event` flag is zombiekit's canonical event name; when wiring into Gemini CLI, map Gemini's `BeforeTool` to `--event pre-tool-use` in `settings.json`.
+
+### Gemini CLI setup
+
+Add to `.gemini/settings.json` (or `~/.gemini/settings.json`):
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event session-start" }] }
+    ],
+    "BeforeTool": [
+      {
+        "matcher": ".*",
+        "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event pre-tool-use" }]
+      }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event session-end" }] }
+    ]
+  }
+}
+```
 
 **Hooks are warnings, not hard stops.** A matched rule surfaces guidance alongside the tool call — the agent still executes the command. Each `(rule, trigger)` fires at most once per session; state resets on compaction.
 

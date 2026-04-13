@@ -3,18 +3,20 @@ package hook
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// handleText is a test helper that drops the HandleResult metadata and
-// returns only the injected output, since most tests assert on text only.
+// handleText is a test helper that returns the injected rule bodies joined
+// with blank lines, since most tests assert on substrings of rule content.
+// Handler output formatting is no longer the handler's responsibility.
 func handleText(t *testing.T, h *Handler, e *HookEvent) (string, error) {
 	t.Helper()
 	r, err := h.Handle(e)
-	return r.Output, err
+	return strings.Join(r.Bodies, "\n\n"), err
 }
 
 func setupTestRules(t *testing.T) string {
@@ -325,23 +327,18 @@ func TestHandler_Resume_ResetsTracking(t *testing.T) {
 	assert.Contains(t, output2, "Go Standards")
 }
 
-func TestHandler_ClaudeFormat_SessionStart(t *testing.T) {
+func TestHandler_UnrecognizedEvent_Errors(t *testing.T) {
 	dir := setupTestRules(t)
-	sessionID := "test-claude-ss-" + t.Name()
-	defer func() { _ = DeleteState(sessionID) }()
-
 	handler := NewHandler(dir, t.TempDir(), AgentClaude)
 
-	output, err := handleText(t, handler, &HookEvent{
-		SessionID:     sessionID,
-		HookEventName: "SessionStart",
+	_, err := handler.Handle(&HookEvent{
+		SessionID:     "test-unrec-" + t.Name(),
+		HookEventName: "BogusEvent",
 		CWD:           dir,
-		Source:        "startup",
 	})
-	require.NoError(t, err)
-	assert.Contains(t, output, "<system-reminder>")
-	assert.Contains(t, output, "</system-reminder>")
-	assert.Contains(t, output, "General Rules")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unrecognized event")
+	assert.Contains(t, err.Error(), "BogusEvent")
 }
 
 // setupBashRulesRepo wires a temp repo with a Taskfile-aware command rule
@@ -398,7 +395,7 @@ func TestHandler_PreToolUse_Bash_FiresOnMatch(t *testing.T) {
 		ToolInput:     &ToolInput{Command: "go test ./..."},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, result.Output, "task dev -- test")
+	assert.Contains(t, strings.Join(result.Bodies, "\n\n"), "task dev -- test")
 	require.Len(t, result.MatchedRules, 1)
 	assert.Equal(t, "go test", result.MatchedRules[0].Trigger)
 }
@@ -415,14 +412,14 @@ func TestHandler_PreToolUse_Bash_DedupPerTrigger(t *testing.T) {
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "go test ./..."},
 	})
 	require.NoError(t, err)
-	assert.NotEmpty(t, r1.Output)
+	assert.NotEmpty(t, r1.Bodies)
 
 	r2, err := handler.Handle(&HookEvent{
 		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "go test -count=1 ./..."},
 	})
 	require.NoError(t, err)
-	assert.Empty(t, r2.Output)
+	assert.Empty(t, r2.Bodies)
 	require.Len(t, r2.SkippedRules, 1)
 	assert.Equal(t, "go test", r2.SkippedRules[0].Trigger)
 
@@ -431,7 +428,7 @@ func TestHandler_PreToolUse_Bash_DedupPerTrigger(t *testing.T) {
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "go run main.go"},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, r3.Output, "task dev -- test")
+	assert.Contains(t, strings.Join(r3.Bodies, "\n\n"), "task dev -- test")
 	require.Len(t, r3.MatchedRules, 1)
 	assert.Equal(t, "go run", r3.MatchedRules[0].Trigger)
 }
@@ -447,7 +444,7 @@ func TestHandler_PreToolUse_Bash_NoMatch(t *testing.T) {
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "ls -la"},
 	})
 	require.NoError(t, err)
-	assert.Empty(t, result.Output)
+	assert.Empty(t, result.Bodies)
 	assert.Empty(t, result.MatchedRules)
 }
 
@@ -462,8 +459,9 @@ func TestHandler_PreToolUse_Bash_TaskfileGateAbsent(t *testing.T) {
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "go test ./..."},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, result.Output, "No Taskfile")
-	assert.NotContains(t, result.Output, "task dev -- test")
+	joined := strings.Join(result.Bodies, "\n\n")
+	assert.Contains(t, joined, "No Taskfile")
+	assert.NotContains(t, joined, "task dev -- test")
 }
 
 func TestHandler_PreToolUse_Bash_EnvPrefixStripped(t *testing.T) {
@@ -477,7 +475,7 @@ func TestHandler_PreToolUse_Bash_EnvPrefixStripped(t *testing.T) {
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "CGO_ENABLED=0 go test ./..."},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, result.Output, "task dev -- test")
+	assert.Contains(t, strings.Join(result.Bodies, "\n\n"), "task dev -- test")
 }
 
 func TestHandler_PreToolUse_Bash_ChainedCommand(t *testing.T) {
@@ -491,7 +489,7 @@ func TestHandler_PreToolUse_Bash_ChainedCommand(t *testing.T) {
 		ToolName: "Bash", ToolInput: &ToolInput{Command: "cd pkg && go test ./..."},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, result.Output, "task dev -- test")
+	assert.Contains(t, strings.Join(result.Bodies, "\n\n"), "task dev -- test")
 }
 
 func TestHandler_PreToolUse_Bash_EmptyCommand(t *testing.T) {
@@ -505,26 +503,6 @@ func TestHandler_PreToolUse_Bash_EmptyCommand(t *testing.T) {
 		ToolName: "Bash", ToolInput: &ToolInput{Command: ""},
 	})
 	require.NoError(t, err)
-	assert.Empty(t, result.Output)
+	assert.Empty(t, result.Bodies)
 }
 
-func TestHandler_ClaudeFormat_PreToolUse(t *testing.T) {
-	dir := setupTestRules(t)
-	sessionID := "test-claude-ptu-" + t.Name()
-	defer func() { _ = DeleteState(sessionID) }()
-
-	handler := NewHandler(dir, t.TempDir(), AgentClaude)
-
-	output, err := handleText(t, handler, &HookEvent{
-		SessionID:     sessionID,
-		HookEventName: "PreToolUse",
-		CWD:           dir,
-		ToolName:      "Read",
-		ToolInput:     &ToolInput{FilePath: filepath.Join(dir, "main.go")},
-	})
-	require.NoError(t, err)
-	assert.Contains(t, output, `"hookSpecificOutput"`)
-	assert.Contains(t, output, `"permissionDecision":"allow"`)
-	assert.Contains(t, output, `"hookEventName":"PreToolUse"`)
-	assert.Contains(t, output, "Go Standards")
-}

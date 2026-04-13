@@ -12,12 +12,14 @@ type Handler struct {
 	agent Agent
 }
 
-// HandleResult is returned from Handle with both the injected output and
-// audit data describing which rules fired (or were deduped) for this
-// invocation. Each entry carries the trigger that caused the match —
-// empty for file-glob rules, a command prefix for Bash rules.
+// HandleResult is returned from Handle with the raw rule bodies to inject
+// and audit data describing which rules fired (or were deduped) for this
+// invocation. Output formatting is the CLI layer's responsibility; the
+// handler is editor-agnostic. Each rule entry carries the trigger that
+// caused the match — empty for file-glob rules, a command prefix for Bash
+// rules.
 type HandleResult struct {
-	Output       string
+	Bodies       []string
 	MatchedRules []MatchedRule
 	SkippedRules []MatchedRule
 }
@@ -41,7 +43,7 @@ func (h *Handler) Handle(event *HookEvent) (HandleResult, error) {
 	case "SessionEnd":
 		return h.handleSessionEnd(event)
 	default:
-		return HandleResult{}, fmt.Errorf("unknown hook event: %s", event.HookEventName)
+		return HandleResult{}, fmt.Errorf("hook: unrecognized event: %s", event.HookEventName)
 	}
 }
 
@@ -82,7 +84,7 @@ func (h *Handler) handleSessionStart(event *HookEvent) (HandleResult, error) {
 	}
 
 	return HandleResult{
-		Output:       FormatOutput(h.agent, bodies),
+		Bodies:       bodies,
 		MatchedRules: matched,
 	}, nil
 }
@@ -121,7 +123,7 @@ func (h *Handler) handlePreToolUse(event *HookEvent) (HandleResult, error) {
 	}
 
 	return HandleResult{
-		Output:       FormatPreToolOutput(h.agent, bodies),
+		Bodies:       bodies,
 		MatchedRules: matched,
 		SkippedRules: skipped,
 	}, nil
@@ -165,7 +167,7 @@ func (h *Handler) handlePreBash(event *HookEvent) (HandleResult, error) {
 	}
 
 	return HandleResult{
-		Output:       FormatPreToolOutput(h.agent, bodies),
+		Bodies:       bodies,
 		MatchedRules: matched,
 		SkippedRules: skipped,
 	}, nil
