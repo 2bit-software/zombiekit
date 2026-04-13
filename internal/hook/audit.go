@@ -9,6 +9,7 @@ type AuditRecord struct {
 	Event          string        `json:"event"`
 	SessionID      string        `json:"session"`
 	Agent          string        `json:"agent"`
+	EditorSource   string        `json:"editor_source,omitempty"`
 	CWD            string        `json:"cwd,omitempty"`
 	Source         string        `json:"source,omitempty"`
 	ToolName       string        `json:"tool_name,omitempty"`

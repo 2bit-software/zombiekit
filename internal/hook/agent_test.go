@@ -6,63 +6,43 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDetectAgent_Claude(t *testing.T) {
-	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
-	t.Setenv("GEMINI_SESSION_ID", "")
-	assert.Equal(t, AgentClaude, DetectAgent())
-}
-
-func TestDetectAgent_Gemini(t *testing.T) {
+func TestResolveEditor_Flag_Claude(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
-	t.Setenv("GEMINI_SESSION_ID", "xyz")
-	assert.Equal(t, AgentGemini, DetectAgent())
+	editor, source, err := ResolveEditor("claude")
+	assert.NoError(t, err)
+	assert.Equal(t, AgentClaude, editor)
+	assert.Equal(t, EditorSourceFlag, source)
 }
 
-func TestDetectAgent_BothSet_ClaudeWins(t *testing.T) {
-	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
-	t.Setenv("GEMINI_SESSION_ID", "xyz")
-	assert.Equal(t, AgentClaude, DetectAgent())
-}
-
-func TestDetectAgent_NeitherSet_DefaultsGemini(t *testing.T) {
+func TestResolveEditor_Flag_Gemini(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
-	t.Setenv("GEMINI_SESSION_ID", "")
-	assert.Equal(t, AgentGemini, DetectAgent())
+	editor, source, err := ResolveEditor("gemini")
+	assert.NoError(t, err)
+	assert.Equal(t, AgentGemini, editor)
+	assert.Equal(t, EditorSourceFlag, source)
 }
 
-func TestFormatOutput_Claude(t *testing.T) {
-	output := FormatOutput(AgentClaude, []string{"# Rule 1", "# Rule 2"})
-	expected := "<system-reminder>\n# Rule 1\n\n# Rule 2\n</system-reminder>"
-	assert.Equal(t, expected, output)
+func TestResolveEditor_Flag_Unknown(t *testing.T) {
+	_, _, err := ResolveEditor("frobnitz")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown editor")
+	assert.Contains(t, err.Error(), "frobnitz")
+	assert.Contains(t, err.Error(), "claude")
+	assert.Contains(t, err.Error(), "gemini")
 }
 
-func TestFormatOutput_Gemini(t *testing.T) {
-	output := FormatOutput(AgentGemini, []string{"# Rule 1", "# Rule 2"})
-	expected := "# Rule 1\n\n# Rule 2"
-	assert.Equal(t, expected, output)
+func TestResolveEditor_Env_Claude(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
+	editor, source, err := ResolveEditor("")
+	assert.NoError(t, err)
+	assert.Equal(t, AgentClaude, editor)
+	assert.Equal(t, EditorSourceEnv, source)
 }
 
-func TestFormatOutput_Empty(t *testing.T) {
-	assert.Empty(t, FormatOutput(AgentClaude, nil))
-	assert.Empty(t, FormatOutput(AgentClaude, []string{}))
-}
-
-func TestFormatPreToolOutput_Claude(t *testing.T) {
-	output := FormatPreToolOutput(AgentClaude, []string{"# Rule 1", "# Rule 2"})
-	assert.Contains(t, output, `"hookSpecificOutput"`)
-	assert.Contains(t, output, `"permissionDecision":"allow"`)
-	assert.Contains(t, output, `"hookEventName":"PreToolUse"`)
-	assert.Contains(t, output, "# Rule 1")
-	assert.Contains(t, output, "# Rule 2")
-}
-
-func TestFormatPreToolOutput_Gemini(t *testing.T) {
-	output := FormatPreToolOutput(AgentGemini, []string{"# Rule 1", "# Rule 2"})
-	expected := "# Rule 1\n\n# Rule 2"
-	assert.Equal(t, expected, output)
-}
-
-func TestFormatPreToolOutput_Empty(t *testing.T) {
-	assert.Empty(t, FormatPreToolOutput(AgentClaude, nil))
-	assert.Empty(t, FormatPreToolOutput(AgentClaude, []string{}))
+func TestResolveEditor_NoEnv_DefaultsClaude(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+	editor, source, err := ResolveEditor("")
+	assert.NoError(t, err)
+	assert.Equal(t, AgentClaude, editor)
+	assert.Equal(t, EditorSourceDefault, source)
 }
