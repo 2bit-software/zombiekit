@@ -49,7 +49,24 @@ func (h *Handler) Handle(event *HookEvent) (HandleResult, error) {
 	}
 }
 
+// handleSessionStart delivers unconditional rules (and graphite status)
+// at the start of a session or the equivalent reset boundary. Two distinct
+// entry paths route here:
+//
+//   - Lifecycle events ("startup", "resume", "compact") reset per-session
+//     dedup state and re-emit all unconditional rules. Claude Code and
+//     Gemini CLI fire these exactly once per reset point.
+//   - The OpenCode "inject" source is a stateless per-turn query driven by
+//     experimental.chat.system.transform. It does not touch session state
+//     and always emits the full unconditional rule set, because the
+//     OpenCode system prompt is a fresh array per LLM call — any "inject
+//     once, subsequent calls empty" behavior would drop the rules from the
+//     prompt after the first turn.
 func (h *Handler) handleSessionStart(event *HookEvent) (HandleResult, error) {
+	if event.Source == "inject" {
+		return h.handleSessionInject(event)
+	}
+
 	state := LoadState(event.SessionID, h.agent)
 
 	// Reset tracking for all sources (startup, resume, compact)
@@ -79,6 +96,35 @@ func (h *Handler) handleSessionStart(event *HookEvent) (HandleResult, error) {
 
 	if err := SaveState(state); err != nil {
 		return HandleResult{}, err
+	}
+
+	if graphiteStatus := DetectGraphiteStatus(event.CWD); graphiteStatus != "" {
+		bodies = append(bodies, graphiteStatus)
+	}
+
+	return HandleResult{
+		Bodies:       bodies,
+		MatchedRules: matched,
+	}, nil
+}
+
+// handleSessionInject returns unconditional rules for a per-turn system
+// prompt refresh without touching session state. OpenCode's
+// experimental.chat.system.transform fires on every assistant turn and
+// populates a fresh output.system array each time; emitting the same
+// rules on every call is the only way to keep them in the system prompt
+// across turns. Stateless-by-design: no dedup, no marking, no save.
+func (h *Handler) handleSessionInject(event *HookEvent) (HandleResult, error) {
+	unconditional, err := h.rules.ResolveUnconditional()
+	if err != nil {
+		return HandleResult{}, err
+	}
+
+	var bodies []string
+	var matched []MatchedRule
+	for _, rule := range unconditional {
+		matched = append(matched, MatchedRule{ID: rule.ID()})
+		bodies = append(bodies, rule.Body)
 	}
 
 	if graphiteStatus := DetectGraphiteStatus(event.CWD); graphiteStatus != "" {

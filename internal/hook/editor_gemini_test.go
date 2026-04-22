@@ -92,9 +92,10 @@ func TestGeminiEditor_ExtractFilePaths_CamelCase(t *testing.T) {
 }
 
 func TestGeminiEditor_ExtractFilePaths_ToolResponse(t *testing.T) {
+	ok := true
 	paths := geminiFormatter{}.ExtractFilePaths(&HookEvent{
 		ToolName:     "write_file",
-		ToolResponse: &ToolResponse{FilePath: "out.txt", Success: true},
+		ToolResponse: &ToolResponse{FilePath: "out.txt", Success: &ok},
 	})
 	assert.Equal(t, []string{"out.txt"}, paths)
 }

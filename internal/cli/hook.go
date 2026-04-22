@@ -3,9 +3,9 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
-	"io"
 
 	"github.com/urfave/cli/v2"
 
@@ -19,11 +19,11 @@ func newHookCommand() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "event",
-				Usage: "Hook event type: session-start, pre-tool-use, session-end",
+				Usage: "Hook event type: session-start, session-inject, pre-tool-use, post-tool-use, session-end, compact",
 			},
 			&cli.StringFlag{
 				Name:  "editor",
-				Usage: "Target coding editor: claude, gemini (default: auto-detect via env, fallback claude)",
+				Usage: "Target coding editor: claude, gemini, opencode (default: auto-detect via env, fallback claude)",
 			},
 		},
 		Action: runHook,
@@ -60,12 +60,18 @@ func runHook(c *cli.Context) error {
 	switch eventType {
 	case "session-start":
 		event.HookEventName = "SessionStart"
+	case "session-inject":
+		event.HookEventName = "SessionStart"
+		event.Source = "inject"
 	case "pre-tool-use":
 		event.HookEventName = "PreToolUse"
 	case "post-tool-use":
 		event.HookEventName = "PostToolUse"
 	case "session-end":
 		event.HookEventName = "SessionEnd"
+	case "compact":
+		event.HookEventName = "SessionStart"
+		event.Source = "compact"
 	default:
 		return fmt.Errorf("unknown event type: %s", eventType)
 	}

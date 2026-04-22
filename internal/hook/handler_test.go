@@ -505,3 +505,88 @@ func TestHandler_PreToolUse_Bash_EmptyCommand(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.Bodies)
 }
+
+// --- OpenCode session-inject / compact regression tests ---
+
+func TestHandler_SessionInject_InjectsUnconditionalOnFirstCall(t *testing.T) {
+	dir := setupTestRules(t)
+	sessionID := "test-inject-first-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentOpenCode)
+	output, err := handleText(t, handler, &HookEvent{
+		SessionID:     sessionID,
+		HookEventName: "SessionStart",
+		CWD:           dir,
+		Source:        "inject",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, output, "# General Rules")
+}
+
+func TestHandler_SessionInject_AlwaysInjects(t *testing.T) {
+	dir := setupTestRules(t)
+	sessionID := "test-inject-always-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	// OpenCode fires experimental.chat.system.transform on every LLM
+	// stream, and each stream's output.system is a fresh array. If
+	// brains returned empty on the second call, the rules would drop
+	// out of the system prompt after the first turn.
+	handler := NewHandler(dir, t.TempDir(), AgentOpenCode)
+
+	for i := range 3 {
+		output, err := handleText(t, handler, &HookEvent{
+			SessionID: sessionID, HookEventName: "SessionStart", CWD: dir, Source: "inject",
+		})
+		require.NoError(t, err)
+		assert.Contains(t, output, "# General Rules", "call %d must emit rules", i+1)
+	}
+}
+
+func TestHandler_SessionInject_DoesNotWriteSessionState(t *testing.T) {
+	dir := setupTestRules(t)
+	sessionID := "test-inject-stateless-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentOpenCode)
+
+	_, err := handleText(t, handler, &HookEvent{
+		SessionID: sessionID, HookEventName: "SessionStart", CWD: dir, Source: "inject",
+	})
+	require.NoError(t, err)
+
+	// A stateless inject path should not create the /tmp state file.
+	_, statErr := os.Stat(stateFilePath(sessionID))
+	assert.True(t, os.IsNotExist(statErr), "session-inject must not touch session state file")
+}
+
+func TestHandler_SessionInject_DoesNotClobberExistingDedup(t *testing.T) {
+	dir := setupTestRules(t)
+	sessionID := "test-inject-preserve-" + t.Name()
+	defer func() { _ = DeleteState(sessionID) }()
+
+	handler := NewHandler(dir, t.TempDir(), AgentClaude)
+
+	// Claude reads a .go file — Go Standards is marked injected.
+	first, err := handleText(t, handler, &HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Read", ToolInput: &ToolInput{FilePath: filepath.Join(dir, "main.go")},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, first, "Go Standards")
+
+	// A session-inject call after that must NOT reset dedup — so a
+	// subsequent Read of another .go file is still suppressed.
+	_, err = handleText(t, handler, &HookEvent{
+		SessionID: sessionID, HookEventName: "SessionStart", CWD: dir, Source: "inject",
+	})
+	require.NoError(t, err)
+
+	second, err := handleText(t, handler, &HookEvent{
+		SessionID: sessionID, HookEventName: "PreToolUse", CWD: dir,
+		ToolName: "Read", ToolInput: &ToolInput{FilePath: filepath.Join(dir, "other.go")},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, second, "session-inject must not reset existing file-glob dedup")
+}

@@ -55,8 +55,9 @@ type ToolResponse struct {
 type Agent string
 
 const (
-	AgentClaude Agent = "claude"
-	AgentGemini Agent = "gemini"
+	AgentClaude   Agent = "claude"
+	AgentGemini   Agent = "gemini"
+	AgentOpenCode Agent = "opencode"
 )
 
 // MatchedRule records that a rule fired (or was deduped) for a specific
@@ -66,4 +67,3 @@ type MatchedRule struct {
 	ID      string `json:"id"`
 	Trigger string `json:"trigger,omitempty"`
 }
-
