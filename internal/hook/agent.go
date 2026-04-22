@@ -26,5 +26,9 @@ func ResolveEditor(flagValue string) (Agent, EditorSource, error) {
 		return AgentClaude, EditorSourceEnv, nil
 	}
 
+	// TODO(opencode): add env-based auto-detection for OpenCode once a
+	// stable environment variable is identified (e.g. OPENCODE_SESSION or
+	// similar). Until then, OpenCode users must pass --editor opencode.
+
 	return AgentClaude, EditorSourceDefault, nil
 }

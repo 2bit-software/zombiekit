@@ -22,6 +22,14 @@ func TestResolveEditor_Flag_Gemini(t *testing.T) {
 	assert.Equal(t, EditorSourceFlag, source)
 }
 
+func TestResolveEditor_Flag_OpenCode(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+	editor, source, err := ResolveEditor("opencode")
+	assert.NoError(t, err)
+	assert.Equal(t, AgentOpenCode, editor)
+	assert.Equal(t, EditorSourceFlag, source)
+}
+
 func TestResolveEditor_Flag_Unknown(t *testing.T) {
 	_, _, err := ResolveEditor("frobnitz")
 	assert.Error(t, err)
@@ -29,6 +37,7 @@ func TestResolveEditor_Flag_Unknown(t *testing.T) {
 	assert.Contains(t, err.Error(), "frobnitz")
 	assert.Contains(t, err.Error(), "claude")
 	assert.Contains(t, err.Error(), "gemini")
+	assert.Contains(t, err.Error(), "opencode")
 }
 
 func TestResolveEditor_Env_Claude(t *testing.T) {

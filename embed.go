@@ -24,6 +24,9 @@ var embeddedScripts embed.FS
 //go:embed embed/workflows/*
 var embeddedWorkflows embed.FS
 
+//go:embed embed/integrations/opencode/brains.ts
+var embeddedOpencodeShim embed.FS
+
 // Exported filesystems with embed/ prefix stripped via fs.Sub.
 // Consumers see the same paths they expect (e.g., "profiles/*", "workflows/*").
 var (
@@ -33,6 +36,10 @@ var (
 	EmbeddedTemplates      fs.FS
 	EmbeddedScripts        fs.FS
 	EmbeddedWorkflows      fs.FS
+	// TODO(opencode): EmbeddedOpencodeShim is exported but not yet consumed
+	// by any CLI subcommand. Add a `brains init opencode` or similar that
+	// extracts brains.ts into .opencode/plugins/ for the user.
+	EmbeddedOpencodeShim fs.FS
 )
 
 func init() {
@@ -60,5 +67,9 @@ func init() {
 	EmbeddedWorkflows, err = fs.Sub(embeddedWorkflows, "embed")
 	if err != nil {
 		panic("embed: workflows: " + err.Error())
+	}
+	EmbeddedOpencodeShim, err = fs.Sub(embeddedOpencodeShim, "embed")
+	if err != nil {
+		panic("embed: opencode shim: " + err.Error())
 	}
 }

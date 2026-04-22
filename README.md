@@ -147,7 +147,7 @@ Configuration is in `.env` (copied from `.env.example` by `task dev -- setup`). 
 
 ZombieKit registers coding-agent hooks that inject rules into the conversation at the right moments. Rules live in `.brains/rules/` (project-local) and `~/.brains/rules/` (global), and accumulate — all matching rules fire, none shadow.
 
-Both Claude Code and Gemini CLI are supported. Pass `--editor claude` or `--editor gemini` to tell `brains hook` which output format to emit; when the flag is omitted, the command falls back to env detection (`CLAUDE_CODE_ENTRYPOINT`) and ultimately to Claude as the default.
+Claude Code, Gemini CLI, and OpenCode are supported. Pass `--editor claude`, `--editor gemini`, or `--editor opencode` to tell `brains hook` which output format to emit; when the flag is omitted, the command falls back to env detection (`CLAUDE_CODE_ENTRYPOINT`) and ultimately to Claude as the default.
 
 | Event | What fires | Purpose |
 |-------|-----------|---------|
@@ -187,6 +187,39 @@ Add to `.gemini/settings.json` (or `~/.gemini/settings.json`):
   }
 }
 ```
+
+### OpenCode setup
+
+OpenCode's plugin system is in-process TypeScript rather than subprocess-based, so the hook cannot be pointed directly at the `brains` binary the way Claude Code and Gemini CLI can. Instead, zombiekit ships a thin plugin shim at `embed/integrations/opencode/brains.ts` that OpenCode loads; the shim spawns `brains hook --editor opencode` under the hood and mutates OpenCode's hook output with whatever rules `brains` returns.
+
+1. **Copy the shim into your project:**
+
+   ```sh
+   mkdir -p .opencode/plugins
+   cp $(go env GOPATH)/src/github.com/2bit-software/zombiekit/embed/integrations/opencode/brains.ts \
+      .opencode/plugins/brains.ts
+   ```
+
+   If `.opencode/plugins/*.ts` auto-discovery is already enabled in your project, that's all you need. Otherwise, add the plugin to `opencode.json`:
+
+   ```json
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "plugin": ["./.opencode/plugins/brains.ts"]
+   }
+   ```
+
+2. **Start OpenCode.** The shim registers three hooks: `experimental.chat.system.transform` (unconditional rule injection at session start and on every turn thereafter, deduped by zombiekit's per-session state), `experimental.session.compacting` (re-injects unconditional rules into the compacted context), and `tool.execute.after` (path-matched file-edit rules). On first invocation the shim logs `[brains/opencode] plugin active, binary=<path>` to stderr so you can confirm registration.
+
+3. **Using a non-default binary:** set `BRAINS_BIN=/path/to/other-brains` in OpenCode's environment to target an alternate build. This is the recommended dev loop when iterating on the `brains` binary without touching your Claude Code session — stop OpenCode, rebuild, restart with `BRAINS_BIN` pointing at the new binary.
+
+**Caveats.**
+
+- `experimental.chat.system.transform` and `experimental.session.compacting` are OpenCode **experimental** hooks and may rename in future releases. The shim is the only thing that needs updating if they do.
+- Running OpenCode with `OPENCODE_PURE=1` disables all external plugins, so hooks will silently not fire.
+- OpenCode's `tool.execute.before` is not wired in this iteration; file-edit rules fire on the `after` edge only.
+
+---
 
 **Hooks are warnings, not hard stops.** A matched rule surfaces guidance alongside the tool call — the agent still executes the command. Each `(rule, trigger)` fires at most once per session; state resets on compaction.
 
