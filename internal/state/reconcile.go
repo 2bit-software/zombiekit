@@ -47,10 +47,16 @@ func PlanReconciliation(jobs []Job, now time.Time) ReconciliationPlan {
 	return plan
 }
 
-// ApplyReconciliation scans the state store for orphaned jobs and marks them
-// as needing attention. It must be called during startup before any watcher
-// goroutines begin polling.
-func ApplyReconciliation(ctx context.Context, store StateStore, logger *slog.Logger) error {
+// ApplyReconciliation scans the state store for orphaned jobs, marks them
+// as needing attention, and warns about jobs belonging to unconfigured
+// projects. It must be called during startup before any watcher goroutines
+// begin polling.
+//
+// configuredProjects lists the project IDs from the TOML config. Jobs
+// with a project_id not in this set are logged as orphans and their
+// slots are released. Pass nil to skip orphan-by-project detection
+// (backwards compatibility).
+func ApplyReconciliation(ctx context.Context, store StateStore, logger *slog.Logger, configuredProjects ...string) error {
 	start := time.Now()
 
 	jobs, err := store.ListAllJobs(ctx)
@@ -58,25 +64,33 @@ func ApplyReconciliation(ctx context.Context, store StateStore, logger *slog.Log
 		return fmt.Errorf("reconciliation: list jobs: %w", err)
 	}
 
+	configured := make(map[string]bool, len(configuredProjects))
+	for _, id := range configuredProjects {
+		configured[id] = true
+	}
+
+	if len(configured) > 0 {
+		detectOrphanedProjects(ctx, jobs, configured, store, logger)
+	}
+
 	plan := PlanReconciliation(jobs, time.Now())
 
 	if !plan.HasFindings() {
 		logger.Info("reconciliation complete: no orphaned jobs found")
-		return nil
-	}
-
-	for _, orphan := range plan.Orphaned {
-		if err := store.SetJobStatus(ctx, orphan.ProjectID, orphan.TicketID, StatusNeedsAttention); err != nil {
-			return fmt.Errorf("reconciliation: mark job %s/%s as needs-attention: %w", orphan.ProjectID, orphan.TicketID, err)
+	} else {
+		for _, orphan := range plan.Orphaned {
+			if err := store.SetJobStatus(ctx, orphan.ProjectID, orphan.TicketID, StatusNeedsAttention); err != nil {
+				return fmt.Errorf("reconciliation: mark job %s/%s as needs-attention: %w", orphan.ProjectID, orphan.TicketID, err)
+			}
+			logger.Info("reconciliation: orphaned job detected",
+				slog.String("project_id", orphan.ProjectID),
+				slog.String("ticket_id", orphan.TicketID),
+				slog.String("previous_status", orphan.PreviousStatus),
+				slog.String("new_status", StatusNeedsAttention),
+				slog.String("worktree_path", orphan.WorktreePath),
+				slog.Duration("stale_duration", orphan.StaleDuration),
+			)
 		}
-		logger.Info("reconciliation: orphaned job detected",
-			slog.String("project_id", orphan.ProjectID),
-			slog.String("ticket_id", orphan.TicketID),
-			slog.String("previous_status", orphan.PreviousStatus),
-			slog.String("new_status", StatusNeedsAttention),
-			slog.String("worktree_path", orphan.WorktreePath),
-			slog.Duration("stale_duration", orphan.StaleDuration),
-		)
 	}
 
 	slotsReset, err := store.ResetAllSlots(ctx)
@@ -91,4 +105,23 @@ func ApplyReconciliation(ctx context.Context, store StateStore, logger *slog.Log
 	)
 
 	return nil
+}
+
+func detectOrphanedProjects(ctx context.Context, jobs []Job, configured map[string]bool, store StateStore, logger *slog.Logger) {
+	for _, job := range jobs {
+		if job.ProjectID == "" || configured[job.ProjectID] {
+			continue
+		}
+		logger.Warn("reconciliation: job belongs to unconfigured project, releasing slot",
+			slog.String("project_id", job.ProjectID),
+			slog.String("ticket_id", job.TicketID),
+			slog.String("status", job.Status),
+		)
+		if err := store.ReleaseSlot(ctx, job.ProjectID); err != nil {
+			logger.Error("reconciliation: failed to release orphaned project slot",
+				slog.String("project_id", job.ProjectID),
+				slog.String("err", err.Error()),
+			)
+		}
+	}
 }

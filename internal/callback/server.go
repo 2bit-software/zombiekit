@@ -2,6 +2,7 @@ package callback
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -26,13 +27,17 @@ type EventSource interface {
 	Events() <-chan Event
 }
 
+// HealthProvider returns per-project health data for the /healthz endpoint.
+type HealthProvider func() any
+
 // CallbackServer receives HTTP POST callbacks from agent sessions and delivers
 // parsed events to a consumer via a buffered channel.
 type CallbackServer struct {
-	port       int
-	events     chan Event
-	httpServer *http.Server
-	mux        *http.ServeMux
+	port           int
+	events         chan Event
+	httpServer     *http.Server
+	mux            *http.ServeMux
+	healthProvider HealthProvider
 }
 
 // New creates a CallbackServer that will listen on the given port.
@@ -103,8 +108,20 @@ func (s *CallbackServer) registerRoutes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 }
 
+// SetHealthProvider registers a function that returns per-project health
+// data. When set, /healthz returns JSON instead of plain text.
+func (s *CallbackServer) SetHealthProvider(hp HealthProvider) {
+	s.healthProvider = hp
+}
+
 func (s *CallbackServer) handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
+	if s.healthProvider == nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "ok")
+	json.NewEncoder(w).Encode(s.healthProvider()) //nolint:errcheck
 }
