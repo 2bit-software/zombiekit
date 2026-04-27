@@ -41,7 +41,7 @@ func TestPlanReconciliation(t *testing.T) {
 		{
 			name: "single in-progress job detected",
 			jobs: []Job{
-				{TicketID: "DEV-1", Status: StatusInProgress, WorktreePath: "/tmp/wt1", UpdatedAt: now.Add(-time.Hour)},
+				{TicketID: "DEV-1", ProjectID: testProj, Status: StatusInProgress, WorktreePath: "/tmp/wt1", UpdatedAt: now.Add(-time.Hour)},
 			},
 			wantOrphaned:    1,
 			wantTicketIDs:   []string{"DEV-1"},
@@ -50,8 +50,8 @@ func TestPlanReconciliation(t *testing.T) {
 		{
 			name: "multiple in-progress jobs all detected",
 			jobs: []Job{
-				{TicketID: "DEV-1", Status: StatusInProgress, WorktreePath: "/tmp/wt1", UpdatedAt: now.Add(-time.Hour)},
-				{TicketID: "DEV-2", Status: StatusInProgress, WorktreePath: "/tmp/wt2", UpdatedAt: now.Add(-2 * time.Hour)},
+				{TicketID: "DEV-1", ProjectID: testProj, Status: StatusInProgress, WorktreePath: "/tmp/wt1", UpdatedAt: now.Add(-time.Hour)},
+				{TicketID: "DEV-2", ProjectID: testProj, Status: StatusInProgress, WorktreePath: "/tmp/wt2", UpdatedAt: now.Add(-2 * time.Hour)},
 			},
 			wantOrphaned:    2,
 			wantTicketIDs:   []string{"DEV-1", "DEV-2"},
@@ -61,7 +61,7 @@ func TestPlanReconciliation(t *testing.T) {
 			name: "mixed statuses only flags in-progress",
 			jobs: []Job{
 				{TicketID: "DEV-1", Status: StatusQueued, UpdatedAt: now.Add(-time.Hour)},
-				{TicketID: "DEV-2", Status: StatusInProgress, WorktreePath: "/tmp/wt2", UpdatedAt: now.Add(-time.Hour)},
+				{TicketID: "DEV-2", ProjectID: testProj, Status: StatusInProgress, WorktreePath: "/tmp/wt2", UpdatedAt: now.Add(-time.Hour)},
 				{TicketID: "DEV-3", Status: StatusComplete, UpdatedAt: now.Add(-time.Hour)},
 				{TicketID: "DEV-4", Status: StatusClosed, UpdatedAt: now.Add(-time.Hour)},
 				{TicketID: "DEV-5", Status: StatusNeedsAttention, UpdatedAt: now.Add(-time.Hour)},
@@ -93,12 +93,13 @@ func TestPlanReconciliation_NilPRNumber(t *testing.T) {
 	now := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
 
 	plan := PlanReconciliation([]Job{
-		{TicketID: "DEV-1", Status: StatusInProgress, WorktreePath: "/tmp/wt1", UpdatedAt: now.Add(-time.Hour)},
+		{TicketID: "DEV-1", ProjectID: testProj, Status: StatusInProgress, WorktreePath: "/tmp/wt1", UpdatedAt: now.Add(-time.Hour)},
 	}, now)
 
 	require.Len(t, plan.Orphaned, 1)
 	assert.Nil(t, plan.Orphaned[0].PRNumber)
 	assert.Equal(t, "DEV-1", plan.Orphaned[0].TicketID)
+	assert.Equal(t, testProj, plan.Orphaned[0].ProjectID)
 }
 
 func TestPlanReconciliation_WithPRNumber(t *testing.T) {
@@ -106,7 +107,7 @@ func TestPlanReconciliation_WithPRNumber(t *testing.T) {
 	pr42 := int64(42)
 
 	plan := PlanReconciliation([]Job{
-		{TicketID: "DEV-1", Status: StatusInProgress, WorktreePath: "/tmp/wt1", PRNumber: &pr42, UpdatedAt: now.Add(-time.Hour)},
+		{TicketID: "DEV-1", ProjectID: testProj, Status: StatusInProgress, WorktreePath: "/tmp/wt1", PRNumber: &pr42, UpdatedAt: now.Add(-time.Hour)},
 	}, now)
 
 	require.Len(t, plan.Orphaned, 1)
@@ -119,7 +120,7 @@ func TestPlanReconciliation_StaleDuration(t *testing.T) {
 	updatedAt := now.Add(-3 * time.Hour)
 
 	plan := PlanReconciliation([]Job{
-		{TicketID: "DEV-1", Status: StatusInProgress, UpdatedAt: updatedAt},
+		{TicketID: "DEV-1", ProjectID: testProj, Status: StatusInProgress, UpdatedAt: updatedAt},
 	}, now)
 
 	require.Len(t, plan.Orphaned, 1)
@@ -132,6 +133,7 @@ func TestPlanReconciliation_OrphanedJobFields(t *testing.T) {
 	plan := PlanReconciliation([]Job{
 		{
 			TicketID:     "DEV-1",
+			ProjectID:    testProj,
 			Status:       StatusInProgress,
 			WorktreePath: "/home/user/worktrees/dev-1",
 			UpdatedAt:    now.Add(-30 * time.Minute),
@@ -141,6 +143,7 @@ func TestPlanReconciliation_OrphanedJobFields(t *testing.T) {
 	require.Len(t, plan.Orphaned, 1)
 	orphan := plan.Orphaned[0]
 	assert.Equal(t, "DEV-1", orphan.TicketID)
+	assert.Equal(t, testProj, orphan.ProjectID)
 	assert.Equal(t, StatusInProgress, orphan.PreviousStatus)
 	assert.Equal(t, "/home/user/worktrees/dev-1", orphan.WorktreePath)
 	assert.Equal(t, 30*time.Minute, orphan.StaleDuration)
@@ -148,7 +151,7 @@ func TestPlanReconciliation_OrphanedJobFields(t *testing.T) {
 
 // --- ApplyReconciliation integration tests ---
 
-func testLogger() *slog.Logger {
+func reconcileTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 }
 
@@ -156,7 +159,7 @@ func TestApplyReconciliation_CleanState(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	err := ApplyReconciliation(ctx, store, testLogger())
+	err := ApplyReconciliation(ctx, store, reconcileTestLogger())
 	require.NoError(t, err)
 }
 
@@ -164,13 +167,13 @@ func TestApplyReconciliation_SingleOrphanedJob(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
-	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", testProj))
+	require.NoError(t, store.SetJobStatus(ctx, testProj, "DEV-1", StatusInProgress))
 
-	err := ApplyReconciliation(ctx, store, testLogger())
+	err := ApplyReconciliation(ctx, store, reconcileTestLogger())
 	require.NoError(t, err)
 
-	job, err := store.GetJob(ctx, "DEV-1")
+	job, err := store.GetJob(ctx, testProj, "DEV-1")
 	require.NoError(t, err)
 	assert.Equal(t, StatusNeedsAttention, job.Status)
 }
@@ -180,15 +183,15 @@ func TestApplyReconciliation_MultipleOrphanedJobs(t *testing.T) {
 	ctx := context.Background()
 
 	for _, id := range []string{"DEV-1", "DEV-2", "DEV-3"} {
-		require.NoError(t, store.CreateJob(ctx, id, "/tmp/"+id, "s-"+id, ""))
-		require.NoError(t, store.SetJobStatus(ctx, id, StatusInProgress))
+		require.NoError(t, store.CreateJob(ctx, id, "/tmp/"+id, "s-"+id, testProj))
+		require.NoError(t, store.SetJobStatus(ctx, testProj, id, StatusInProgress))
 	}
 
-	err := ApplyReconciliation(ctx, store, testLogger())
+	err := ApplyReconciliation(ctx, store, reconcileTestLogger())
 	require.NoError(t, err)
 
 	for _, id := range []string{"DEV-1", "DEV-2", "DEV-3"} {
-		job, err := store.GetJob(ctx, id)
+		job, err := store.GetJob(ctx, testProj, id)
 		require.NoError(t, err)
 		assert.Equal(t, StatusNeedsAttention, job.Status, "job %s should be needs-attention", id)
 	}
@@ -198,25 +201,24 @@ func TestApplyReconciliation_MixedStatuses(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
-	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", testProj))
+	require.NoError(t, store.SetJobStatus(ctx, testProj, "DEV-1", StatusInProgress))
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2", ""))
-	require.NoError(t, store.SetJobStatus(ctx, "DEV-2", StatusComplete))
+	require.NoError(t, store.CreateJob(ctx, "DEV-2", "/tmp/wt2", "s2", testProj))
+	require.NoError(t, store.SetJobStatus(ctx, testProj, "DEV-2", StatusComplete))
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-3", "/tmp/wt3", "s3", ""))
-	// DEV-3 stays queued
+	require.NoError(t, store.CreateJob(ctx, "DEV-3", "/tmp/wt3", "s3", testProj))
 
-	err := ApplyReconciliation(ctx, store, testLogger())
+	err := ApplyReconciliation(ctx, store, reconcileTestLogger())
 	require.NoError(t, err)
 
-	job1, _ := store.GetJob(ctx, "DEV-1")
+	job1, _ := store.GetJob(ctx, testProj, "DEV-1")
 	assert.Equal(t, StatusNeedsAttention, job1.Status)
 
-	job2, _ := store.GetJob(ctx, "DEV-2")
+	job2, _ := store.GetJob(ctx, testProj, "DEV-2")
 	assert.Equal(t, StatusComplete, job2.Status)
 
-	job3, _ := store.GetJob(ctx, "DEV-3")
+	job3, _ := store.GetJob(ctx, testProj, "DEV-3")
 	assert.Equal(t, StatusQueued, job3.Status)
 }
 
@@ -224,15 +226,15 @@ func TestApplyReconciliation_ResetsSlots(t *testing.T) {
 	store := setupTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", ""))
-	require.NoError(t, store.SetJobStatus(ctx, "DEV-1", StatusInProgress))
+	require.NoError(t, store.CreateJob(ctx, "DEV-1", "/tmp/wt1", "s1", testProj))
+	require.NoError(t, store.SetJobStatus(ctx, testProj, "DEV-1", StatusInProgress))
 
 	_, err := store.TryAcquireSlot(ctx, "proj-1", 5)
 	require.NoError(t, err)
 	_, err = store.TryAcquireSlot(ctx, "proj-1", 5)
 	require.NoError(t, err)
 
-	err = ApplyReconciliation(ctx, store, testLogger())
+	err = ApplyReconciliation(ctx, store, reconcileTestLogger())
 	require.NoError(t, err)
 
 	var activeCount int
@@ -245,9 +247,9 @@ func TestApplyReconciliation_ResetsSlots(t *testing.T) {
 
 func TestApplyReconciliation_DBErrorOnQuery(t *testing.T) {
 	store := setupTestStore(t)
-	store.Close() // force DB error
+	store.Close()
 
-	err := ApplyReconciliation(context.Background(), store, testLogger())
+	err := ApplyReconciliation(context.Background(), store, reconcileTestLogger())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reconciliation")
 }

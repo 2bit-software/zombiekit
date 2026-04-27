@@ -65,17 +65,17 @@ func WithWorktreeCleanup(mgr worktree.Manager) DeleteOption {
 }
 
 // ListJobs returns jobs matching the filter. An empty Statuses slice returns all jobs.
-func (s *Service) ListJobs(ctx context.Context, filter JobFilter) ([]state.Job, error) {
+func (s *Service) ListJobs(ctx context.Context, projectID string, filter JobFilter) ([]state.Job, error) {
 	if len(filter.Statuses) == 0 {
 		return s.store.ListAllJobs(ctx)
 	}
-	return s.store.ListJobsByStatus(ctx, filter.Statuses...)
+	return s.store.ListJobsByStatus(ctx, projectID, filter.Statuses...)
 }
 
 // GetJob retrieves a single job by ticket ID.
 // Returns state.ErrJobNotFound if the job does not exist.
-func (s *Service) GetJob(ctx context.Context, ticketID string) (*state.Job, error) {
-	job, err := s.store.GetJob(ctx, ticketID)
+func (s *Service) GetJob(ctx context.Context, projectID, ticketID string) (*state.Job, error) {
+	job, err := s.store.GetJob(ctx, projectID, ticketID)
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +90,8 @@ func (s *Service) GetJob(ctx context.Context, ticketID string) (*state.Job, erro
 // Optional cleanup (cmux session, git worktree) runs before the DB delete so
 // the user can retry on partial failure. Cleanup errors are captured in the
 // result, not returned — the job record is always deleted if reachable.
-func (s *Service) DeleteJob(ctx context.Context, ticketID string, opts ...DeleteOption) (*DeleteResult, error) {
-	job, err := s.GetJob(ctx, ticketID)
+func (s *Service) DeleteJob(ctx context.Context, projectID, ticketID string, opts ...DeleteOption) (*DeleteResult, error) {
+	job, err := s.GetJob(ctx, projectID, ticketID)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (s *Service) DeleteJob(ctx context.Context, ticketID string, opts ...Delete
 		}
 	}
 
-	if err := s.store.DeleteJob(ctx, ticketID); err != nil {
+	if err := s.store.DeleteJob(ctx, projectID, ticketID); err != nil {
 		return nil, err
 	}
 
@@ -133,11 +133,11 @@ func (s *Service) DeleteJob(ctx context.Context, ticketID string, opts ...Delete
 }
 
 // SetJobStatus updates a job's status after validating against known status constants.
-func (s *Service) SetJobStatus(ctx context.Context, ticketID, status string) error {
+func (s *Service) SetJobStatus(ctx context.Context, projectID, ticketID, status string) error {
 	if !slices.Contains(state.ValidStatuses, status) {
 		return fmt.Errorf("invalid status %q (valid: %s)", status, strings.Join(state.ValidStatuses, ", "))
 	}
-	return s.store.SetJobStatus(ctx, ticketID, status)
+	return s.store.SetJobStatus(ctx, projectID, ticketID, status)
 }
 
 // ListSlots returns all concurrency slot records.

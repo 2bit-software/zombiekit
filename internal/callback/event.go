@@ -27,6 +27,7 @@ const (
 // safe to pass across goroutine boundaries without copying.
 type Event struct {
 	Kind      EventKind
+	ProjectID string
 	TicketID  string
 	Timestamp time.Time
 

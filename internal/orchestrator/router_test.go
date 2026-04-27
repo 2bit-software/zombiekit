@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/2bit-software/zombiekit/internal/callback"
 	"github.com/2bit-software/zombiekit/internal/github"
 	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
 	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // --- test helpers ---
@@ -26,8 +27,7 @@ type routerFixture struct {
 	lc       *linear.MockClient
 	archiver *mockArchiver
 	auditor  *mockAuditor
-	cfg      *Config
-	router   *Router
+	runner   *ProjectRunner
 	worktree string
 }
 
@@ -40,14 +40,18 @@ func newRouterFixture(t *testing.T) *routerFixture {
 	lc := &linear.MockClient{}
 	arch := &mockArchiver{}
 	aud := &mockAuditor{}
-	cfg := &Config{
-		ProjectID:     "test-project",
+	cfg := ProjectConfig{
+		ID:            "test-project",
 		BaseBranch:    "main",
 		TrackingLabel: "ai-managed",
+		PollInterval:  Duration{50 * time.Millisecond},
+		CallbackPort:  9999,
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	wt := &stubWorktree{basePath: t.TempDir()}
-	r := NewRouter(events, store, gh, lc, wt, arch, aud, nil, cfg, logger)
+	p := NewProjectRunner(cfg, store, lc, gh, wt, &stubSession{}, events, false, sandbox.Config{}, logger)
+	p.archiver = arch
+	p.auditor = aud
 
 	return &routerFixture{
 		events:   events,
@@ -56,8 +60,7 @@ func newRouterFixture(t *testing.T) *routerFixture {
 		lc:       lc,
 		archiver: arch,
 		auditor:  aud,
-		cfg:      cfg,
-		router:   r,
+		runner:   p,
 		worktree: worktree,
 	}
 }
@@ -73,7 +76,7 @@ func (f *routerFixture) runSingleEvent(t *testing.T, evt callback.Event) {
 	t.Helper()
 	f.events <- evt
 	close(f.events)
-	err := f.router.Run(context.Background())
+	err := f.runner.eventRouter(context.Background())
 	require.NoError(t, err)
 }
 
@@ -82,10 +85,10 @@ func prNum(n int64) *int64 { return &n }
 // --- mock store for router tests ---
 
 type routerMockStore struct {
-	getJobFn          func(ctx context.Context, ticketID string) (*state.Job, error)
-	setJobStatusFn    func(ctx context.Context, ticketID string, status string) error
-	setPRFn           func(ctx context.Context, ticketID string, prNumber int64) error
-	setCommentWaterFn func(ctx context.Context, prNumber int64, commentID int64) error
+	getJobFn          func(ctx context.Context, projectID, ticketID string) (*state.Job, error)
+	setJobStatusFn    func(ctx context.Context, projectID, ticketID string, status string) error
+	setPRFn           func(ctx context.Context, projectID, ticketID string, prNumber int64) error
+	setCommentWaterFn func(ctx context.Context, projectID string, prNumber int64, commentID int64) error
 	releaseSlotFn     func(ctx context.Context, projectID string) error
 	calls             []string
 }
@@ -93,7 +96,7 @@ type routerMockStore struct {
 func (m *routerMockStore) Migrate(_ context.Context) error                      { return nil }
 func (m *routerMockStore) Close() error                                         { return nil }
 func (m *routerMockStore) CreateJob(_ context.Context, _, _, _, _ string) error { return nil }
-func (m *routerMockStore) ListJobsByStatus(_ context.Context, _ ...string) ([]state.Job, error) {
+func (m *routerMockStore) ListJobsByStatus(_ context.Context, _ string, _ ...string) ([]state.Job, error) {
 	return nil, nil
 }
 func (m *routerMockStore) TryAcquireSlot(_ context.Context, _ string, _ int) (bool, error) {
@@ -101,45 +104,45 @@ func (m *routerMockStore) TryAcquireSlot(_ context.Context, _ string, _ int) (bo
 }
 func (m *routerMockStore) ResetAllSlots(_ context.Context) (int, error)       { return 0, nil }
 func (m *routerMockStore) ListAllJobs(_ context.Context) ([]state.Job, error) { return nil, nil }
-func (m *routerMockStore) DeleteJob(_ context.Context, _ string) error        { return nil }
+func (m *routerMockStore) DeleteJob(_ context.Context, _, _ string) error     { return nil }
 func (m *routerMockStore) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error) {
 	return nil, nil
 }
-func (m *routerMockStore) GetJobByPR(_ context.Context, _ int64) (*state.Job, error) {
+func (m *routerMockStore) GetJobByPR(_ context.Context, _ string, _ int64) (*state.Job, error) {
 	return nil, nil
 }
-func (m *routerMockStore) GetCommentWatermark(_ context.Context, _ int64) (int64, error) {
+func (m *routerMockStore) GetCommentWatermark(_ context.Context, _ string, _ int64) (int64, error) {
 	return 0, nil
 }
 
-func (m *routerMockStore) GetJob(ctx context.Context, ticketID string) (*state.Job, error) {
+func (m *routerMockStore) GetJob(ctx context.Context, projectID, ticketID string) (*state.Job, error) {
 	m.calls = append(m.calls, "GetJob")
 	if m.getJobFn != nil {
-		return m.getJobFn(ctx, ticketID)
+		return m.getJobFn(ctx, projectID, ticketID)
 	}
 	return nil, nil
 }
 
-func (m *routerMockStore) SetJobStatus(ctx context.Context, ticketID string, status string) error {
+func (m *routerMockStore) SetJobStatus(ctx context.Context, projectID, ticketID string, status string) error {
 	m.calls = append(m.calls, "SetJobStatus")
 	if m.setJobStatusFn != nil {
-		return m.setJobStatusFn(ctx, ticketID, status)
+		return m.setJobStatusFn(ctx, projectID, ticketID, status)
 	}
 	return nil
 }
 
-func (m *routerMockStore) SetPR(ctx context.Context, ticketID string, prNumber int64) error {
+func (m *routerMockStore) SetPR(ctx context.Context, projectID, ticketID string, prNumber int64) error {
 	m.calls = append(m.calls, "SetPR")
 	if m.setPRFn != nil {
-		return m.setPRFn(ctx, ticketID, prNumber)
+		return m.setPRFn(ctx, projectID, ticketID, prNumber)
 	}
 	return nil
 }
 
-func (m *routerMockStore) SetCommentWatermark(ctx context.Context, prNumber int64, commentID int64) error {
+func (m *routerMockStore) SetCommentWatermark(ctx context.Context, projectID string, prNumber int64, commentID int64) error {
 	m.calls = append(m.calls, "SetCommentWatermark")
 	if m.setCommentWaterFn != nil {
-		return m.setCommentWaterFn(ctx, prNumber, commentID)
+		return m.setCommentWaterFn(ctx, projectID, prNumber, commentID)
 	}
 	return nil
 }
@@ -187,7 +190,7 @@ func TestRouter_Complete_HappyPath(t *testing.T) {
 	f := newRouterFixture(t)
 	f.writePRDescription(t, "PR body here")
 
-	f.store.getJobFn = func(_ context.Context, _ string) (*state.Job, error) {
+	f.store.getJobFn = func(_ context.Context, _, _ string) (*state.Job, error) {
 		return &state.Job{TicketID: "DEV-100", WorktreePath: f.worktree, Status: state.StatusInProgress}, nil
 	}
 	f.lc.GetTicketFn = func(_ context.Context, _ string) (*linear.Ticket, error) {
@@ -221,7 +224,7 @@ func TestRouter_Complete_MissingPRDescription(t *testing.T) {
 	f := newRouterFixture(t)
 	// No pr-description.md written
 
-	f.store.getJobFn = func(_ context.Context, _ string) (*state.Job, error) {
+	f.store.getJobFn = func(_ context.Context, _, _ string) (*state.Job, error) {
 		return &state.Job{TicketID: "DEV-100", WorktreePath: f.worktree, Status: state.StatusInProgress}, nil
 	}
 	f.lc.SetTicketStatusFn = func(_ context.Context, _ string, status string) error {
@@ -259,7 +262,7 @@ func TestRouter_Complete_CreatePRFailure(t *testing.T) {
 	f := newRouterFixture(t)
 	f.writePRDescription(t, "body")
 
-	f.store.getJobFn = func(_ context.Context, _ string) (*state.Job, error) {
+	f.store.getJobFn = func(_ context.Context, _, _ string) (*state.Job, error) {
 		return &state.Job{TicketID: "DEV-100", WorktreePath: f.worktree}, nil
 	}
 	f.lc.GetTicketFn = func(_ context.Context, _ string) (*linear.Ticket, error) {
@@ -284,7 +287,7 @@ func TestRouter_Complete_CreatePRFailure(t *testing.T) {
 func TestRouter_Failed_HappyPath(t *testing.T) {
 	f := newRouterFixture(t)
 
-	f.store.getJobFn = func(_ context.Context, _ string) (*state.Job, error) {
+	f.store.getJobFn = func(_ context.Context, _, _ string) (*state.Job, error) {
 		return &state.Job{TicketID: "DEV-100", WorktreePath: f.worktree}, nil
 	}
 	f.lc.SetTicketStatusFn = func(_ context.Context, _ string, _ string) error { return nil }
@@ -328,7 +331,7 @@ func TestRouter_Failed_UnknownTicket(t *testing.T) {
 func TestRouter_Failed_LinearAPIFailure_SlotStillReleased(t *testing.T) {
 	f := newRouterFixture(t)
 
-	f.store.getJobFn = func(_ context.Context, _ string) (*state.Job, error) {
+	f.store.getJobFn = func(_ context.Context, _, _ string) (*state.Job, error) {
 		return &state.Job{TicketID: "DEV-100", WorktreePath: f.worktree}, nil
 	}
 	f.lc.SetTicketStatusFn = func(_ context.Context, _ string, _ string) error {
@@ -354,7 +357,7 @@ func TestRouter_CommentResolved_HappyPath(t *testing.T) {
 	f := newRouterFixture(t)
 	f.writePRDescription(t, "Updated PR body")
 
-	f.store.getJobFn = func(_ context.Context, _ string) (*state.Job, error) {
+	f.store.getJobFn = func(_ context.Context, _, _ string) (*state.Job, error) {
 		return &state.Job{TicketID: "DEV-100", WorktreePath: f.worktree, PRNumber: prNum(42)}, nil
 	}
 	f.gh.UpdatePRBodyFn = func(_ context.Context, pr int, body string) error {
@@ -385,7 +388,7 @@ func TestRouter_CommentResolved_HappyPath(t *testing.T) {
 func TestRouter_CommentResolved_NilPRNumber(t *testing.T) {
 	f := newRouterFixture(t)
 
-	f.store.getJobFn = func(_ context.Context, _ string) (*state.Job, error) {
+	f.store.getJobFn = func(_ context.Context, _, _ string) (*state.Job, error) {
 		return &state.Job{TicketID: "DEV-100", WorktreePath: f.worktree, PRNumber: nil}, nil
 	}
 	f.lc.SetTicketStatusFn = func(_ context.Context, _ string, _ string) error { return nil }
@@ -404,7 +407,7 @@ func TestRouter_CommentResolved_NilPRNumber(t *testing.T) {
 func TestRouter_CommentResolved_InvalidCommentID(t *testing.T) {
 	f := newRouterFixture(t)
 
-	f.store.getJobFn = func(_ context.Context, _ string) (*state.Job, error) {
+	f.store.getJobFn = func(_ context.Context, _, _ string) (*state.Job, error) {
 		return &state.Job{TicketID: "DEV-100", WorktreePath: f.worktree, PRNumber: prNum(42)}, nil
 	}
 	f.lc.SetTicketStatusFn = func(_ context.Context, _ string, _ string) error { return nil }
@@ -426,7 +429,7 @@ func TestRouter_ChannelClosed_ReturnsNil(t *testing.T) {
 	f := newRouterFixture(t)
 	close(f.events)
 
-	err := f.router.Run(context.Background())
+	err := f.runner.eventRouter(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -435,7 +438,7 @@ func TestRouter_ContextCancelled_ReturnsNil(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error, 1)
-	go func() { done <- f.router.Run(ctx) }()
+	go func() { done <- f.runner.eventRouter(ctx) }()
 
 	// Give router time to start
 	time.Sleep(10 * time.Millisecond)

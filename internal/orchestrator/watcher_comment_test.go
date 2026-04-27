@@ -3,15 +3,17 @@ package orchestrator
 import (
 	"context"
 	"log/slog"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/2bit-software/zombiekit/internal/callback"
+	"github.com/2bit-software/zombiekit/internal/github"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
+	"github.com/2bit-software/zombiekit/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/2bit-software/zombiekit/internal/github"
-	"github.com/2bit-software/zombiekit/internal/logging"
-	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 // --- Comment watcher test doubles ---
@@ -46,30 +48,30 @@ func (s *commentStubState) Close() error                    { return nil }
 func (s *commentStubState) CreateJob(_ context.Context, _, _, _, _ string) error {
 	return nil
 }
-func (s *commentStubState) GetJob(_ context.Context, _ string) (*state.Job, error) {
+func (s *commentStubState) GetJob(_ context.Context, _, _ string) (*state.Job, error) {
 	return nil, nil
 }
-func (s *commentStubState) ListJobsByStatus(_ context.Context, _ ...string) ([]state.Job, error) {
+func (s *commentStubState) ListJobsByStatus(_ context.Context, _ string, _ ...string) ([]state.Job, error) {
 	return nil, nil
 }
-func (s *commentStubState) SetJobStatus(_ context.Context, _, _ string) error { return nil }
-func (s *commentStubState) SetPR(_ context.Context, _ string, _ int64) error  { return nil }
+func (s *commentStubState) SetJobStatus(_ context.Context, _, _, _ string) error { return nil }
+func (s *commentStubState) SetPR(_ context.Context, _, _ string, _ int64) error  { return nil }
 
-func (s *commentStubState) GetJobByPR(_ context.Context, prNumber int64) (*state.Job, error) {
+func (s *commentStubState) GetJobByPR(_ context.Context, _ string, prNumber int64) (*state.Job, error) {
 	s.record("GetJobByPR")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.jobsByPR[prNumber], nil
 }
 
-func (s *commentStubState) GetCommentWatermark(_ context.Context, prNumber int64) (int64, error) {
+func (s *commentStubState) GetCommentWatermark(_ context.Context, _ string, prNumber int64) (int64, error) {
 	s.record("GetCommentWatermark")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.watermarks[prNumber], nil
 }
 
-func (s *commentStubState) SetCommentWatermark(_ context.Context, prNumber int64, commentID int64) error {
+func (s *commentStubState) SetCommentWatermark(_ context.Context, _ string, prNumber int64, commentID int64) error {
 	s.record("SetCommentWatermark")
 	if s.setWatermarkErr != nil {
 		return s.setWatermarkErr
@@ -92,19 +94,18 @@ func (s *commentStubState) ReleaseSlot(_ context.Context, _ string) error {
 
 func (s *commentStubState) ResetAllSlots(_ context.Context) (int, error)       { return 0, nil }
 func (s *commentStubState) ListAllJobs(_ context.Context) ([]state.Job, error) { return nil, nil }
-func (s *commentStubState) DeleteJob(_ context.Context, _ string) error        { return nil }
+func (s *commentStubState) DeleteJob(_ context.Context, _, _ string) error     { return nil }
 func (s *commentStubState) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error) {
 	return nil, nil
 }
 
 // commentTestFixture bundles all test dependencies for the comment watcher.
 type commentTestFixture struct {
-	cfg        *Config
 	gh         *github.MockClient
 	store      *commentStubState
 	sessions   *commentStubSession
 	dispatcher *CommentDispatcher
-	orch       *Orchestrator
+	runner     *ProjectRunner
 	logger     *slog.Logger
 }
 
@@ -139,13 +140,12 @@ func (s *commentStubSession) SessionExists(_ context.Context, _ string) (bool, e
 
 func newCommentFixture(t *testing.T) *commentTestFixture {
 	t.Helper()
-	setupLogger(t)
 
-	cfg := &Config{
+	cfg := ProjectConfig{
+		ID:               "test-project",
 		CallbackPort:     9999,
-		PollInterval:     50 * time.Millisecond,
+		PollInterval:     Duration{50 * time.Millisecond},
 		ConcurrencyLimit: 1,
-		ProjectID:        "test-project",
 		TrackingLabel:    "ai-managed",
 		BotUsername:      "test-bot",
 	}
@@ -153,17 +153,17 @@ func newCommentFixture(t *testing.T) *commentTestFixture {
 	store := newCommentStubState()
 	gh := &github.MockClient{}
 	sess := &commentStubSession{}
-	logger := logging.Logger()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	dispatcher := NewCommentDispatcher(logger)
-	orch := New(cfg, store, nil, gh, nil, sess)
+	events := make(chan callback.Event, 8)
+	runner := NewProjectRunner(cfg, store, nil, gh, nil, sess, events, false, sandbox.Config{}, logger)
 
 	return &commentTestFixture{
-		cfg:        cfg,
 		gh:         gh,
 		store:      store,
 		sessions:   sess,
 		dispatcher: dispatcher,
-		orch:       orch,
+		runner:     runner,
 		logger:     logger,
 	}
 }
@@ -198,7 +198,7 @@ func TestPollDetectsNewComments(t *testing.T) {
 		return comments, nil
 	}
 
-	f.orch.pollComments(context.Background(), f.dispatcher, f.logger)
+	f.runner.pollComments(context.Background(), f.dispatcher, f.logger)
 
 	// GetCommentsSince was called with the right args (validated in the Fn above).
 	var found bool
@@ -240,7 +240,7 @@ func TestBotCommentFiltered(t *testing.T) {
 		}, nil
 	}
 
-	f.orch.pollComments(context.Background(), f.dispatcher, f.logger)
+	f.runner.pollComments(context.Background(), f.dispatcher, f.logger)
 
 	q := f.dispatcher.GetQueue(prNum)
 	require.NotNil(t, q, "queue should exist")
@@ -283,7 +283,7 @@ func TestTerminalJobSkipped(t *testing.T) {
 		return nil, nil
 	}
 
-	f.orch.pollComments(context.Background(), f.dispatcher, f.logger)
+	f.runner.pollComments(context.Background(), f.dispatcher, f.logger)
 
 	// No calls to GetCommentsSince should have been made.
 	for _, c := range f.gh.Calls {
@@ -305,7 +305,7 @@ func TestPRReaping(t *testing.T) {
 		return []github.PRSummary{}, nil
 	}
 
-	f.orch.pollComments(context.Background(), f.dispatcher, f.logger)
+	f.runner.pollComments(context.Background(), f.dispatcher, f.logger)
 
 	assert.Nil(t, f.dispatcher.GetQueue(42), "queue for PR 42 should have been reaped")
 }
@@ -335,7 +335,7 @@ func TestSerialProcessing(t *testing.T) {
 		spawnCount:  &spawnCount,
 		spawnMu:     &spawnMu,
 	}
-	f.orch.sessions = customSess
+	f.runner.sessions = customSess
 
 	// Mock GitHub calls needed by runPRQueue.
 	f.gh.IsMergedFn = func(_ context.Context, _ int) (bool, error) { return false, nil }
@@ -350,7 +350,7 @@ func TestSerialProcessing(t *testing.T) {
 	q.comments <- github.PRComment{ID: 501, Author: "alice", Body: "first"}
 	q.comments <- github.PRComment{ID: 502, Author: "bob", Body: "second"}
 
-	go f.orch.runPRQueue(ctx, f.dispatcher, prNum, job, q, f.logger)
+	go f.runner.runPRQueue(ctx, f.dispatcher, prNum, job, q, f.logger)
 
 	// Wait for first spawn.
 	select {

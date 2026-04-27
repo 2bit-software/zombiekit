@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	defaultBufferSize  = 64
-	shutdownTimeout    = 5 * time.Second
-	readHeaderTimeout  = 5 * time.Second
-	writeTimeout       = 10 * time.Second
-	idleTimeout        = 30 * time.Second
+	defaultBufferSize = 64
+	shutdownTimeout   = 5 * time.Second
+	readHeaderTimeout = 5 * time.Second
+	writeTimeout      = 10 * time.Second
+	idleTimeout       = 30 * time.Second
 )
 
 // EventSource abstracts the read side of the callback server.
@@ -97,9 +97,9 @@ func (s *CallbackServer) Run(ctx context.Context) error {
 }
 
 func (s *CallbackServer) registerRoutes() {
-	s.mux.HandleFunc("POST /{ticketID}/complete", s.handleComplete)
-	s.mux.HandleFunc("POST /{ticketID}/comment-resolved", s.handleCommentResolved)
-	s.mux.HandleFunc("POST /{ticketID}/failed", s.handleFailed)
+	s.mux.HandleFunc("POST /project/{projectID}/{ticketID}/complete", s.handleComplete)
+	s.mux.HandleFunc("POST /project/{projectID}/{ticketID}/comment-resolved", s.handleCommentResolved)
+	s.mux.HandleFunc("POST /project/{projectID}/{ticketID}/failed", s.handleFailed)
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 }
 

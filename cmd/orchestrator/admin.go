@@ -7,11 +7,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/admin"
 	"github.com/2bit-software/zombiekit/internal/cmux"
 	"github.com/2bit-software/zombiekit/internal/state"
 	"github.com/2bit-software/zombiekit/internal/worktree"
+	"github.com/urfave/cli/v2"
 )
 
 func openStore(c *cli.Context, mustExist bool) (*state.SQLiteStore, error) {
@@ -55,6 +55,13 @@ func formatPR(pr *int64) string {
 
 // --- jobs subcommands ---
 
+var projectFlag = &cli.StringFlag{
+	Name:    "project",
+	Aliases: []string{"p"},
+	Usage:   "Filter by project ID",
+	EnvVars: []string{"ORCH_PROJECT_ID"},
+}
+
 func jobsCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "jobs",
@@ -68,6 +75,7 @@ func jobsCommand() *cli.Command {
 						Name:  "status",
 						Usage: "Filter by status (repeatable)",
 					},
+					projectFlag,
 				},
 				Action: jobsList,
 			},
@@ -75,6 +83,7 @@ func jobsCommand() *cli.Command {
 				Name:      "get",
 				Usage:     "Show details for a single job",
 				ArgsUsage: "<ticket-id>",
+				Flags:     []cli.Flag{projectFlag},
 				Action:    jobsGet,
 			},
 			{
@@ -102,6 +111,7 @@ func jobsCommand() *cli.Command {
 						Usage:   "Worktrees root directory (optional, used with --worktree)",
 						EnvVars: []string{"ORCH_WORKTREES_ROOT"},
 					},
+					projectFlag,
 				},
 				Action: jobsDelete,
 			},
@@ -109,6 +119,7 @@ func jobsCommand() *cli.Command {
 				Name:      "set-status",
 				Usage:     "Update a job's status",
 				ArgsUsage: "<ticket-id> <status>",
+				Flags:     []cli.Flag{projectFlag},
 				Action:    jobsSetStatus,
 			},
 		},
@@ -122,8 +133,9 @@ func jobsList(c *cli.Context) error {
 	}
 	defer func() { _ = store.Close() }()
 
+	projectID := c.String("project")
 	filter := admin.JobFilter{Statuses: c.StringSlice("status")}
-	jobs, err := svc.ListJobs(c.Context, filter)
+	jobs, err := svc.ListJobs(c.Context, projectID, filter)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
@@ -151,7 +163,8 @@ func jobsGet(c *cli.Context) error {
 	}
 	defer func() { _ = store.Close() }()
 
-	job, err := svc.GetJob(c.Context, ticketID)
+	projectID := c.String("project")
+	job, err := svc.GetJob(c.Context, projectID, ticketID)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
@@ -205,7 +218,8 @@ func jobsDelete(c *cli.Context) error {
 		opts = append(opts, admin.WithWorktreeCleanup(wtMgr))
 	}
 
-	result, err := svc.DeleteJob(c.Context, ticketID, opts...)
+	projectID := c.String("project")
+	result, err := svc.DeleteJob(c.Context, projectID, ticketID, opts...)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
@@ -247,14 +261,16 @@ func jobsSetStatus(c *cli.Context) error {
 	}
 	defer func() { _ = store.Close() }()
 
+	projectID := c.String("project")
+
 	// Get current status for the confirmation message
-	job, err := svc.GetJob(c.Context, ticketID)
+	job, err := svc.GetJob(c.Context, projectID, ticketID)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
 	oldStatus := job.Status
 
-	if err := svc.SetJobStatus(c.Context, ticketID, newStatus); err != nil {
+	if err := svc.SetJobStatus(c.Context, projectID, ticketID, newStatus); err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
 

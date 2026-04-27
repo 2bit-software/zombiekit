@@ -11,8 +11,8 @@
 |------|--------|--------|
 | spec | completed | 2026-04-27 09:15 |
 | plan | completed | 2026-04-27 09:45 |
-| tasks | in_progress | 2026-04-27 09:45 |
-| implement | pending | - |
+| tasks | completed | 2026-04-27 09:45 |
+| implement | in_progress | 2026-04-27 |
 
 ## Source
 

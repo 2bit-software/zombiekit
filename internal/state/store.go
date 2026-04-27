@@ -51,17 +51,17 @@ type StateStore interface {
 	Close() error
 
 	CreateJob(ctx context.Context, ticketID, worktreePath, cmuxSession, projectID string) error
-	GetJob(ctx context.Context, ticketID string) (*Job, error)
+	GetJob(ctx context.Context, projectID, ticketID string) (*Job, error)
 	ListAllJobs(ctx context.Context) ([]Job, error)
-	ListJobsByStatus(ctx context.Context, statuses ...string) ([]Job, error)
-	DeleteJob(ctx context.Context, ticketID string) error
-	SetJobStatus(ctx context.Context, ticketID string, status string) error
-	SetPR(ctx context.Context, ticketID string, prNumber int64) error
+	ListJobsByStatus(ctx context.Context, projectID string, statuses ...string) ([]Job, error)
+	DeleteJob(ctx context.Context, projectID, ticketID string) error
+	SetJobStatus(ctx context.Context, projectID, ticketID string, status string) error
+	SetPR(ctx context.Context, projectID, ticketID string, prNumber int64) error
 
-	GetJobByPR(ctx context.Context, prNumber int64) (*Job, error)
+	GetJobByPR(ctx context.Context, projectID string, prNumber int64) (*Job, error)
 
-	GetCommentWatermark(ctx context.Context, prNumber int64) (int64, error)
-	SetCommentWatermark(ctx context.Context, prNumber int64, commentID int64) error
+	GetCommentWatermark(ctx context.Context, projectID string, prNumber int64) (int64, error)
+	SetCommentWatermark(ctx context.Context, projectID string, prNumber int64, commentID int64) error
 
 	TryAcquireSlot(ctx context.Context, projectID string, limit int) (bool, error)
 	ReleaseSlot(ctx context.Context, projectID string) error
@@ -193,19 +193,19 @@ func scanJobs(rows *sql.Rows) ([]Job, error) {
 	return jobs, nil
 }
 
-// GetJob retrieves a job by ticket ID.
-// Returns nil, nil if no job exists for the given ticket ID.
-func (s *SQLiteStore) GetJob(ctx context.Context, ticketID string) (*Job, error) {
+// GetJob retrieves a job by project and ticket ID.
+// Returns nil, nil if no job exists for the given key.
+func (s *SQLiteStore) GetJob(ctx context.Context, projectID, ticketID string) (*Job, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT `+jobColumns+` FROM jobs WHERE ticket_id = ?`,
-		ticketID,
+		`SELECT `+jobColumns+` FROM jobs WHERE project_id = ? AND ticket_id = ?`,
+		projectID, ticketID,
 	)
 	job, err := scanJob(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get job %s: %w", ticketID, err)
+		return nil, fmt.Errorf("get job %s/%s: %w", projectID, ticketID, err)
 	}
 	return &job, nil
 }
@@ -223,22 +223,23 @@ func (s *SQLiteStore) ListAllJobs(ctx context.Context) ([]Job, error) {
 	return scanJobs(rows)
 }
 
-// ListJobsByStatus returns all jobs matching any of the given statuses.
+// ListJobsByStatus returns all jobs for a project matching any of the given statuses.
 // Returns an empty slice (not nil) when no jobs match.
-func (s *SQLiteStore) ListJobsByStatus(ctx context.Context, statuses ...string) ([]Job, error) {
+func (s *SQLiteStore) ListJobsByStatus(ctx context.Context, projectID string, statuses ...string) ([]Job, error) {
 	if len(statuses) == 0 {
 		return []Job{}, nil
 	}
 
 	placeholders := make([]string, len(statuses))
-	args := make([]any, len(statuses))
+	args := make([]any, 1+len(statuses))
+	args[0] = projectID
 	for i, status := range statuses {
 		placeholders[i] = "?"
-		args[i] = status
+		args[i+1] = status
 	}
 
 	query := fmt.Sprintf(
-		`SELECT `+jobColumns+` FROM jobs WHERE status IN (%s)`,
+		`SELECT `+jobColumns+` FROM jobs WHERE project_id = ? AND status IN (%s)`,
 		strings.Join(placeholders, ", "),
 	)
 
@@ -250,112 +251,112 @@ func (s *SQLiteStore) ListJobsByStatus(ctx context.Context, statuses ...string) 
 	return scanJobs(rows)
 }
 
-// DeleteJob removes a job record by ticket ID.
-// Returns ErrJobNotFound if no job exists for the given ticket ID.
-func (s *SQLiteStore) DeleteJob(ctx context.Context, ticketID string) error {
+// DeleteJob removes a job record by project and ticket ID.
+// Returns ErrJobNotFound if no job exists for the given key.
+func (s *SQLiteStore) DeleteJob(ctx context.Context, projectID, ticketID string) error {
 	result, err := s.db.ExecContext(ctx,
-		`DELETE FROM jobs WHERE ticket_id = ?`, ticketID,
+		`DELETE FROM jobs WHERE project_id = ? AND ticket_id = ?`, projectID, ticketID,
 	)
 	if err != nil {
-		return fmt.Errorf("delete job %s: %w", ticketID, err)
+		return fmt.Errorf("delete job %s/%s: %w", projectID, ticketID, err)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("delete job %s: %w", ticketID, err)
+		return fmt.Errorf("delete job %s/%s: %w", projectID, ticketID, err)
 	}
 	if n == 0 {
-		return fmt.Errorf("delete job %s: %w", ticketID, ErrJobNotFound)
+		return fmt.Errorf("delete job %s/%s: %w", projectID, ticketID, ErrJobNotFound)
 	}
 	return nil
 }
 
 // SetJobStatus updates the status of a job and its updated_at timestamp.
-// Returns ErrJobNotFound if no job exists for the given ticket ID.
-func (s *SQLiteStore) SetJobStatus(ctx context.Context, ticketID string, status string) error {
+// Returns ErrJobNotFound if no job exists for the given key.
+func (s *SQLiteStore) SetJobStatus(ctx context.Context, projectID, ticketID string, status string) error {
 	result, err := s.db.ExecContext(ctx,
-		`UPDATE jobs SET status = ?, updated_at = ? WHERE ticket_id = ?`,
-		status, time.Now(), ticketID,
+		`UPDATE jobs SET status = ?, updated_at = ? WHERE project_id = ? AND ticket_id = ?`,
+		status, time.Now(), projectID, ticketID,
 	)
 	if err != nil {
-		return fmt.Errorf("set status for job %s: %w", ticketID, err)
+		return fmt.Errorf("set status for job %s/%s: %w", projectID, ticketID, err)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("set status for job %s: %w", ticketID, err)
+		return fmt.Errorf("set status for job %s/%s: %w", projectID, ticketID, err)
 	}
 	if n == 0 {
-		return fmt.Errorf("set status for job %s: %w", ticketID, ErrJobNotFound)
+		return fmt.Errorf("set status for job %s/%s: %w", projectID, ticketID, ErrJobNotFound)
 	}
 	return nil
 }
 
 // SetPR associates a PR number with an existing job.
-// Returns ErrJobNotFound if no job exists for the given ticket ID.
-func (s *SQLiteStore) SetPR(ctx context.Context, ticketID string, prNumber int64) error {
+// Returns ErrJobNotFound if no job exists for the given key.
+func (s *SQLiteStore) SetPR(ctx context.Context, projectID, ticketID string, prNumber int64) error {
 	result, err := s.db.ExecContext(ctx,
-		`UPDATE jobs SET pr_number = ?, updated_at = ? WHERE ticket_id = ?`,
-		prNumber, time.Now(), ticketID,
+		`UPDATE jobs SET pr_number = ?, updated_at = ? WHERE project_id = ? AND ticket_id = ?`,
+		prNumber, time.Now(), projectID, ticketID,
 	)
 	if err != nil {
-		return fmt.Errorf("set PR for job %s: %w", ticketID, err)
+		return fmt.Errorf("set PR for job %s/%s: %w", projectID, ticketID, err)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("set PR for job %s: %w", ticketID, err)
+		return fmt.Errorf("set PR for job %s/%s: %w", projectID, ticketID, err)
 	}
 	if n == 0 {
-		return fmt.Errorf("set PR for job %s: %w", ticketID, ErrJobNotFound)
+		return fmt.Errorf("set PR for job %s/%s: %w", projectID, ticketID, ErrJobNotFound)
 	}
 	return nil
 }
 
-// GetJobByPR retrieves a job by its associated PR number.
-// Returns nil, nil if no job exists for the given PR number.
-func (s *SQLiteStore) GetJobByPR(ctx context.Context, prNumber int64) (*Job, error) {
+// GetJobByPR retrieves a job by project and PR number.
+// Returns nil, nil if no job exists for the given key.
+func (s *SQLiteStore) GetJobByPR(ctx context.Context, projectID string, prNumber int64) (*Job, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT `+jobColumns+` FROM jobs WHERE pr_number = ?`,
-		prNumber,
+		`SELECT `+jobColumns+` FROM jobs WHERE project_id = ? AND pr_number = ?`,
+		projectID, prNumber,
 	)
 	job, err := scanJob(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get job by PR %d: %w", prNumber, err)
+		return nil, fmt.Errorf("get job by PR %s/%d: %w", projectID, prNumber, err)
 	}
 	return &job, nil
 }
 
-// GetCommentWatermark returns the last processed comment ID for a PR.
-// Returns 0 if no watermark has been set for the given PR.
-func (s *SQLiteStore) GetCommentWatermark(ctx context.Context, prNumber int64) (int64, error) {
+// GetCommentWatermark returns the last processed comment ID for a project's PR.
+// Returns 0 if no watermark has been set.
+func (s *SQLiteStore) GetCommentWatermark(ctx context.Context, projectID string, prNumber int64) (int64, error) {
 	var commentID int64
 	err := s.db.QueryRowContext(ctx,
-		`SELECT last_processed_comment_id FROM comment_watermarks WHERE pr_number = ?`,
-		prNumber,
+		`SELECT last_processed_comment_id FROM comment_watermarks WHERE project_id = ? AND pr_number = ?`,
+		projectID, prNumber,
 	).Scan(&commentID)
 	if err == sql.ErrNoRows {
 		return 0, nil
 	}
 	if err != nil {
-		return 0, fmt.Errorf("get comment watermark for PR %d: %w", prNumber, err)
+		return 0, fmt.Errorf("get comment watermark for %s/PR#%d: %w", projectID, prNumber, err)
 	}
 	return commentID, nil
 }
 
-// SetCommentWatermark sets the last processed comment ID for a PR.
+// SetCommentWatermark sets the last processed comment ID for a project's PR.
 // Creates the watermark if it doesn't exist, or updates it if it does.
-func (s *SQLiteStore) SetCommentWatermark(ctx context.Context, prNumber int64, commentID int64) error {
+func (s *SQLiteStore) SetCommentWatermark(ctx context.Context, projectID string, prNumber int64, commentID int64) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO comment_watermarks (pr_number, last_processed_comment_id, updated_at)
-		 VALUES (?, ?, ?)
-		 ON CONFLICT(pr_number) DO UPDATE SET
+		`INSERT INTO comment_watermarks (project_id, pr_number, last_processed_comment_id, updated_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(project_id, pr_number) DO UPDATE SET
 		     last_processed_comment_id = excluded.last_processed_comment_id,
 		     updated_at = excluded.updated_at`,
-		prNumber, commentID, time.Now(),
+		projectID, prNumber, commentID, time.Now(),
 	)
 	if err != nil {
-		return fmt.Errorf("set comment watermark for PR %d: %w", prNumber, err)
+		return fmt.Errorf("set comment watermark for %s/PR#%d: %w", projectID, prNumber, err)
 	}
 	return nil
 }

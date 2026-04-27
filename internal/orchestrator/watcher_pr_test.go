@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/2bit-software/zombiekit/internal/callback"
+	"github.com/2bit-software/zombiekit/internal/github"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
+	"github.com/2bit-software/zombiekit/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/2bit-software/zombiekit/internal/github"
-	"github.com/2bit-software/zombiekit/internal/logging"
-	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 // --- PR watcher test doubles ---
@@ -29,12 +31,12 @@ type prStubState struct {
 	releaseSlotCalls  int
 }
 
-func (s *prStubState) ListJobsByStatus(_ context.Context, _ ...string) ([]state.Job, error) {
+func (s *prStubState) ListJobsByStatus(_ context.Context, _ string, _ ...string) ([]state.Job, error) {
 	s.record("ListJobsByStatus")
 	return s.listJobs, s.listJobsErr
 }
 
-func (s *prStubState) SetJobStatus(_ context.Context, ticketID, status string) error {
+func (s *prStubState) SetJobStatus(_ context.Context, _, ticketID, status string) error {
 	s.record("SetJobStatus")
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -66,15 +68,22 @@ func (s *prStubLinear) SetTicketStatus(_ context.Context, ticketID, status strin
 
 // --- Helpers ---
 
-func buildPRWatcherOrch(t *testing.T, gh *github.MockClient, wt *stubWorktree, lc *prStubLinear, st *prStubState) *Orchestrator {
+func buildPRWatcherRunner(t *testing.T, gh *github.MockClient, wt *stubWorktree, lc *prStubLinear, st *prStubState) *ProjectRunner {
 	t.Helper()
-	setupLogger(t)
-	cfg := &Config{
-		PollInterval:         50 * time.Millisecond,
-		ProjectID:            "test-project",
-		ClosedPRTicketStatus: "cancelled",
+	cfg := ProjectConfig{
+		ID:             "test-project",
+		PollInterval:   Duration{50 * time.Millisecond},
+		ClosedPRStatus: "cancelled",
+		CallbackPort:   9999,
 	}
-	return New(cfg, st, lc, gh, wt, &stubSession{})
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	events := make(chan callback.Event, 8)
+	return NewProjectRunner(cfg, st, lc, gh, wt, &stubSession{}, events, false, sandbox.Config{}, logger)
+}
+
+func setupTestLogger(t *testing.T) *slog.Logger {
+	t.Helper()
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})).With(slog.String("test", t.Name()))
 }
 
 // --- Tests ---
@@ -91,9 +100,9 @@ func TestPRWatcher_MergedPR(t *testing.T) {
 			{TicketID: "DEV-100", WorktreePath: "/tmp/wt/DEV-100", PRNumber: prNum(42), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
 	assert.Contains(t, wt.getCalls(), "DeleteWorktree")
 	assert.Equal(t, []string{"DEV-100:done"}, lc.setStatusCalls)
@@ -114,10 +123,10 @@ func TestPRWatcher_ClosedPR(t *testing.T) {
 			{TicketID: "DEV-200", WorktreePath: "/tmp/wt/DEV-200", PRNumber: prNum(99), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
-	o.cfg.ClosedPRTicketStatus = "backlog"
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
+	p.cfg.ClosedPRStatus = "backlog"
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
 	assert.Equal(t, []string{"DEV-200:backlog"}, lc.setStatusCalls)
 	assert.Equal(t, []string{"DEV-200:" + state.StatusClosed}, st.setJobStatusCalls)
@@ -134,9 +143,9 @@ func TestPRWatcher_SkipNoPR(t *testing.T) {
 			{TicketID: "DEV-300", WorktreePath: "/tmp/wt/DEV-300", PRNumber: nil, Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
 	assert.Empty(t, gh.Calls, "should not call GitHub for jobs without PR")
 	assert.Empty(t, wt.getCalls())
@@ -158,9 +167,9 @@ func TestPRWatcher_OpenPR(t *testing.T) {
 			{TicketID: "DEV-400", WorktreePath: "/tmp/wt/DEV-400", PRNumber: prNum(10), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
 	assert.Len(t, gh.Calls, 2, "should call IsMerged and IsClosed")
 	assert.Empty(t, wt.getCalls(), "should not clean up open PR")
@@ -179,9 +188,9 @@ func TestPRWatcher_PartialFailure_Worktree(t *testing.T) {
 			{TicketID: "DEV-500", WorktreePath: "/tmp/wt/DEV-500", PRNumber: prNum(50), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
 	assert.Contains(t, wt.getCalls(), "DeleteWorktree")
 	assert.Equal(t, []string{"DEV-500:done"}, lc.setStatusCalls, "ticket status should still be set")
@@ -202,9 +211,9 @@ func TestPRWatcher_PartialFailure_Linear(t *testing.T) {
 			{TicketID: "DEV-600", WorktreePath: "/tmp/wt/DEV-600", PRNumber: prNum(60), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
 	assert.Contains(t, wt.getCalls(), "DeleteWorktree")
 	assert.Equal(t, []string{"DEV-600:" + state.StatusClosed}, st.setJobStatusCalls, "job status should still be set despite Linear failure")
@@ -224,9 +233,9 @@ func TestPRWatcher_PartialFailure_SetJobStatus(t *testing.T) {
 			{TicketID: "DEV-700", WorktreePath: "/tmp/wt/DEV-700", PRNumber: prNum(70), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
 	assert.Equal(t, 1, st.releaseSlotCalls, "slot should still be released despite SetJobStatus failure")
 }
@@ -244,12 +253,12 @@ func TestPRWatcher_ContextCancelled(t *testing.T) {
 			{TicketID: "DEV-801", WorktreePath: "/tmp/wt/DEV-801", PRNumber: prNum(81), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
 	// Cancel before poll starts
 	cancel()
 
-	o.pollPRLifecycle(ctx, setupTestLogger(t))
+	p.pollPRLifecycle(ctx, setupTestLogger(t))
 
 	assert.Empty(t, gh.Calls, "should not check any PRs after context cancellation")
 }
@@ -273,9 +282,9 @@ func TestPRWatcher_MultiplePRs(t *testing.T) {
 			{TicketID: "DEV-C", WorktreePath: "/tmp/wt/DEV-C", PRNumber: prNum(13), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
 	require.Len(t, st.setJobStatusCalls, 2, "two PRs should be cleaned up")
 	assert.Contains(t, st.setJobStatusCalls, "DEV-A:"+state.StatusClosed)
@@ -299,20 +308,20 @@ func TestPRWatcher_Idempotent(t *testing.T) {
 			{TicketID: "DEV-900", WorktreePath: "/tmp/wt/DEV-900", PRNumber: prNum(90), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 	logger := setupTestLogger(t)
 
-	// First poll — cleanup happens
-	o.pollPRLifecycle(context.Background(), logger)
+	// First poll -- cleanup happens
+	p.pollPRLifecycle(context.Background(), logger)
 	assert.Equal(t, 1, st.releaseSlotCalls)
 
-	// Second poll — no more queued jobs (simulate StatusClosed by returning empty list)
+	// Second poll -- no more queued jobs (simulate StatusClosed by returning empty list)
 	st.listJobs = []state.Job{}
 	st.setJobStatusCalls = nil
 	st.releaseSlotCalls = 0
 	lc.setStatusCalls = nil
 
-	o.pollPRLifecycle(context.Background(), logger)
+	p.pollPRLifecycle(context.Background(), logger)
 
 	assert.Empty(t, st.setJobStatusCalls, "no cleanup on second poll")
 	assert.Equal(t, 0, st.releaseSlotCalls, "no slot release on second poll")
@@ -331,11 +340,11 @@ func TestPRWatcher_MergedAndClosed(t *testing.T) {
 			{TicketID: "DEV-MC", WorktreePath: "/tmp/wt/DEV-MC", PRNumber: prNum(77), Status: state.StatusQueued},
 		},
 	}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
-	o.pollPRLifecycle(context.Background(), setupTestLogger(t))
+	p.pollPRLifecycle(context.Background(), setupTestLogger(t))
 
-	// IsMerged is checked first — merge path should be taken
+	// IsMerged is checked first -- merge path should be taken
 	assert.Equal(t, []string{"DEV-MC:done"}, lc.setStatusCalls, "should use merge status, not close status")
 
 	// IsClosed should NOT be called (short-circuited by merge detection)
@@ -352,25 +361,17 @@ func TestPRWatcher_ServiceFunc(t *testing.T) {
 	wt := &stubWorktree{}
 	lc := &prStubLinear{}
 	st := &prStubState{stubState: *newStubState()}
-	o := buildPRWatcherOrch(t, gh, wt, lc, st)
+	p := buildPRWatcherRunner(t, gh, wt, lc, st)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	svc := o.NewPRWatcher()
 
 	done := make(chan error, 1)
-	go func() { done <- svc(ctx) }()
+	go func() { done <- p.prWatcher(ctx) }()
 
 	// Let it run for a tick
 	time.Sleep(100 * time.Millisecond)
 	cancel()
 
 	err := <-done
-	assert.NoError(t, err, "NewPRWatcher should return nil on context cancellation")
-}
-
-// --- Test logger helper ---
-
-func setupTestLogger(t *testing.T) *slog.Logger {
-	t.Helper()
-	return logging.Logger().With(slog.String("test", t.Name()))
+	assert.NoError(t, err, "prWatcher should return nil on context cancellation")
 }

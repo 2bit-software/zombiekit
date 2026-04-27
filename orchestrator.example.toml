@@ -1,0 +1,44 @@
+# Orchestrator configuration for multi-project mode.
+# Start with: orchestrator run --config orchestrator.toml
+
+[global]
+# Credentials (required). Per-project overrides are optional.
+linear_api_key = "lin_api_..."
+github_token   = "ghp_..."
+
+# Shared settings.
+callback_port   = 8666
+db_path         = ".data/orchestrator.db"
+poll_interval   = "30s"
+shutdown_timeout = "30s"
+log_level       = "info"
+log_json        = false
+bot_username    = "zombiekit[bot]"
+
+# Sandbox mode: "auto" (detect sbx on PATH), "enabled", or "disabled".
+sandbox = "auto"
+
+[[project]]
+id                = "zombiekit"
+linear_project_id = "707aafa8-..."
+github_owner      = "2bit-software"
+github_repo       = "zombiekit"
+repo_dir          = "/home/deploy/repos/zombiekit"
+worktrees_root    = "/home/deploy/repos/zombiekit/.claude/worktrees"
+base_branch       = "main"
+concurrency_limit = 1
+tracking_label    = "ai-managed"
+copy_files        = [".env", ".mcp.json"]
+# closed_pr_status = ""  # Linear status to set when a PR is closed without merge
+
+[[project]]
+id                = "clawbeam"
+linear_project_id = "7f3668d7-..."
+github_owner      = "2bit-software"
+github_repo       = "clawbeam"
+repo_dir          = "/home/deploy/repos/clawbeam"
+worktrees_root    = "/home/deploy/repos/clawbeam/.claude/worktrees"
+base_branch       = "main"
+concurrency_limit = 2
+# Per-project credential override (optional).
+# github_token = "ghp_different_token_..."

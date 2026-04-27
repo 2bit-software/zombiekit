@@ -30,6 +30,7 @@ type failedPayload struct {
 }
 
 func (s *CallbackServer) handleComplete(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectID")
 	ticketID := r.PathValue("ticketID")
 
 	payload, err := decodeJSON[completePayload](r, maxBodyBytes)
@@ -60,6 +61,7 @@ func (s *CallbackServer) handleComplete(w http.ResponseWriter, r *http.Request) 
 
 	event := Event{
 		Kind:      EventComplete,
+		ProjectID: projectID,
 		TicketID:  ticketID,
 		Timestamp: time.Now(),
 		Branch:    payload.Branch,
@@ -69,6 +71,7 @@ func (s *CallbackServer) handleComplete(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *CallbackServer) handleCommentResolved(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectID")
 	ticketID := r.PathValue("ticketID")
 
 	payload, err := decodeJSON[commentResolvedPayload](r, maxBodyBytes)
@@ -103,6 +106,7 @@ func (s *CallbackServer) handleCommentResolved(w http.ResponseWriter, r *http.Re
 
 	event := Event{
 		Kind:       EventCommentResolved,
+		ProjectID:  projectID,
 		TicketID:   ticketID,
 		Timestamp:  time.Now(),
 		CommentID:  payload.CommentID,
@@ -113,6 +117,7 @@ func (s *CallbackServer) handleCommentResolved(w http.ResponseWriter, r *http.Re
 }
 
 func (s *CallbackServer) handleFailed(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectID")
 	ticketID := r.PathValue("ticketID")
 
 	payload, err := decodeJSON[failedPayload](r, maxBodyBytes)
@@ -143,6 +148,7 @@ func (s *CallbackServer) handleFailed(w http.ResponseWriter, r *http.Request) {
 
 	event := Event{
 		Kind:      EventFailed,
+		ProjectID: projectID,
 		TicketID:  ticketID,
 		Timestamp: time.Now(),
 		Reason:    payload.Reason,

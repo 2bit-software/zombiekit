@@ -10,36 +10,11 @@ import (
 	"time"
 
 	"github.com/2bit-software/zombiekit/internal/github"
-	"github.com/2bit-software/zombiekit/internal/logging"
-	"github.com/2bit-software/zombiekit/internal/shutdown"
 	"github.com/2bit-software/zombiekit/internal/state"
 )
 
-// NewCommentWatcher returns a ServiceFunc that polls tracked PRs for new
-// review comments and dispatches them to per-PR goroutines for serial
-// processing via AI sessions.
-func (o *Orchestrator) NewCommentWatcher(dispatcher *CommentDispatcher) shutdown.ServiceFunc {
-	return func(ctx context.Context) error {
-		logger := logging.Logger().With(slog.String("watcher", WatcherCommentWatcher))
-		logger.Info("comment watcher started", slog.Duration("poll_interval", o.cfg.PollInterval))
-
-		ticker := time.NewTicker(o.cfg.PollInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Info("comment watcher stopping")
-				return nil
-			case <-ticker.C:
-				o.pollComments(ctx, dispatcher, logger)
-			}
-		}
-	}
-}
-
-func (o *Orchestrator) pollComments(ctx context.Context, dispatcher *CommentDispatcher, logger *slog.Logger) {
-	prs, err := o.github.ListOpenPRs(ctx, o.cfg.TrackingLabel)
+func (p *ProjectRunner) pollComments(ctx context.Context, dispatcher *CommentDispatcher, logger *slog.Logger) {
+	prs, err := p.github.ListOpenPRs(ctx, p.cfg.TrackingLabel)
 	if err != nil {
 		logger.Error("failed to list open PRs", slog.String("err", err.Error()))
 		return
@@ -49,7 +24,7 @@ func (o *Orchestrator) pollComments(ctx context.Context, dispatcher *CommentDisp
 
 	for _, pr := range prs {
 		activePRSet[pr.Number] = true
-		o.pollPRComments(ctx, dispatcher, pr, logger)
+		p.pollPRComments(ctx, dispatcher, pr, logger)
 	}
 
 	// Reap queues for PRs no longer in the tracked set.
@@ -61,10 +36,10 @@ func (o *Orchestrator) pollComments(ctx context.Context, dispatcher *CommentDisp
 	}
 }
 
-func (o *Orchestrator) pollPRComments(ctx context.Context, dispatcher *CommentDispatcher, pr github.PRSummary, logger *slog.Logger) {
+func (p *ProjectRunner) pollPRComments(ctx context.Context, dispatcher *CommentDispatcher, pr github.PRSummary, logger *slog.Logger) {
 	prLog := logger.With(slog.Int("pr_number", pr.Number))
 
-	job, err := o.store.GetJobByPR(ctx, int64(pr.Number))
+	job, err := p.store.GetJobByPR(ctx, p.id, int64(pr.Number))
 	if err != nil {
 		prLog.Error("failed to get job by PR", slog.String("err", err.Error()))
 		return
@@ -77,12 +52,12 @@ func (o *Orchestrator) pollPRComments(ctx context.Context, dispatcher *CommentDi
 		return
 	}
 
-	filtered, err := o.fetchNewComments(ctx, pr, prLog)
+	filtered, err := p.fetchNewComments(ctx, pr, prLog)
 	if err != nil || len(filtered) == 0 {
 		return
 	}
 
-	q := o.ensurePRQueue(ctx, dispatcher, pr, job, prLog)
+	q := p.ensurePRQueue(ctx, dispatcher, pr, job, prLog)
 	enqueueComments(q, filtered, prLog)
 }
 
@@ -100,20 +75,20 @@ func isTerminalStatus(status string) bool {
 // fetchNewComments retrieves review comments since the watermark and filters
 // out those authored by the bot. Returns nil, nil when there are no new
 // comments or an error occurred (already logged).
-func (o *Orchestrator) fetchNewComments(ctx context.Context, pr github.PRSummary, logger *slog.Logger) ([]github.PRComment, error) {
-	watermark, err := o.store.GetCommentWatermark(ctx, int64(pr.Number))
+func (p *ProjectRunner) fetchNewComments(ctx context.Context, pr github.PRSummary, logger *slog.Logger) ([]github.PRComment, error) {
+	watermark, err := p.store.GetCommentWatermark(ctx, p.id, int64(pr.Number))
 	if err != nil {
 		logger.Error("failed to get watermark", slog.String("err", err.Error()))
 		return nil, err
 	}
 
-	comments, err := o.github.GetCommentsSince(ctx, pr.Number, github.CommentKindReview, watermark)
+	comments, err := p.github.GetCommentsSince(ctx, pr.Number, github.CommentKindReview, watermark)
 	if err != nil {
 		logger.Error("failed to get comments", slog.String("err", err.Error()))
 		return nil, err
 	}
 
-	filtered := filterBotComments(comments, o.cfg.BotUsername)
+	filtered := filterBotComments(comments, p.cfg.BotUsername)
 	return filtered, nil
 }
 
@@ -130,14 +105,14 @@ func filterBotComments(comments []github.PRComment, botUsername string) []github
 
 // ensurePRQueue returns the existing queue for a PR or creates a new one and
 // starts its processing goroutine.
-func (o *Orchestrator) ensurePRQueue(ctx context.Context, dispatcher *CommentDispatcher, pr github.PRSummary, job *state.Job, logger *slog.Logger) *prQueue {
+func (p *ProjectRunner) ensurePRQueue(ctx context.Context, dispatcher *CommentDispatcher, pr github.PRSummary, job *state.Job, logger *slog.Logger) *prQueue {
 	q := dispatcher.GetQueue(pr.Number)
 	if q != nil {
 		return q
 	}
 	prCtx, prCancel := context.WithCancel(ctx)
 	q = dispatcher.CreateQueue(pr.Number, prCancel)
-	go o.runPRQueue(prCtx, dispatcher, pr.Number, job, q, logger)
+	go p.runPRQueue(prCtx, dispatcher, pr.Number, job, q, logger)
 	return q
 }
 
@@ -157,7 +132,7 @@ func enqueueComments(q *prQueue, comments []github.PRComment, logger *slog.Logge
 // runPRQueue processes comments serially for a single PR. It blocks on each
 // session's completion signal before dispatching the next comment.
 // job.TicketID and job.WorktreePath are immutable for the lifetime of a job.
-func (o *Orchestrator) runPRQueue(
+func (p *ProjectRunner) runPRQueue(
 	ctx context.Context,
 	dispatcher *CommentDispatcher,
 	prNumber int,
@@ -185,7 +160,7 @@ func (o *Orchestrator) runPRQueue(
 				highestEnqueuedID = comment.ID
 			}
 
-			stop := o.handleQueuedComment(ctx, comment, job, prNumber, q, dispatcher, logger, &highestEnqueuedID)
+			stop := p.handleQueuedComment(ctx, comment, job, prNumber, q, dispatcher, logger, &highestEnqueuedID)
 			if stop {
 				return
 			}
@@ -195,7 +170,7 @@ func (o *Orchestrator) runPRQueue(
 
 // handleQueuedComment processes a single comment from the PR queue. Returns
 // true when the queue should stop (PR closed/merged, or session failed).
-func (o *Orchestrator) handleQueuedComment(
+func (p *ProjectRunner) handleQueuedComment(
 	ctx context.Context,
 	comment github.PRComment,
 	job *state.Job,
@@ -205,23 +180,23 @@ func (o *Orchestrator) handleQueuedComment(
 	logger *slog.Logger,
 	highestEnqueuedID *int64,
 ) bool {
-	open, err := o.prStillOpen(ctx, prNumber, logger)
+	open, err := p.prStillOpen(ctx, prNumber, logger)
 	if err != nil {
 		return false
 	}
 	if !open {
-		o.drainCommentChannel(q.comments)
+		p.drainCommentChannel(q.comments)
 		return true
 	}
 
-	result, err := o.processComment(ctx, comment, job, prNumber, dispatcher, logger)
+	result, err := p.processComment(ctx, comment, job, prNumber, dispatcher, logger)
 	if err != nil {
 		return false
 	}
 
 	if result.Kind == SessionFailed {
 		logger.Info("session failed, draining queue")
-		o.advanceWatermarkOnDrain(ctx, q.comments, prNumber, highestEnqueuedID, logger)
+		p.advanceWatermarkOnDrain(ctx, q.comments, prNumber, highestEnqueuedID, logger)
 		return true
 	}
 
@@ -231,26 +206,26 @@ func (o *Orchestrator) handleQueuedComment(
 
 // advanceWatermarkOnDrain drains all buffered comments and persists the
 // highest observed comment ID as the watermark so they are not re-processed.
-func (o *Orchestrator) advanceWatermarkOnDrain(
+func (p *ProjectRunner) advanceWatermarkOnDrain(
 	ctx context.Context,
 	ch chan github.PRComment,
 	prNumber int,
 	highestEnqueuedID *int64,
 	logger *slog.Logger,
 ) {
-	drainedMax := o.drainCommentChannel(ch)
+	drainedMax := p.drainCommentChannel(ch)
 	if drainedMax > *highestEnqueuedID {
 		*highestEnqueuedID = drainedMax
 	}
-	if err := o.store.SetCommentWatermark(ctx, int64(prNumber), *highestEnqueuedID); err != nil {
+	if err := p.store.SetCommentWatermark(ctx, p.id, int64(prNumber), *highestEnqueuedID); err != nil {
 		logger.Error("failed to advance watermark on failure", slog.String("err", err.Error()))
 	}
 }
 
 // prStillOpen reports whether the PR is still open (not merged or closed).
 // Returns false with a nil error when the PR has been merged or closed.
-func (o *Orchestrator) prStillOpen(ctx context.Context, prNumber int, logger *slog.Logger) (bool, error) {
-	merged, err := o.github.IsMerged(ctx, prNumber)
+func (p *ProjectRunner) prStillOpen(ctx context.Context, prNumber int, logger *slog.Logger) (bool, error) {
+	merged, err := p.github.IsMerged(ctx, prNumber)
 	if err != nil {
 		logger.Error("IsMerged check failed", slog.String("err", err.Error()))
 		return false, err
@@ -260,7 +235,7 @@ func (o *Orchestrator) prStillOpen(ctx context.Context, prNumber int, logger *sl
 		return false, nil
 	}
 
-	closed, err := o.github.IsClosed(ctx, prNumber)
+	closed, err := p.github.IsClosed(ctx, prNumber)
 	if err != nil {
 		logger.Error("IsClosed check failed", slog.String("err", err.Error()))
 		return false, err
@@ -276,7 +251,7 @@ func (o *Orchestrator) prStillOpen(ctx context.Context, prNumber int, logger *sl
 // processComment handles the full lifecycle of a single comment: slot
 // acquisition, writing the comment payload, spawning the AI session, and
 // waiting for its result. It releases the slot on failure paths.
-func (o *Orchestrator) processComment(
+func (p *ProjectRunner) processComment(
 	ctx context.Context,
 	comment github.PRComment,
 	job *state.Job,
@@ -284,23 +259,23 @@ func (o *Orchestrator) processComment(
 	dispatcher *CommentDispatcher,
 	logger *slog.Logger,
 ) (SessionResult, error) {
-	if !o.acquireSlotBlocking(ctx, logger) {
+	if !p.acquireSlotBlocking(ctx, logger) {
 		return SessionResult{}, ctx.Err()
 	}
 
 	if err := writeCommentJSON(job.WorktreePath, comment); err != nil {
 		logger.Error("failed to write comment.json", slog.String("err", err.Error()))
-		o.releaseSlotLogError(ctx, logger, "failed to release slot after write error")
+		p.releaseSlotLogError(ctx, logger, "failed to release slot after write error")
 		return SessionResult{}, err
 	}
 
 	done := dispatcher.RegisterSession(job.TicketID, prNumber)
 
 	prompt := "Read .ai/comment.json — this is a PR review comment to resolve. Address the feedback."
-	_, err := o.sessions.SpawnSession(ctx, job.TicketID, "comment-resolution", job.WorktreePath, nil, prompt)
+	_, err := p.sessions.SpawnSession(ctx, job.TicketID, "comment-resolution", job.WorktreePath, nil, prompt)
 	if err != nil {
 		logger.Error("failed to spawn session", slog.String("err", err.Error()))
-		o.releaseSlotLogError(ctx, logger, "failed to release slot after spawn error")
+		p.releaseSlotLogError(ctx, logger, "failed to release slot after spawn error")
 		return SessionResult{}, err
 	}
 
@@ -312,15 +287,15 @@ func (o *Orchestrator) processComment(
 	}
 }
 
-func (o *Orchestrator) releaseSlotLogError(ctx context.Context, logger *slog.Logger, msg string) {
-	if err := o.store.ReleaseSlot(ctx, o.cfg.ProjectID); err != nil {
+func (p *ProjectRunner) releaseSlotLogError(ctx context.Context, logger *slog.Logger, msg string) {
+	if err := p.store.ReleaseSlot(ctx, p.id); err != nil {
 		logger.Error(msg, slog.String("err", err.Error()))
 	}
 }
 
-func (o *Orchestrator) acquireSlotBlocking(ctx context.Context, logger *slog.Logger) bool {
+func (p *ProjectRunner) acquireSlotBlocking(ctx context.Context, logger *slog.Logger) bool {
 	for {
-		acquired, err := o.store.TryAcquireSlot(ctx, o.cfg.ProjectID, o.cfg.ConcurrencyLimit)
+		acquired, err := p.store.TryAcquireSlot(ctx, p.id, p.cfg.ConcurrencyLimit)
 		if err != nil {
 			logger.Error("slot acquisition error", slog.String("err", err.Error()))
 		}
@@ -337,7 +312,7 @@ func (o *Orchestrator) acquireSlotBlocking(ctx context.Context, logger *slog.Log
 
 // drainCommentChannel reads and discards all buffered comments, returning the
 // highest comment ID seen. Used to advance the watermark past drained comments.
-func (o *Orchestrator) drainCommentChannel(ch chan github.PRComment) int64 {
+func (p *ProjectRunner) drainCommentChannel(ch chan github.PRComment) int64 {
 	var maxID int64
 	for {
 		select {

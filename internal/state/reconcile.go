@@ -9,6 +9,7 @@ import (
 
 // OrphanedJob describes a job that needs attention after a crash.
 type OrphanedJob struct {
+	ProjectID      string
 	TicketID       string
 	PreviousStatus string
 	WorktreePath   string
@@ -34,6 +35,7 @@ func PlanReconciliation(jobs []Job, now time.Time) ReconciliationPlan {
 	for _, job := range jobs {
 		if job.Status == StatusInProgress {
 			plan.Orphaned = append(plan.Orphaned, OrphanedJob{
+				ProjectID:      job.ProjectID,
 				TicketID:       job.TicketID,
 				PreviousStatus: job.Status,
 				WorktreePath:   job.WorktreePath,
@@ -51,9 +53,9 @@ func PlanReconciliation(jobs []Job, now time.Time) ReconciliationPlan {
 func ApplyReconciliation(ctx context.Context, store StateStore, logger *slog.Logger) error {
 	start := time.Now()
 
-	jobs, err := store.ListJobsByStatus(ctx, StatusInProgress)
+	jobs, err := store.ListAllJobs(ctx)
 	if err != nil {
-		return fmt.Errorf("reconciliation: list in-progress jobs: %w", err)
+		return fmt.Errorf("reconciliation: list jobs: %w", err)
 	}
 
 	plan := PlanReconciliation(jobs, time.Now())
@@ -64,10 +66,11 @@ func ApplyReconciliation(ctx context.Context, store StateStore, logger *slog.Log
 	}
 
 	for _, orphan := range plan.Orphaned {
-		if err := store.SetJobStatus(ctx, orphan.TicketID, StatusNeedsAttention); err != nil {
-			return fmt.Errorf("reconciliation: mark job %s as needs-attention: %w", orphan.TicketID, err)
+		if err := store.SetJobStatus(ctx, orphan.ProjectID, orphan.TicketID, StatusNeedsAttention); err != nil {
+			return fmt.Errorf("reconciliation: mark job %s/%s as needs-attention: %w", orphan.ProjectID, orphan.TicketID, err)
 		}
 		logger.Info("reconciliation: orphaned job detected",
+			slog.String("project_id", orphan.ProjectID),
 			slog.String("ticket_id", orphan.TicketID),
 			slog.String("previous_status", orphan.PreviousStatus),
 			slog.String("new_status", StatusNeedsAttention),

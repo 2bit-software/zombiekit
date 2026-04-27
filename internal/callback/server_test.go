@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/2bit-software/zombiekit/internal/logging"
 )
 
 func init() {
@@ -95,12 +95,17 @@ func drainEvent(t *testing.T, srv *CallbackServer) Event {
 	}
 }
 
+// projectRoute builds the new /project/{projectID}/{ticketID}/{action} URL.
+func projectRoute(base, projectID, ticketID, action string) string {
+	return fmt.Sprintf("%s/project/%s/%s/%s", base, projectID, ticketID, action)
+}
+
 // --- Happy Path Tests ---
 
 func TestHandleComplete(t *testing.T) {
 	srv, baseURL := startTestServer(t)
 
-	resp := postJSON(t, baseURL+"/DEV-123/complete", map[string]string{
+	resp := postJSON(t, projectRoute(baseURL, "test-proj", "DEV-123", "complete"), map[string]string{
 		"status":    "complete",
 		"ticket_id": "DEV-123",
 		"branch":    "DEV-123/add-feature",
@@ -116,6 +121,7 @@ func TestHandleComplete(t *testing.T) {
 
 	ev := drainEvent(t, srv)
 	assert.Equal(t, EventComplete, ev.Kind)
+	assert.Equal(t, "test-proj", ev.ProjectID)
 	assert.Equal(t, "DEV-123", ev.TicketID)
 	assert.Equal(t, "DEV-123/add-feature", ev.Branch)
 	assert.False(t, ev.Timestamp.IsZero())
@@ -124,7 +130,7 @@ func TestHandleComplete(t *testing.T) {
 func TestHandleCommentResolved(t *testing.T) {
 	srv, baseURL := startTestServer(t)
 
-	resp := postJSON(t, baseURL+"/DEV-789/comment-resolved", map[string]string{
+	resp := postJSON(t, projectRoute(baseURL, "test-proj", "DEV-789", "comment-resolved"), map[string]string{
 		"status":     "comment-resolved",
 		"ticket_id":  "DEV-789",
 		"comment_id": "IC_def456",
@@ -137,6 +143,7 @@ func TestHandleCommentResolved(t *testing.T) {
 
 	ev := drainEvent(t, srv)
 	assert.Equal(t, EventCommentResolved, ev.Kind)
+	assert.Equal(t, "test-proj", ev.ProjectID)
 	assert.Equal(t, "DEV-789", ev.TicketID)
 	assert.Equal(t, "IC_def456", ev.CommentID)
 	assert.Equal(t, "Added nil check as requested", ev.Resolution)
@@ -145,7 +152,7 @@ func TestHandleCommentResolved(t *testing.T) {
 func TestHandleFailedWithoutCommentID(t *testing.T) {
 	srv, baseURL := startTestServer(t)
 
-	resp := postJSON(t, baseURL+"/DEV-456/failed", map[string]string{
+	resp := postJSON(t, projectRoute(baseURL, "test-proj", "DEV-456", "failed"), map[string]string{
 		"status":    "failed",
 		"ticket_id": "DEV-456",
 		"reason":    "tests failing after 3 attempts",
@@ -157,6 +164,7 @@ func TestHandleFailedWithoutCommentID(t *testing.T) {
 
 	ev := drainEvent(t, srv)
 	assert.Equal(t, EventFailed, ev.Kind)
+	assert.Equal(t, "test-proj", ev.ProjectID)
 	assert.Equal(t, "DEV-456", ev.TicketID)
 	assert.Equal(t, "tests failing after 3 attempts", ev.Reason)
 	assert.Empty(t, ev.CommentID)
@@ -165,7 +173,7 @@ func TestHandleFailedWithoutCommentID(t *testing.T) {
 func TestHandleFailedWithCommentID(t *testing.T) {
 	srv, baseURL := startTestServer(t)
 
-	resp := postJSON(t, baseURL+"/DEV-456/failed", map[string]string{
+	resp := postJSON(t, projectRoute(baseURL, "test-proj", "DEV-456", "failed"), map[string]string{
 		"status":     "failed",
 		"ticket_id":  "DEV-456",
 		"comment_id": "IC_abc123",
@@ -177,6 +185,7 @@ func TestHandleFailedWithCommentID(t *testing.T) {
 
 	ev := drainEvent(t, srv)
 	assert.Equal(t, EventFailed, ev.Kind)
+	assert.Equal(t, "test-proj", ev.ProjectID)
 	assert.Equal(t, "IC_abc123", ev.CommentID)
 	assert.Equal(t, "cannot resolve conflicting review feedback", ev.Reason)
 }
@@ -187,50 +196,50 @@ func TestValidationErrors(t *testing.T) {
 	_, baseURL := startTestServer(t)
 
 	tests := []struct {
-		name     string
-		path     string
-		body     any
-		wantErr  string
+		name    string
+		path    string
+		body    any
+		wantErr string
 	}{
 		{
 			name:    "complete missing branch",
-			path:    "/DEV-1/complete",
+			path:    "/project/test-proj/DEV-1/complete",
 			body:    map[string]string{"status": "complete", "ticket_id": "DEV-1"},
 			wantErr: "missing required field: branch",
 		},
 		{
 			name:    "complete missing ticket_id",
-			path:    "/DEV-1/complete",
+			path:    "/project/test-proj/DEV-1/complete",
 			body:    map[string]string{"status": "complete", "branch": "x"},
 			wantErr: "missing required field: ticket_id",
 		},
 		{
 			name:    "complete wrong status",
-			path:    "/DEV-1/complete",
+			path:    "/project/test-proj/DEV-1/complete",
 			body:    map[string]string{"status": "failed", "ticket_id": "DEV-1", "branch": "x"},
 			wantErr: "status field must be 'complete' for this route",
 		},
 		{
 			name:    "comment-resolved missing comment_id",
-			path:    "/DEV-1/comment-resolved",
+			path:    "/project/test-proj/DEV-1/comment-resolved",
 			body:    map[string]string{"status": "comment-resolved", "ticket_id": "DEV-1", "resolution": "fixed"},
 			wantErr: "missing required field: comment_id",
 		},
 		{
 			name:    "comment-resolved missing resolution",
-			path:    "/DEV-1/comment-resolved",
+			path:    "/project/test-proj/DEV-1/comment-resolved",
 			body:    map[string]string{"status": "comment-resolved", "ticket_id": "DEV-1", "comment_id": "IC_1"},
 			wantErr: "missing required field: resolution",
 		},
 		{
 			name:    "failed missing reason",
-			path:    "/DEV-1/failed",
+			path:    "/project/test-proj/DEV-1/failed",
 			body:    map[string]string{"status": "failed", "ticket_id": "DEV-1"},
 			wantErr: "missing required field: reason",
 		},
 		{
 			name:    "failed wrong status",
-			path:    "/DEV-1/failed",
+			path:    "/project/test-proj/DEV-1/failed",
 			body:    map[string]string{"status": "complete", "ticket_id": "DEV-1", "reason": "x"},
 			wantErr: "status field must be 'failed' for this route",
 		},
@@ -254,7 +263,7 @@ func TestValidationErrors(t *testing.T) {
 func TestMalformedJSON(t *testing.T) {
 	_, baseURL := startTestServer(t)
 
-	resp, err := http.Post(baseURL+"/DEV-1/complete", "application/json", strings.NewReader("{invalid"))
+	resp, err := http.Post(baseURL+"/project/test-proj/DEV-1/complete", "application/json", strings.NewReader("{invalid"))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -265,7 +274,7 @@ func TestMalformedJSON(t *testing.T) {
 func TestEmptyBody(t *testing.T) {
 	_, baseURL := startTestServer(t)
 
-	resp, err := http.Post(baseURL+"/DEV-1/complete", "application/json", strings.NewReader(""))
+	resp, err := http.Post(baseURL+"/project/test-proj/DEV-1/complete", "application/json", strings.NewReader(""))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -275,7 +284,7 @@ func TestEmptyBody(t *testing.T) {
 func TestUnknownFields(t *testing.T) {
 	_, baseURL := startTestServer(t)
 
-	resp := postJSON(t, baseURL+"/DEV-1/complete", map[string]string{
+	resp := postJSON(t, projectRoute(baseURL, "test-proj", "DEV-1", "complete"), map[string]string{
 		"status":    "complete",
 		"ticket_id": "DEV-1",
 		"branch":    "x",
@@ -290,7 +299,7 @@ func TestOversizedBody(t *testing.T) {
 	_, baseURL := startTestServer(t)
 
 	bigBody := `{"status":"complete","ticket_id":"DEV-1","branch":"` + strings.Repeat("x", 70*1024) + `"}`
-	resp, err := http.Post(baseURL+"/DEV-1/complete", "application/json", strings.NewReader(bigBody))
+	resp, err := http.Post(baseURL+"/project/test-proj/DEV-1/complete", "application/json", strings.NewReader(bigBody))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -304,7 +313,7 @@ func TestBackpressure(t *testing.T) {
 
 	// Fill the buffer
 	for i := range 2 {
-		resp := postJSON(t, baseURL+fmt.Sprintf("/DEV-%d/complete", i), map[string]string{
+		resp := postJSON(t, projectRoute(baseURL, "test-proj", fmt.Sprintf("DEV-%d", i), "complete"), map[string]string{
 			"status":    "complete",
 			"ticket_id": fmt.Sprintf("DEV-%d", i),
 			"branch":    "x",
@@ -314,7 +323,7 @@ func TestBackpressure(t *testing.T) {
 	}
 
 	// Third should get 503
-	resp := postJSON(t, baseURL+"/DEV-99/complete", map[string]string{
+	resp := postJSON(t, projectRoute(baseURL, "test-proj", "DEV-99", "complete"), map[string]string{
 		"status":    "complete",
 		"ticket_id": "DEV-99",
 		"branch":    "x",
@@ -341,7 +350,7 @@ func TestConcurrentRequests(t *testing.T) {
 	for i := range n {
 		go func(id int) {
 			defer wg.Done()
-			resp := postJSON(t, baseURL+fmt.Sprintf("/TICKET-%d/complete", id), map[string]string{
+			resp := postJSON(t, projectRoute(baseURL, "test-proj", fmt.Sprintf("TICKET-%d", id), "complete"), map[string]string{
 				"status":    "complete",
 				"ticket_id": fmt.Sprintf("TICKET-%d", id),
 				"branch":    fmt.Sprintf("TICKET-%d/feature", id),
@@ -423,7 +432,7 @@ func TestHealthCheck(t *testing.T) {
 func TestMethodNotAllowed(t *testing.T) {
 	_, baseURL := startTestServer(t)
 
-	resp, err := http.Get(baseURL + "/DEV-1/complete")
+	resp, err := http.Get(baseURL + "/project/test-proj/DEV-1/complete")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -435,7 +444,7 @@ func TestMethodNotAllowed(t *testing.T) {
 func TestTicketIDMismatch(t *testing.T) {
 	srv, baseURL := startTestServer(t)
 
-	resp := postJSON(t, baseURL+"/URL-TICKET/complete", map[string]string{
+	resp := postJSON(t, projectRoute(baseURL, "test-proj", "URL-TICKET", "complete"), map[string]string{
 		"status":    "complete",
 		"ticket_id": "BODY-TICKET",
 		"branch":    "x",
@@ -454,7 +463,7 @@ func TestDuplicateCallback(t *testing.T) {
 	srv, baseURL := startTestServer(t)
 
 	for range 2 {
-		resp := postJSON(t, baseURL+"/DEV-DUP/complete", map[string]string{
+		resp := postJSON(t, projectRoute(baseURL, "test-proj", "DEV-DUP", "complete"), map[string]string{
 			"status":    "complete",
 			"ticket_id": "DEV-DUP",
 			"branch":    "DEV-DUP/feature",

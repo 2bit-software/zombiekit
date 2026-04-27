@@ -2,16 +2,19 @@ package orchestrator
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/2bit-software/zombiekit/internal/callback"
+	"github.com/2bit-software/zombiekit/internal/linear"
+	"github.com/2bit-software/zombiekit/internal/sandbox"
+	"github.com/2bit-software/zombiekit/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/2bit-software/zombiekit/internal/linear"
-	"github.com/2bit-software/zombiekit/internal/state"
 )
 
 // --- Test doubles ---
@@ -187,7 +190,7 @@ func (s *stubState) getCalls() []string {
 
 func (s *stubState) Migrate(_ context.Context) error { return nil }
 func (s *stubState) Close() error                    { return nil }
-func (s *stubState) GetJob(_ context.Context, ticketID string) (*state.Job, error) {
+func (s *stubState) GetJob(_ context.Context, _, ticketID string) (*state.Job, error) {
 	s.record("GetJob")
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -203,18 +206,20 @@ func (s *stubState) CreateJob(_ context.Context, ticketID, worktreePath, session
 	s.jobs[ticketID] = &state.Job{TicketID: ticketID, WorktreePath: worktreePath, CmuxSession: session}
 	return nil
 }
-func (s *stubState) ListJobsByStatus(_ context.Context, _ ...string) ([]state.Job, error) {
+func (s *stubState) ListJobsByStatus(_ context.Context, _ string, _ ...string) ([]state.Job, error) {
 	return nil, nil
 }
-func (s *stubState) SetJobStatus(_ context.Context, _, _ string) error { return nil }
-func (s *stubState) SetPR(_ context.Context, _ string, _ int64) error  { return nil }
-func (s *stubState) GetJobByPR(_ context.Context, _ int64) (*state.Job, error) {
+func (s *stubState) SetJobStatus(_ context.Context, _, _, _ string) error { return nil }
+func (s *stubState) SetPR(_ context.Context, _, _ string, _ int64) error  { return nil }
+func (s *stubState) GetJobByPR(_ context.Context, _ string, _ int64) (*state.Job, error) {
 	return nil, nil
 }
-func (s *stubState) GetCommentWatermark(_ context.Context, _ int64) (int64, error) {
+func (s *stubState) GetCommentWatermark(_ context.Context, _ string, _ int64) (int64, error) {
 	return 0, nil
 }
-func (s *stubState) SetCommentWatermark(_ context.Context, _ int64, _ int64) error { return nil }
+func (s *stubState) SetCommentWatermark(_ context.Context, _ string, _ int64, _ int64) error {
+	return nil
+}
 func (s *stubState) TryAcquireSlot(_ context.Context, _ string, _ int) (bool, error) {
 	s.record("TryAcquireSlot")
 	return s.acquireResult, s.acquireErr
@@ -225,7 +230,7 @@ func (s *stubState) ReleaseSlot(_ context.Context, _ string) error {
 }
 func (s *stubState) ResetAllSlots(_ context.Context) (int, error)                 { return 0, nil }
 func (s *stubState) ListAllJobs(_ context.Context) ([]state.Job, error)           { return nil, nil }
-func (s *stubState) DeleteJob(_ context.Context, _ string) error                  { return nil }
+func (s *stubState) DeleteJob(_ context.Context, _, _ string) error               { return nil }
 func (s *stubState) ListSlots(_ context.Context) ([]state.ConcurrencySlot, error) { return nil, nil }
 
 // capturingSessionManager captures SpawnSession args for assertion.
@@ -250,16 +255,17 @@ func testTicket(id, identifier, title, desc string) linear.Ticket {
 	}
 }
 
-func buildOrch(t *testing.T, sl *stubLinear, sw *stubWorktree, ss *stubSession, st *stubState) *Orchestrator {
+func buildRunner(t *testing.T, sl *stubLinear, sw *stubWorktree, ss *stubSession, st *stubState) *ProjectRunner {
 	t.Helper()
-	setupLogger(t)
-	cfg := &Config{
+	cfg := ProjectConfig{
+		ID:               "test-project",
 		CallbackPort:     9999,
-		PollInterval:     50 * time.Millisecond,
+		PollInterval:     Duration{50 * time.Millisecond},
 		ConcurrencyLimit: 1,
-		ProjectID:        "test-project",
 	}
-	return New(cfg, st, sl, nil, sw, ss)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	events := make(chan callback.Event, 8)
+	return NewProjectRunner(cfg, st, sl, nil, sw, ss, events, false, sandbox.Config{}, logger)
 }
 
 // --- T007: Happy path and concurrency tests ---
@@ -269,9 +275,9 @@ func TestLinearPoller_SingleTicket(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	o.pollAndProcess(context.Background())
+	p.pollAndProcess(context.Background())
 
 	// Verify full pipeline call order
 	assert.Equal(t, []string{"PollReadyTickets"}, sl.getCalls()[:1])
@@ -293,9 +299,9 @@ func TestLinearPoller_TicketFileWritten(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	o.pollAndProcess(context.Background())
+	p.pollAndProcess(context.Background())
 
 	ticketFile := filepath.Join(sw.basePath, "DEV-101", ".ai", "ticket.md")
 	content, err := os.ReadFile(ticketFile)
@@ -315,18 +321,19 @@ func TestLinearPoller_CallbackURL(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	st := newStubState()
 
-	setupLogger(t)
-	cfg := &Config{
+	cfg := ProjectConfig{
+		ID:               "test-project",
 		CallbackPort:     9999,
-		PollInterval:     50 * time.Millisecond,
+		PollInterval:     Duration{50 * time.Millisecond},
 		ConcurrencyLimit: 1,
-		ProjectID:        "test-project",
 	}
-	o := New(cfg, st, sl, nil, sw, cs)
-	o.pollAndProcess(context.Background())
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	events := make(chan callback.Event, 8)
+	p := NewProjectRunner(cfg, st, sl, nil, sw, cs, events, false, sandbox.Config{}, logger)
+	p.pollAndProcess(context.Background())
 
 	require.NotNil(t, capturedEnv)
-	assert.Equal(t, "http://localhost:9999/DEV-102", capturedEnv["WORK_CALLBACK_URL"])
+	assert.Equal(t, "http://localhost:9999/project/test-project/DEV-102", capturedEnv["WORK_CALLBACK_URL"])
 }
 
 func TestLinearPoller_ConcurrencyLimit(t *testing.T) {
@@ -340,24 +347,19 @@ func TestLinearPoller_ConcurrencyLimit(t *testing.T) {
 	st := newStubState()
 
 	// After first ticket acquires, second should fail
-	callCount := 0
-	origAcquire := st.acquireResult
-	_ = origAcquire
-	// Override TryAcquireSlot to return false after first call
 	st.acquireResult = true // first call succeeds
 
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 	// Process first ticket
-	err := o.processTicket(context.Background(), tickets[0])
+	err := p.processTicket(context.Background(), tickets[0])
 	require.NoError(t, err)
 	assert.NotNil(t, st.jobs["DEV-200"])
 
 	// Now set slot to full
 	st.acquireResult = false
-	err = o.processTicket(context.Background(), tickets[1])
+	err = p.processTicket(context.Background(), tickets[1])
 	require.NoError(t, err) // not an error, just deferred
 	assert.Nil(t, st.jobs["DEV-201"])
-	_ = callCount
 }
 
 func TestLinearPoller_ConcurrencyMultiPoll(t *testing.T) {
@@ -368,23 +370,23 @@ func TestLinearPoller_ConcurrencyMultiPoll(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
 	// First poll: only 1 slot, so first ticket gets it
 	st.acquireResult = true
-	err := o.processTicket(context.Background(), ticket1)
+	err := p.processTicket(context.Background(), ticket1)
 	require.NoError(t, err)
 	assert.NotNil(t, st.jobs["DEV-300"])
 
 	// Second ticket deferred (slot full)
 	st.acquireResult = false
-	err = o.processTicket(context.Background(), ticket2)
+	err = p.processTicket(context.Background(), ticket2)
 	require.NoError(t, err)
 	assert.Nil(t, st.jobs["DEV-301"])
 
 	// Simulate slot release
 	st.acquireResult = true
-	err = o.processTicket(context.Background(), ticket2)
+	err = p.processTicket(context.Background(), ticket2)
 	require.NoError(t, err)
 	assert.NotNil(t, st.jobs["DEV-301"])
 }
@@ -398,8 +400,8 @@ func TestLinearPoller_SkipExistingJob(t *testing.T) {
 	// Pre-populate a job
 	st.jobs["DEV-400"] = &state.Job{TicketID: "DEV-400"}
 
-	o := buildOrch(t, sl, sw, ss, st)
-	err := o.processTicket(context.Background(), ticket)
+	p := buildRunner(t, sl, sw, ss, st)
+	err := p.processTicket(context.Background(), ticket)
 
 	require.NoError(t, err)
 	// Should NOT have called TryAcquireSlot or anything downstream
@@ -416,9 +418,9 @@ func TestLinearPoller_RollbackOnSpawnFailure(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{spawnErr: assert.AnError}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	err := o.processTicket(context.Background(), ticket)
+	err := p.processTicket(context.Background(), ticket)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "spawn session")
@@ -443,9 +445,9 @@ func TestLinearPoller_RollbackOnCreateJobFailure(t *testing.T) {
 	ss := &stubSession{}
 	st := newStubState()
 	st.createJobErr = assert.AnError
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	err := o.processTicket(context.Background(), ticket)
+	err := p.processTicket(context.Background(), ticket)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create job")
@@ -465,9 +467,9 @@ func TestLinearPoller_RollbackOnWorktreeFailure(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir(), createErr: assert.AnError}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	err := o.processTicket(context.Background(), ticket)
+	err := p.processTicket(context.Background(), ticket)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create worktree")
@@ -484,9 +486,9 @@ func TestLinearPoller_NeedsAttentionOnFailure(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir(), createErr: assert.AnError}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	_ = o.processTicket(context.Background(), ticket)
+	_ = p.processTicket(context.Background(), ticket)
 
 	// FR-013: needs-attention label applied, ai-ready removed
 	calls := sl.getCalls()
@@ -503,11 +505,11 @@ func TestLinearPoller_LinearFailureAfterJob(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	err := o.processTicket(context.Background(), ticket)
+	err := p.processTicket(context.Background(), ticket)
 
-	// Should NOT return error — job is running
+	// Should NOT return error -- job is running
 	require.NoError(t, err)
 	// Job should exist
 	assert.NotNil(t, st.jobs["DEV-504"])
@@ -524,11 +526,11 @@ func TestLinearPoller_RemoveLabelFailureAfterJob(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	err := o.processTicket(context.Background(), ticket)
+	err := p.processTicket(context.Background(), ticket)
 
-	// Should NOT return error — job is running
+	// Should NOT return error -- job is running
 	require.NoError(t, err)
 	assert.NotNil(t, st.jobs["DEV-505"])
 }
@@ -543,12 +545,12 @@ func TestLinearPoller_GracefulShutdown(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Process first ticket
-	err := o.processTicket(ctx, ticket1)
+	err := p.processTicket(ctx, ticket1)
 	require.NoError(t, err)
 	assert.NotNil(t, st.jobs["DEV-600"])
 
@@ -560,8 +562,8 @@ func TestLinearPoller_GracefulShutdown(t *testing.T) {
 	// pollAndProcess with cancelled context skips work
 	st2 := newStubState()
 	sl2 := &stubLinear{tickets: []linear.Ticket{ticket2}}
-	o2 := buildOrch(t, sl2, sw, ss, st2)
-	o2.pollAndProcess(ctx)
+	p2 := buildRunner(t, sl2, sw, ss, st2)
+	p2.pollAndProcess(ctx)
 
 	// With cancelled context, PollReadyTickets is still called but
 	// the ticket loop checks ctx.Err() and returns
@@ -573,13 +575,12 @@ func TestLinearPoller_ShutdownBetweenPolls(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	poller := o.NewLinearPoller()
-	err := poller(ctx)
+	err := p.linearPoller(ctx)
 
 	assert.NoError(t, err)
 	// No polling should have occurred
@@ -591,9 +592,9 @@ func TestLinearPoller_EmptyPoll(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	o.pollAndProcess(context.Background())
+	p.pollAndProcess(context.Background())
 
 	assert.Equal(t, []string{"PollReadyTickets"}, sl.getCalls())
 	assert.Empty(t, sw.getCalls())
@@ -607,10 +608,10 @@ func TestLinearPoller_PollError(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
 	// Should not panic
-	o.pollAndProcess(context.Background())
+	p.pollAndProcess(context.Background())
 
 	assert.Equal(t, []string{"PollReadyTickets"}, sl.getCalls())
 	assert.Empty(t, sw.getCalls())
@@ -622,9 +623,9 @@ func TestLinearPoller_EmptyDescription(t *testing.T) {
 	sw := &stubWorktree{basePath: t.TempDir()}
 	ss := &stubSession{}
 	st := newStubState()
-	o := buildOrch(t, sl, sw, ss, st)
+	p := buildRunner(t, sl, sw, ss, st)
 
-	err := o.processTicket(context.Background(), ticket)
+	err := p.processTicket(context.Background(), ticket)
 	require.NoError(t, err)
 
 	ticketFile := filepath.Join(sw.basePath, "DEV-800", ".ai", "ticket.md")
