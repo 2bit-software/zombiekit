@@ -1,36 +1,32 @@
 # ZombieKit
 
-> "Feed your codebase some brains."
-
-Prompt composition and artifact management for Claude Code.
-
-## What Is ZombieKit?
-
-Claude Code is the brain; ZombieKit is the memory. ZombieKit does NOT orchestrate AI—Claude Code does that natively. Instead, ZombieKit provides persistent storage and structured workflows that Claude Code can invoke through skills.
-
-ZombieKit gives you structured workflows for features, bugs, and refactors. It maintains persistent memory across sessions via artifacts stored in your repository. It provides composable prompts through profiles that can be mixed and matched for different contexts.
-
-Integration is simple: ZombieKit runs as an MCP server that Claude Code connects to. Slash commands like `/brains.feature` invoke skills. All artifacts are stored in a `history/` folder in your project, versioned alongside your code.
+Prompt composition, structured workflows, and artifact management for AI coding agents.
 
 ## Quick Start
 
 ### Prerequisites
 
-- Go 1.24+ (`go version`)
-- Task from taskfile.dev (`task --version`)
-- Claude Code (the AI coding assistant)
+- Go 1.25+ (`go version`)
+- [Task](https://taskfile.dev) (`task --version`)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), or [OpenCode](https://opencode.ai)
 
 ### Installation
 
 ```bash
-git clone https://github.com/morganhein/zombiekit.git
+git clone https://github.com/2bit-software/zombiekit.git
 cd zombiekit
 task install
 ```
 
-### MCP Configuration
+This builds the `brains` CLI and installs it to your `$GOBIN`.
 
-Add to your Claude Code MCP settings:
+### MCP Registration
+
+```bash
+brains init --claude    # registers the MCP server + slash commands
+```
+
+Or add manually to your Claude Code MCP settings:
 
 ```json
 {
@@ -43,205 +39,83 @@ Add to your Claude Code MCP settings:
 }
 ```
 
-### Project Initialization
+### Verify
 
-Run once per project:
-
-```bash
-brains init
-```
-
-### Verification
-
-In Claude Code, run:
+In Claude Code:
 
 ```
-/brains.status
+/brains.help
 ```
 
-## The Workflow Cycle
+## How It Works
+
+Claude Code is the brain; ZombieKit is the memory. ZombieKit does not orchestrate AI -- Claude Code does that natively. ZombieKit provides structured workflows, persistent artifact storage, composable prompts (profiles), and contextual rule injection (hooks) that the agent invokes through MCP tools and slash commands.
+
+All artifacts are stored in a `history/` folder in your project, versioned alongside your code.
+
+## Commands
+
+Four slash commands drive all workflows:
+
+| Command | Purpose |
+|---------|---------|
+| `/brains.new [desc]` | Start new work -- auto-detects feature, bug, or refactor |
+| `/brains.next [step]` | Advance to next step, or jump to a named step |
+| `/brains.complete` | Finish the current initiative |
+| `/brains.help` | Show commands, current state, and valid next actions |
+
+### Workflow Types
+
+`/brains.new` classifies your input and loads the appropriate workflow:
+
+| Type | Trigger | Phases |
+|------|---------|--------|
+| **feature** | "add X", "implement Y", "create Z" | spec &rarr; plan &rarr; tasks &rarr; implement |
+| **feature-light** | "quick feature", "fl: X" | plan &rarr; implement |
+| **bug** | "fix X", "broken", "error" | report &rarr; investigate &rarr; fix-plan &rarr; implement |
+| **refactor** | "refactor X", "cleanup", "reorganize" | goal &rarr; analysis &rarr; plan &rarr; tasks &rarr; implement |
+| **unmanaged** | "unmanaged", "manual" | branch scaffold only -- you handle implementation |
+
+Each phase runs a composable profile. `/brains.next` advances through them. At any point you can detour (`/brains.next audit`, `/brains.next clarify`) without disrupting the main sequence.
+
+## Example
 
 ```
-RESEARCH --> CREATE --> AUDIT --> HIGHLIGHT
-    ^                      |
-    |                      |
-    +---- (if issues) -----+
+brains init --claude                         # one-time setup (terminal)
+/brains.new add user authentication          # starts a feature workflow
+# ... review and approve the spec ...
+/brains.next                                 # advance: spec -> plan
+# ... review the plan ...
+/brains.next                                 # advance: plan -> tasks
+/brains.next                                 # advance: tasks -> implement
+/brains.complete                             # wrap up, offer commit/PR
 ```
-
-Every feature, bug, and refactor follows this pattern:
-- **Research**: Parallel agents explore the codebase and domain
-- **Create**: Single agent synthesizes findings into an artifact
-- **Audit**: Checks completeness against requirements
-- **Highlight**: Presents artifact to user for approval
-
-## Core Skills
-
-These are the primary workflow skills. See [docs/DESIGN.md](docs/DESIGN.md) for the complete list.
-
-| Skill | Purpose |
-|-------|---------|
-| **Starting Work** | |
-| `/brains.init` | Initialize ZombieKit in project |
-| `/brains.feature` | Create feature specification |
-| `/brains.bug` | Bug investigation and fix |
-| `/brains.refactor` | Refactoring specification |
-| **Planning** | |
-| `/brains.plan` | Create implementation plan |
-| `/brains.tasks` | Generate task breakdown |
-| **Implementing** | |
-| `/brains.implement` | Execute tasks from task list |
-| **Tracking** | |
-| `/brains.status` | Show current initiative status |
-| `/brains.complete` | Mark initiative as done |
-
-## Example Workflow
-
-The `brains init` command runs once in your terminal to initialize a project. All `/brains.*` commands run inside Claude Code.
-
-1. `brains init` — Initialize project (terminal, one-time)
-2. `/brains.feature "add user authentication"` — Create spec (Claude Code)
-3. Review and approve the specification
-4. `/brains.plan` — Create implementation plan
-5. Review and approve the plan
-6. `/brains.tasks` — Generate task breakdown
-7. `/brains.implement` — Execute tasks
-8. `/brains.complete` — Mark initiative done
-
-## Development Setup
-
-For contributors or those wanting to use the recall (semantic search) features:
-
-```bash
-# Check dependencies and create .env
-task dev -- setup
-
-# Pull embedding model (required for recall)
-task dev -- ollama:pull
-
-# Start the full stack (PostgreSQL, importer, web GUI)
-task up
-```
-
-All development tasks are in the dev Taskfile (`task dev -- --list` to see all):
-
-```bash
-task dev -- setup        # Create .env, check deps, install tools
-task dev -- build        # Build the binary
-task dev -- test         # Run tests
-task dev -- ci           # Run all CI checks
-task dev -- db:up        # Start PostgreSQL only
-task dev -- db:migrate   # Run migrations
-task dev -- recall:watch # Start Claude importer only
-task dev -- gui          # Start web GUI only
-```
-
-Configuration is in `.env` (copied from `.env.example` by `task dev -- setup`). Key settings:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `POSTGRES_PORT` | 9432 | PostgreSQL external port |
-| `BRAINS_BACKEND` | postgres | Storage backend (sqlite/postgres) |
-| `BRAINS_OLLAMA_URL` | http://localhost:11434 | Ollama API endpoint |
 
 ## Hooks
 
-ZombieKit registers coding-agent hooks that inject rules into the conversation at the right moments. Rules live in `.brains/rules/` (project-local) and `~/.brains/rules/` (global), and accumulate — all matching rules fire, none shadow.
+ZombieKit injects contextual rules into the agent conversation at the right moments. Rules live in `.brains/rules/` (project-local) and `~/.brains/rules/` (global).
 
-Claude Code, Gemini CLI, and OpenCode are supported. Pass `--editor claude`, `--editor gemini`, or `--editor opencode` to tell `brains hook` which output format to emit; when the flag is omitted, the command falls back to env detection (`CLAUDE_CODE_ENTRYPOINT`) and ultimately to Claude as the default.
+Supports Claude Code, Gemini CLI, and OpenCode. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md#hooks) for the full hook table, editor setup, rule resolution order, and matching semantics.
 
-| Event | What fires | Purpose |
-|-------|-----------|---------|
-| `SessionStart` | `brains hook --editor <e> --event session-start` | Injects **unconditional rules** (no path/command triggers) into the system prompt at session start, resume, and compaction. |
-| `PreToolUse` (`Read`/`Write`/`Edit`/`MultiEdit`) | `brains hook --editor <e> --event pre-tool-use` | Injects **path-matched rules** before file operations (primary rule injection point for **Claude Code**). |
-| `PreToolUse` (`Bash`) | same | Injects **command-matched rules** when a bash invocation matches a rule's `commands:` prefix (e.g. `go build` → Taskfile reminder). |
-| `PostToolUse` (`Read`/`Write`/`Edit`/`MultiEdit`) | `brains hook --editor <e> --event post-tool-use` | Injects **path-matched rules** after file operations (primary rule injection point for **Gemini CLI**). |
-| `SessionEnd` | `brains hook --editor <e> --event session-end` | Cleanup / session-state teardown. |
+## Development
 
-The `--event` flag is zombiekit's canonical event name; when wiring into Gemini CLI, map Gemini's `BeforeTool` to `--event pre-tool-use` in `settings.json`.
+For contributors or those wanting the full stack (recall, semantic search, web GUI):
 
-### Gemini CLI setup
-
-Add to `.gemini/settings.json` (or `~/.gemini/settings.json`):
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event session-start" }] }
-    ],
-    "BeforeTool": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event pre-tool-use" }]
-      }
-    ],
-    "AfterTool": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event post-tool-use" }]
-      }
-    ],
-    "SessionEnd": [
-      { "hooks": [{ "type": "command", "command": "brains hook --editor gemini --event session-end" }] }
-    ]
-  }
-}
+```bash
+task dev -- setup           # create .env, check deps, install tools
+task dev -- build           # build the binary
+task dev -- test            # run tests
+task dev -- ci              # run all CI checks (fmt, vet, lint, test, build)
+task up                     # start full stack (PostgreSQL, Ollama, GUI)
 ```
 
-### OpenCode setup
-
-OpenCode's plugin system is in-process TypeScript rather than subprocess-based, so the hook cannot be pointed directly at the `brains` binary the way Claude Code and Gemini CLI can. Instead, zombiekit ships a thin plugin shim at `embed/integrations/opencode/brains.ts` that OpenCode loads; the shim spawns `brains hook --editor opencode` under the hood and mutates OpenCode's hook output with whatever rules `brains` returns.
-
-1. **Copy the shim into your project:**
-
-   ```sh
-   mkdir -p .opencode/plugins
-   cp $(go env GOPATH)/src/github.com/2bit-software/zombiekit/embed/integrations/opencode/brains.ts \
-      .opencode/plugins/brains.ts
-   ```
-
-   If `.opencode/plugins/*.ts` auto-discovery is already enabled in your project, that's all you need. Otherwise, add the plugin to `opencode.json`:
-
-   ```json
-   {
-     "$schema": "https://opencode.ai/config.json",
-     "plugin": ["./.opencode/plugins/brains.ts"]
-   }
-   ```
-
-2. **Start OpenCode.** The shim registers three hooks: `experimental.chat.system.transform` (unconditional rule injection at session start and on every turn thereafter, deduped by zombiekit's per-session state), `experimental.session.compacting` (re-injects unconditional rules into the compacted context), and `tool.execute.after` (path-matched file-edit rules). On first invocation the shim logs `[brains/opencode] plugin active, binary=<path>` to stderr so you can confirm registration.
-
-3. **Using a non-default binary:** set `BRAINS_BIN=/path/to/other-brains` in OpenCode's environment to target an alternate build. This is the recommended dev loop when iterating on the `brains` binary without touching your Claude Code session — stop OpenCode, rebuild, restart with `BRAINS_BIN` pointing at the new binary.
-
-**Caveats.**
-
-- `experimental.chat.system.transform` and `experimental.session.compacting` are OpenCode **experimental** hooks and may rename in future releases. The shim is the only thing that needs updating if they do.
-- Running OpenCode with `OPENCODE_PURE=1` disables all external plugins, so hooks will silently not fire.
-- OpenCode's `tool.execute.before` is not wired in this iteration; file-edit rules fire on the `after` edge only.
-
----
-
-**Hooks are warnings, not hard stops.** A matched rule surfaces guidance alongside the tool call — the agent still executes the command. Each `(rule, trigger)` fires at most once per session; state resets on compaction.
-
-### Bash command rules
-
-Rules can declare command prefixes and file-existence gates:
-
-```yaml
----
-commands: ["go test", "go run", "go build"]
-requires_files: [Taskfile.yml]
----
-# Use the Taskfile
-Prefer `task dev -- test` over bare `go` invocations.
-```
-
-- Commands match as whole-token prefixes; chained commands (`&&`, `||`, `;`, `|`) are split and matched independently.
-- `requires_files` / `requires_files_absent` walk up from `cwd` to the enclosing git root, so subdirectory invocations still resolve a top-level `Taskfile.yml`.
-
-See [INFRASTRUCTURE.md](INFRASTRUCTURE.md#hooks) for the full hook table, rule resolution order, and matching semantics.
+See `task dev -- --list` for all available targets.
 
 ## Learn More
 
-- [Architecture and Design](docs/DESIGN.md) — Full architecture, all skills, configuration options
-- [Skill Definitions](.claude/commands/) — Individual skill documentation
+- [Architecture and Design](docs/DESIGN.md) -- full architecture, profiles, MCP tools, configuration
+- [Infrastructure](INFRASTRUCTURE.md) -- executables, hooks, rule resolution, editor integration
+
+## License
+
+[AGPL-3.0](LICENSE)
