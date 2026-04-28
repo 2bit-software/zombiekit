@@ -389,22 +389,26 @@ func analyzeSteps(parsed *ParsedInitiative) (currentStep, stepStatus string, ste
 	return currentStep, stepStatus, stepsCompleted, stepsTotal
 }
 
-// findAvailableDocs scans the initiative folder for known artifact files.
+// findAvailableDocs scans the initiative folder for all markdown artifact files.
 func (s *Service) findAvailableDocs(initiativePath string) []string {
-	knownDocs := []string{"spec.md", "research.md", "plan.md", "tasks.md", "data-model.md", "quickstart.md"}
 	var available []string
 
-	for _, doc := range knownDocs {
-		docPath := filepath.Join(initiativePath, doc)
-		if _, err := os.Stat(docPath); err == nil {
-			available = append(available, doc)
-		}
+	entries, err := os.ReadDir(initiativePath)
+	if err != nil {
+		return available
 	}
 
-	// Check for contracts directory
-	contractsDir := filepath.Join(initiativePath, "contracts")
-	if info, err := os.Stat(contractsDir); err == nil && info.IsDir() {
-		available = append(available, "contracts/")
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if entry.Name() == "contracts" {
+				available = append(available, "contracts/")
+			}
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".md") && name != InitiativeMDFile {
+			available = append(available, name)
+		}
 	}
 
 	return available

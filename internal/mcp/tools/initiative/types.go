@@ -37,6 +37,9 @@ type StatusResponse struct {
 	InitiativeID   string   `json:"initiative_id,omitempty"`
 	InitiativeType string   `json:"initiative_type,omitempty"`
 	CurrentStep    string   `json:"current_step,omitempty"`
+	StepStatus     string   `json:"step_status,omitempty"`
+	StepsCompleted int      `json:"steps_completed,omitempty"`
+	StepsTotal     int      `json:"steps_total,omitempty"`
 	AvailableDocs  []string `json:"available_docs,omitempty"`
 	SuggestedNext  string   `json:"suggested_next,omitempty"`
 	HistoryPath    string   `json:"history_path,omitempty"`
