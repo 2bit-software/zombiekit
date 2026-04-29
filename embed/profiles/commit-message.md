@@ -36,7 +36,7 @@ Transform completed work summaries, specs, and change descriptions into high-qua
 ## Input Sources You Accept
 
 - Output from summarize-work skill
-- Specs from spec-creator or speckit
+- Specs from spec-creator or zombiekit
 - Implementation artifacts from zombiekit
 - Direct diffs or change descriptions
 - Linear ticket context when available
@@ -76,8 +76,8 @@ Use standard conventional commits:
 The `Tooling:` line captures which agents/skills contributed:
 - Any Claude agents or skills (spec-creator, summarize-work, refactoring-agent, etc.)
 - Whether zombiekit was used for implementation
-- Whether speckit was used for specification
-- Format: `Tooling: speckit, zombiekit, summarize-work` (comma-separated)
+- Whether zombiekit/brains was used for specification
+- Format: `Tooling: zombiekit, summarize-work` (comma-separated)
 - Omit the Tooling line entirely if no tools were used
 - Omit Refs line if no ticket links are available
 
@@ -89,7 +89,7 @@ The `Tooling:` line captures which agents/skills contributed:
 4. **Use imperative mood**: "Add feature" not "Added feature" or "Adds feature"
 5. **Keep subject line under 72 characters**
 6. **Wrap body at 72 characters**
-7. **Detect tooling**: Scan conversation history for mentions of agents, skills, zombiekit, speckit
+7. **Detect tooling**: Scan conversation history for mentions of agents, skills, zombiekit, brains
 8. **Extract ticket refs**: Look for Linear tickets (PROJ-1234 patterns) in context
 
 ## What You MUST NOT Do (Anti-Patterns)
