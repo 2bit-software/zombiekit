@@ -454,6 +454,249 @@ Some notes.
 	})
 }
 
+func TestParseInitiativeMD_FourColumnTable(t *testing.T) {
+	t.Run("parses 4-column table with profile", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		mdPath := filepath.Join(tmpDir, "INITIATIVE.md")
+
+		content := `# Initiative: data-driven
+
+**Type**: refactor
+**Status**: in_progress
+
+## Steps
+
+| Step | Profile | Status | Updated |
+|------|---------|--------|---------|
+| spec | feature | completed | 2026-04-30 10:00 |
+| plan | plan | in_progress | 2026-04-30 11:00 |
+| tasks | tasks | pending | - |
+| implement | implement | pending | - |
+
+## Description
+
+Test.
+`
+		require.NoError(t, os.WriteFile(mdPath, []byte(content), 0644))
+
+		parsed, err := ParseInitiativeMD(mdPath)
+		require.NoError(t, err)
+
+		require.Len(t, parsed.Steps, 4)
+		assert.Equal(t, "spec", parsed.Steps[0].Name)
+		assert.Equal(t, "feature", parsed.Steps[0].Profile)
+		assert.Equal(t, StepCompleted, parsed.Steps[0].Status)
+		assert.Equal(t, "2026-04-30 10:00", parsed.Steps[0].Updated)
+
+		assert.Equal(t, "plan", parsed.Steps[1].Name)
+		assert.Equal(t, "plan", parsed.Steps[1].Profile)
+		assert.Equal(t, StepInProgress, parsed.Steps[1].Status)
+
+		assert.Equal(t, "tasks", parsed.Steps[2].Name)
+		assert.Equal(t, "tasks", parsed.Steps[2].Profile)
+		assert.Equal(t, StepPending, parsed.Steps[2].Status)
+	})
+
+	t.Run("parses 4-column with non-matching step/profile names", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		mdPath := filepath.Join(tmpDir, "INITIATIVE.md")
+
+		content := `# Initiative: bug-fix
+
+**Type**: bug
+
+## Steps
+
+| Step | Profile | Status | Updated |
+|------|---------|--------|---------|
+| investigate | bug | completed | 2026-04-30 |
+| fix | implement | in_progress | 2026-04-30 |
+| verify | audit | pending | - |
+`
+		require.NoError(t, os.WriteFile(mdPath, []byte(content), 0644))
+
+		parsed, err := ParseInitiativeMD(mdPath)
+		require.NoError(t, err)
+
+		require.Len(t, parsed.Steps, 3)
+		assert.Equal(t, "investigate", parsed.Steps[0].Name)
+		assert.Equal(t, "bug", parsed.Steps[0].Profile)
+		assert.Equal(t, "fix", parsed.Steps[1].Name)
+		assert.Equal(t, "implement", parsed.Steps[1].Profile)
+		assert.Equal(t, "verify", parsed.Steps[2].Name)
+		assert.Equal(t, "audit", parsed.Steps[2].Profile)
+	})
+
+	t.Run("parses 4-column with comma-separated profiles", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		mdPath := filepath.Join(tmpDir, "INITIATIVE.md")
+
+		content := `# Initiative: auto-feature
+
+**Type**: feature
+
+## Steps
+
+| Step | Profile | Status | Updated |
+|------|---------|--------|---------|
+| implement | implement,automode | in_progress | 2026-04-30 |
+`
+		require.NoError(t, os.WriteFile(mdPath, []byte(content), 0644))
+
+		parsed, err := ParseInitiativeMD(mdPath)
+		require.NoError(t, err)
+
+		require.Len(t, parsed.Steps, 1)
+		assert.Equal(t, "implement", parsed.Steps[0].Name)
+		assert.Equal(t, "implement,automode", parsed.Steps[0].Profile)
+	})
+
+	t.Run("3-column table still parses with empty profile", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		mdPath := filepath.Join(tmpDir, "INITIATIVE.md")
+
+		content := `# Initiative: legacy
+
+**Type**: feature
+
+## Steps
+
+| Step | Status | Updated |
+|------|--------|---------|
+| spec | completed | 2026-01-31 |
+| plan | pending | - |
+`
+		require.NoError(t, os.WriteFile(mdPath, []byte(content), 0644))
+
+		parsed, err := ParseInitiativeMD(mdPath)
+		require.NoError(t, err)
+
+		require.Len(t, parsed.Steps, 2)
+		assert.Equal(t, "spec", parsed.Steps[0].Name)
+		assert.Equal(t, "", parsed.Steps[0].Profile)
+		assert.Equal(t, StepCompleted, parsed.Steps[0].Status)
+	})
+}
+
+func TestParsedInitiative_FormatSteps(t *testing.T) {
+	t.Run("formats 4-column when profiles present", func(t *testing.T) {
+		parsed := &ParsedInitiative{
+			Steps: []ParsedStep{
+				{Name: "spec", Profile: "feature", Status: StepCompleted, Updated: "2026-04-30"},
+				{Name: "plan", Profile: "plan", Status: StepPending, Updated: "-"},
+			},
+		}
+
+		lines := parsed.formatSteps()
+		assert.Contains(t, lines[0], "| Step | Profile | Status | Updated |")
+		assert.Contains(t, lines[2], "| spec | feature | completed | 2026-04-30 |")
+		assert.Contains(t, lines[3], "| plan | plan | pending | - |")
+	})
+
+	t.Run("formats 3-column when no profiles present", func(t *testing.T) {
+		parsed := &ParsedInitiative{
+			Steps: []ParsedStep{
+				{Name: "spec", Status: StepCompleted, Updated: "2026-04-30"},
+				{Name: "plan", Status: StepPending, Updated: "-"},
+			},
+		}
+
+		lines := parsed.formatSteps()
+		assert.Contains(t, lines[0], "| Step | Status | Updated |")
+		assert.NotContains(t, lines[0], "Profile")
+		assert.Contains(t, lines[2], "| spec | completed | 2026-04-30 |")
+	})
+}
+
+func TestParsedInitiative_RoundTrip(t *testing.T) {
+	t.Run("4-column round trip preserves profiles", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		mdPath := filepath.Join(tmpDir, "INITIATIVE.md")
+
+		original := `# Initiative: roundtrip
+
+**Type**: feature
+**Status**: in_progress
+
+## Steps
+
+| Step | Profile | Status | Updated |
+|------|---------|--------|---------|
+| spec | feature | completed | 2026-04-30 10:00 |
+| plan | plan | in_progress | 2026-04-30 11:00 |
+| tasks | tasks | pending | - |
+
+## Description
+
+Round trip test.
+`
+		require.NoError(t, os.WriteFile(mdPath, []byte(original), 0644))
+
+		parsed, err := ParseInitiativeMD(mdPath)
+		require.NoError(t, err)
+
+		// Modify a step
+		err = parsed.UpdateStepStatus("plan", StepCompleted, "2026-04-30 12:00")
+		require.NoError(t, err)
+
+		// Write back
+		err = parsed.WriteTo(mdPath)
+		require.NoError(t, err)
+
+		// Re-parse
+		parsed2, err := ParseInitiativeMD(mdPath)
+		require.NoError(t, err)
+
+		require.Len(t, parsed2.Steps, 3)
+		// Profile preserved
+		assert.Equal(t, "feature", parsed2.Steps[0].Profile)
+		assert.Equal(t, "plan", parsed2.Steps[1].Profile)
+		assert.Equal(t, "tasks", parsed2.Steps[2].Profile)
+		// Status updated
+		assert.Equal(t, StepCompleted, parsed2.Steps[1].Status)
+		assert.Equal(t, "2026-04-30 12:00", parsed2.Steps[1].Updated)
+	})
+
+	t.Run("3-column round trip still works", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		mdPath := filepath.Join(tmpDir, "INITIATIVE.md")
+
+		original := `# Initiative: legacy
+
+**Type**: feature
+**Status**: in_progress
+
+## Steps
+
+| Step | Status | Updated |
+|------|--------|---------|
+| spec | completed | 2026-01-31 |
+| plan | pending | - |
+
+## Description
+
+Legacy format.
+`
+		require.NoError(t, os.WriteFile(mdPath, []byte(original), 0644))
+
+		parsed, err := ParseInitiativeMD(mdPath)
+		require.NoError(t, err)
+
+		err = parsed.UpdateStepStatus("plan", StepInProgress, "2026-01-31 12:00")
+		require.NoError(t, err)
+
+		err = parsed.WriteTo(mdPath)
+		require.NoError(t, err)
+
+		parsed2, err := ParseInitiativeMD(mdPath)
+		require.NoError(t, err)
+
+		require.Len(t, parsed2.Steps, 2)
+		assert.Equal(t, "", parsed2.Steps[0].Profile)
+		assert.Equal(t, StepInProgress, parsed2.Steps[1].Status)
+	})
+}
+
 func TestParseStepStatus(t *testing.T) {
 	tests := []struct {
 		input    string

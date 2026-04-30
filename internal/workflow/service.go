@@ -21,13 +21,20 @@ type Provider interface {
 	List() ([]*Workflow, error)
 }
 
+// WorkflowStep defines a step in a workflow's step sequence.
+type WorkflowStep struct {
+	Name     string   `yaml:"name"`
+	Profiles []string `yaml:"profiles"`
+}
+
 // Workflow represents a workflow definition.
 type Workflow struct {
 	Name        string
 	Description string
-	Content     string // The body content (markdown)
-	Path        string // Source path for debugging
-	Source      string // "local", "global", or "embedded"
+	Steps       []WorkflowStep // Ordered step sequence with profile mappings
+	Content     string         // The body content (markdown)
+	Path        string         // Source path for debugging
+	Source      string         // "local", "global", or "embedded"
 }
 
 // Service provides workflow loading operations.
@@ -186,8 +193,9 @@ func parseWorkflow(content []byte, name, path, source string) (*Workflow, error)
 
 	// Parse frontmatter
 	var meta struct {
-		Name        string `yaml:"name"`
-		Description string `yaml:"description"`
+		Name        string         `yaml:"name"`
+		Description string         `yaml:"description"`
+		Steps       []WorkflowStep `yaml:"steps"`
 	}
 	if err := yaml.Unmarshal([]byte(frontmatter), &meta); err != nil {
 		return nil, fmt.Errorf("parsing frontmatter in %s: %w", path, err)
@@ -202,6 +210,7 @@ func parseWorkflow(content []byte, name, path, source string) (*Workflow, error)
 	return &Workflow{
 		Name:        workflowName,
 		Description: meta.Description,
+		Steps:       meta.Steps,
 		Content:     body,
 		Path:        path,
 		Source:      source,

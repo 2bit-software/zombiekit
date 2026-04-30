@@ -22,6 +22,7 @@ const (
 // ParsedStep represents a step parsed from the INITIATIVE.md step table.
 type ParsedStep struct {
 	Name    string     // Step name (e.g., "spec", "plan")
+	Profile string     // Profile name(s) for this step (empty for legacy 3-column format)
 	Status  StepStatus // Step status
 	Updated string     // Timestamp or "-"
 }
@@ -69,8 +70,10 @@ func (p *ParsedInitiative) NextStep() *ParsedStep {
 }
 
 var (
-	// Matches step table rows: | step | status | updated |
-	stepRowRe = regexp.MustCompile(`^\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|`)
+	// Matches 4-column step table rows: | step | profile | status | updated |
+	stepRowRe4Col = regexp.MustCompile(`^\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|`)
+	// Matches 3-column step table rows: | step | status | updated |
+	stepRowRe3Col = regexp.MustCompile(`^\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|$`)
 	// Matches header metadata like **Type**: feature
 	metadataRe = regexp.MustCompile(`^\*\*(\w+)\*\*:\s*(.+)$`)
 	// Matches initiative header: # Initiative: name
@@ -94,23 +97,37 @@ func parseMetadataField(parsed *ParsedInitiative, key, value string) {
 }
 
 // parseStepRow attempts to parse a markdown table row as a step.
+// Supports both 4-column (Step|Profile|Status|Updated) and 3-column (Step|Status|Updated) formats.
 // Returns nil if the line is not a valid step row.
 func parseStepRow(line string) *ParsedStep {
-	matches := stepRowRe.FindStringSubmatch(line)
-	if matches == nil {
-		return nil
+	// Try 4-column first: | Step | Profile | Status | Updated |
+	if matches := stepRowRe4Col.FindStringSubmatch(line); matches != nil {
+		stepName := strings.TrimSpace(matches[1])
+		if stepName == "Step" || stepName == "step" {
+			return nil
+		}
+		return &ParsedStep{
+			Name:    stepName,
+			Profile: strings.TrimSpace(matches[2]),
+			Status:  parseStepStatus(strings.TrimSpace(matches[3])),
+			Updated: strings.TrimSpace(matches[4]),
+		}
 	}
 
-	stepName := strings.TrimSpace(matches[1])
-	if stepName == "Step" || stepName == "step" {
-		return nil
+	// Fall back to 3-column: | Step | Status | Updated |
+	if matches := stepRowRe3Col.FindStringSubmatch(line); matches != nil {
+		stepName := strings.TrimSpace(matches[1])
+		if stepName == "Step" || stepName == "step" {
+			return nil
+		}
+		return &ParsedStep{
+			Name:    stepName,
+			Status:  parseStepStatus(strings.TrimSpace(matches[2])),
+			Updated: strings.TrimSpace(matches[3]),
+		}
 	}
 
-	return &ParsedStep{
-		Name:    stepName,
-		Status:  parseStepStatus(strings.TrimSpace(matches[2])),
-		Updated: strings.TrimSpace(matches[3]),
-	}
+	return nil
 }
 
 // scanLine processes a single line from the initiative file, updating the parsed state.
@@ -279,15 +296,36 @@ func (p *ParsedInitiative) WriteTo(path string) error {
 	return nil
 }
 
+// hasProfiles returns true if any step has a non-empty Profile field.
+func (p *ParsedInitiative) hasProfiles() bool {
+	for _, step := range p.Steps {
+		if step.Profile != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // formatSteps formats steps as a markdown table.
+// Uses 4-column format (with Profile) if any step has a profile set,
+// otherwise uses 3-column format for backwards compatibility.
 func (p *ParsedInitiative) formatSteps() []string {
 	var lines []string
 
-	lines = append(lines, "| Step | Status | Updated |")
-	lines = append(lines, "|------|--------|---------|")
-	for _, step := range p.Steps {
-		row := fmt.Sprintf("| %s | %s | %s |", step.Name, step.Status, step.Updated)
-		lines = append(lines, row)
+	if p.hasProfiles() {
+		lines = append(lines, "| Step | Profile | Status | Updated |")
+		lines = append(lines, "|------|---------|--------|---------|")
+		for _, step := range p.Steps {
+			row := fmt.Sprintf("| %s | %s | %s | %s |", step.Name, step.Profile, step.Status, step.Updated)
+			lines = append(lines, row)
+		}
+	} else {
+		lines = append(lines, "| Step | Status | Updated |")
+		lines = append(lines, "|------|--------|---------|")
+		for _, step := range p.Steps {
+			row := fmt.Sprintf("| %s | %s | %s |", step.Name, step.Status, step.Updated)
+			lines = append(lines, row)
+		}
 	}
 	lines = append(lines, "")
 

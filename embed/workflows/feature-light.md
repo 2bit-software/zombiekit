@@ -1,6 +1,11 @@
 ---
 name: feature-light
 description: Lightweight feature workflow — creates a branch, writes spec and plan in one pass, then implements. No research agents, no audit cycle. Use for small, well-understood work.
+steps:
+  - name: spec
+    profiles: [feature]
+  - name: implement
+    profiles: [implement]
 ---
 
 ## User Input

@@ -1,6 +1,9 @@
 ---
 name: unmanaged
 description: Minimal workflow — creates a branch and initiative files, then gets out of the way. The user implements independently. First /brains.next goes straight to /brains.complete.
+steps:
+  - name: implement
+    profiles: [implement]
 ---
 
 ## User Input

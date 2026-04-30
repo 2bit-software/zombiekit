@@ -1,6 +1,17 @@
 ---
 name: bug
 description: Bug investigation workflow — creates a branch, investigates root cause, classifies the failure, and produces a fix plan. /brains.next advances to implement then audit.
+steps:
+  - name: investigate
+    profiles: [bug]
+  - name: plan
+    profiles: [plan]
+  - name: tasks
+    profiles: [tasks]
+  - name: fix
+    profiles: [implement]
+  - name: verify
+    profiles: [audit]
 ---
 
 ## User Input

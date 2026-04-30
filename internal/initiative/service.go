@@ -472,17 +472,40 @@ func (s *Service) createInitiativeMD(init *Initiative, steps []WorkflowStep) err
 	if len(steps) > 0 {
 		builder.WriteString("## Steps\n\n")
 
-		// Create step table
-		builder.WriteString("| Step | Status | Updated |\n")
-		builder.WriteString("|------|--------|--------|\n")
-		for i, step := range steps {
-			status := "pending"
-			updated := "-"
-			if i == 0 {
-				status = "in_progress"
-				updated = time.Now().Format("2006-01-02 15:04")
+		// Determine if any step has a profile (use 4-column format)
+		hasProfile := false
+		for _, step := range steps {
+			if step.Profile != "" {
+				hasProfile = true
+				break
 			}
-			builder.WriteString(fmt.Sprintf("| %s | %s | %s |\n", step.Name, status, updated))
+		}
+
+		// Create step table
+		if hasProfile {
+			builder.WriteString("| Step | Profile | Status | Updated |\n")
+			builder.WriteString("|------|---------|--------|--------|\n")
+			for i, step := range steps {
+				status := "pending"
+				updated := "-"
+				if i == 0 {
+					status = "in_progress"
+					updated = time.Now().Format("2006-01-02 15:04")
+				}
+				builder.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", step.Name, step.Profile, status, updated))
+			}
+		} else {
+			builder.WriteString("| Step | Status | Updated |\n")
+			builder.WriteString("|------|--------|--------|\n")
+			for i, step := range steps {
+				status := "pending"
+				updated := "-"
+				if i == 0 {
+					status = "in_progress"
+					updated = time.Now().Format("2006-01-02 15:04")
+				}
+				builder.WriteString(fmt.Sprintf("| %s | %s | %s |\n", step.Name, status, updated))
+			}
 		}
 		builder.WriteString("\n")
 	}

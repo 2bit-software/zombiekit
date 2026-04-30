@@ -9,10 +9,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	internalInit "github.com/2bit-software/zombiekit/internal/initiative"
 	"github.com/2bit-software/zombiekit/internal/step"
+	"github.com/2bit-software/zombiekit/internal/workflow"
 )
 
 // Tool implements the MCP initiative tool for managing workflow initiatives.
@@ -246,9 +248,27 @@ func (t *Tool) createNewInitiative(dir string, initSvc *internalInit.Service, in
 	return marshalResponse(resp)
 }
 
-// loadWorkflowSteps loads and converts workflow steps for an initiative type.
-// Returns nil steps (not an error) when no workflow is defined.
+// loadWorkflowSteps loads step definitions for an initiative type.
+// Reads from workflow files first; falls back to profile frontmatter for backwards compat.
+// Returns nil steps (not an error) when no workflow or step sequence is defined.
 func loadWorkflowSteps(dir, initType string) ([]internalInit.WorkflowStep, error) {
+	// Primary source: workflow file's steps frontmatter
+	wfSvc, err := workflow.NewServiceForSubdir(dir, "workflows", nil)
+	if err == nil {
+		wf, wfErr := wfSvc.Load(initType)
+		if wfErr == nil && len(wf.Steps) > 0 {
+			initSteps := make([]internalInit.WorkflowStep, len(wf.Steps))
+			for i, ws := range wf.Steps {
+				initSteps[i] = internalInit.WorkflowStep{
+					Name:    ws.Name,
+					Profile: strings.Join(ws.Profiles, ","),
+				}
+			}
+			return initSteps, nil
+		}
+	}
+
+	// Fallback: read from profile frontmatter (legacy path)
 	stepSvc, err := step.NewService(dir)
 	if err != nil {
 		return nil, fmt.Errorf("creating step service: %w", err)

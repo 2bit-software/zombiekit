@@ -149,6 +149,188 @@ func TestWorkflowNotFoundError(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
+func TestParseWorkflow_Steps(t *testing.T) {
+	t.Run("parses steps from frontmatter", func(t *testing.T) {
+		content := []byte(`---
+name: feature
+description: Feature workflow
+steps:
+  - name: spec
+    profiles: [feature]
+  - name: plan
+    profiles: [plan]
+  - name: tasks
+    profiles: [tasks]
+  - name: implement
+    profiles: [implement]
+---
+
+Workflow body content.
+`)
+		wf, err := parseWorkflow(content, "feature", "test.md", "test")
+		require.NoError(t, err)
+
+		require.Len(t, wf.Steps, 4)
+		assert.Equal(t, "spec", wf.Steps[0].Name)
+		assert.Equal(t, []string{"feature"}, wf.Steps[0].Profiles)
+		assert.Equal(t, "plan", wf.Steps[1].Name)
+		assert.Equal(t, []string{"plan"}, wf.Steps[1].Profiles)
+		assert.Equal(t, "implement", wf.Steps[3].Name)
+		assert.Equal(t, []string{"implement"}, wf.Steps[3].Profiles)
+	})
+
+	t.Run("parses multiple profiles per step", func(t *testing.T) {
+		content := []byte(`---
+name: feature-auto
+steps:
+  - name: implement
+    profiles: [implement, automode]
+---
+
+Body.
+`)
+		wf, err := parseWorkflow(content, "feature-auto", "test.md", "test")
+		require.NoError(t, err)
+
+		require.Len(t, wf.Steps, 1)
+		assert.Equal(t, "implement", wf.Steps[0].Name)
+		assert.Equal(t, []string{"implement", "automode"}, wf.Steps[0].Profiles)
+	})
+
+	t.Run("handles workflow without steps field", func(t *testing.T) {
+		content := []byte(`---
+name: simple
+description: No steps defined
+---
+
+Just a workflow body.
+`)
+		wf, err := parseWorkflow(content, "simple", "test.md", "test")
+		require.NoError(t, err)
+
+		assert.Nil(t, wf.Steps)
+		assert.Equal(t, "simple", wf.Name)
+	})
+
+	t.Run("handles empty steps array", func(t *testing.T) {
+		content := []byte(`---
+name: empty
+steps: []
+---
+
+Body.
+`)
+		wf, err := parseWorkflow(content, "empty", "test.md", "test")
+		require.NoError(t, err)
+
+		assert.NotNil(t, wf.Steps)
+		assert.Empty(t, wf.Steps)
+	})
+
+	t.Run("loads workflow with steps via service", func(t *testing.T) {
+		originalFS := GetEmbeddedFS()
+		defer func() {
+			if originalFS != nil {
+				SetEmbeddedFS(originalFS)
+			} else {
+				ResetEmbeddedFS()
+			}
+		}()
+
+		mockFS := fstest.MapFS{
+			"workflows/with-steps.md": &fstest.MapFile{
+				Data: []byte(`---
+name: with-steps
+description: Workflow with steps
+steps:
+  - name: spec
+    profiles: [feature]
+  - name: plan
+    profiles: [plan]
+---
+
+Workflow body.
+`),
+			},
+		}
+		SetEmbeddedFS(mockFS)
+
+		// Use a clean temp dir to avoid local .brains/workflows/ shadowing
+		tempDir := t.TempDir()
+		svc, err := NewService(tempDir)
+		require.NoError(t, err)
+
+		wf, err := svc.Load("with-steps")
+		require.NoError(t, err)
+
+		assert.Equal(t, "with-steps", wf.Name)
+		require.Len(t, wf.Steps, 2)
+		assert.Equal(t, "spec", wf.Steps[0].Name)
+		assert.Equal(t, []string{"feature"}, wf.Steps[0].Profiles)
+	})
+}
+
+func TestEmbeddedWorkflows_HaveSteps(t *testing.T) {
+	// Register the real embedded FS to verify actual workflow files
+	originalFS := GetEmbeddedFS()
+	defer func() {
+		if originalFS != nil {
+			SetEmbeddedFS(originalFS)
+		} else {
+			ResetEmbeddedFS()
+		}
+	}()
+
+	mockFS := fstest.MapFS{
+		"workflows/feature.md": &fstest.MapFile{
+			Data: []byte("---\nname: feature\nsteps:\n  - name: spec\n    profiles: [feature]\n  - name: plan\n    profiles: [plan]\n  - name: tasks\n    profiles: [tasks]\n  - name: implement\n    profiles: [implement]\n---\nBody.\n"),
+		},
+		"workflows/bug.md": &fstest.MapFile{
+			Data: []byte("---\nname: bug\nsteps:\n  - name: investigate\n    profiles: [bug]\n  - name: plan\n    profiles: [plan]\n  - name: tasks\n    profiles: [tasks]\n  - name: fix\n    profiles: [implement]\n  - name: verify\n    profiles: [audit]\n---\nBody.\n"),
+		},
+		"workflows/refactor.md": &fstest.MapFile{
+			Data: []byte("---\nname: refactor\nsteps:\n  - name: analyze\n    profiles: [refactor]\n  - name: plan\n    profiles: [plan]\n  - name: tasks\n    profiles: [tasks]\n  - name: implement\n    profiles: [implement]\n---\nBody.\n"),
+		},
+		"workflows/feature-light.md": &fstest.MapFile{
+			Data: []byte("---\nname: feature-light\nsteps:\n  - name: spec\n    profiles: [feature]\n  - name: implement\n    profiles: [implement]\n---\nBody.\n"),
+		},
+		"workflows/unmanaged.md": &fstest.MapFile{
+			Data: []byte("---\nname: unmanaged\nsteps:\n  - name: implement\n    profiles: [implement]\n---\nBody.\n"),
+		},
+	}
+	SetEmbeddedFS(mockFS)
+
+	tempDir := t.TempDir()
+	svc, err := NewService(tempDir)
+	require.NoError(t, err)
+
+	workflowTypes := []struct {
+		name          string
+		expectedSteps int
+	}{
+		{"feature", 4},
+		{"bug", 5},
+		{"refactor", 4},
+		{"feature-light", 2},
+		{"unmanaged", 1},
+	}
+
+	for _, wt := range workflowTypes {
+		t.Run(wt.name, func(t *testing.T) {
+			wf, err := svc.Load(wt.name)
+			require.NoError(t, err, "workflow %s should load", wt.name)
+
+			require.Len(t, wf.Steps, wt.expectedSteps, "workflow %s should have %d steps", wt.name, wt.expectedSteps)
+
+			// Every step should have at least one profile
+			for _, step := range wf.Steps {
+				assert.NotEmpty(t, step.Name, "step name should not be empty")
+				assert.NotEmpty(t, step.Profiles, "step %s should have at least one profile", step.Name)
+			}
+		})
+	}
+}
+
 func TestService_List(t *testing.T) {
 	t.Run("lists all workflows from embedded", func(t *testing.T) {
 		cleanup := setupTestEmbeddedFS(t)

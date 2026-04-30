@@ -1,6 +1,15 @@
 ---
 name: refactor
 description: Refactoring workflow — creates a branch, analyzes dependencies, assesses safety nets, and produces an atomic refactor plan. /brains.next advances to implement then audit.
+steps:
+  - name: analyze
+    profiles: [refactor]
+  - name: plan
+    profiles: [plan]
+  - name: tasks
+    profiles: [tasks]
+  - name: implement
+    profiles: [implement]
 ---
 
 ## User Input

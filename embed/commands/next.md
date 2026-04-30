@@ -36,7 +36,11 @@ Goal: Read step state from INITIATIVE.md and advance to the next step.
    - Use atomic write (temp file + rename)
 
 5. **Load Next Profile**
-   - Use `mcp__zombiekit__profile-compose` with the step's profile
+   - Read the Profile column from the step table row (4-column format: `| Step | Profile | Status | Updated |`)
+   - If the Profile column exists: use that value as the profile name(s)
+   - If the Profile column is missing (legacy 3-column format): use the step name as the profile name
+   - If the Profile value contains commas (e.g., `implement,automode`): split on comma and compose all profiles
+   - Call `mcp__zombiekit__profile-compose` with the resolved profile(s)
    - If `"automode"` was included in the current compose call, include it again: `profiles: ["{step_profile}", "automode"]`
    - Pass through any user arguments
 

@@ -1,6 +1,15 @@
 ---
 name: feature
 description: Feature specification workflow — creates a branch, researches and writes a business spec, audits it for completeness. /brains.next advances through plan, tasks, and implement.
+steps:
+  - name: spec
+    profiles: [feature]
+  - name: plan
+    profiles: [plan]
+  - name: tasks
+    profiles: [tasks]
+  - name: implement
+    profiles: [implement]
 ---
 
 ## User Input

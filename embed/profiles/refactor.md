@@ -2,22 +2,6 @@
 name: refactor
 description: Create a safe refactoring specification. Analyzes dependencies, assesses safety nets, and produces an atomic refactor plan.
 type: skill
-steps:
-  - name: analyze
-    profile: refactor
-  - name: plan
-    profile: plan
-  - name: tasks
-    profile: tasks
-  - name: implement
-    profile: implement
-handoffs:
-  - label: Build Implementation Plan
-    skill: brains.plan
-    prompt: Create an implementation plan for this refactor
-  - label: Clarify Scope
-    skill: brains.clarify
-    prompt: Identify underspecified areas in the refactor spec
 ---
 
 ## User Input
