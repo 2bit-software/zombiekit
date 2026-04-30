@@ -8,11 +8,11 @@ import (
 
 	"path/filepath"
 
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/config"
 	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/2bit-software/zombiekit/internal/shutdown"
 	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/urfave/cli/v2"
 )
 
 // newStartCommand creates the start command for running all services.

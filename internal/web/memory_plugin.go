@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/2bit-software/zombiekit/internal/memory"
+	"github.com/go-chi/chi/v5"
 )
 
 // MemoryPlugin implements the WebPlugin interface for sticky memories.

@@ -3,8 +3,8 @@ package web
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/2bit-software/zombiekit/internal/profile"
+	"github.com/go-chi/chi/v5"
 )
 
 // profilesHandlers contains the HTTP handlers for the profiles plugin.

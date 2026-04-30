@@ -137,4 +137,3 @@ func (rm *RegistryManager) Register(brainsPath string) error {
 
 	return rm.saveUnlocked(registry)
 }
-

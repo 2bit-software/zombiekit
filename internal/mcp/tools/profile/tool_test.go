@@ -6,9 +6,9 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/2bit-software/zombiekit/internal/profile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/2bit-software/zombiekit/internal/profile"
 )
 
 // Helper to set up embedded profiles for testing
@@ -41,7 +41,6 @@ MCP test content for tools.
 		profile.SetEmbeddedFS(originalFS)
 	}
 }
-
 
 // T025: Unit test for MCP profile-compose with embedded profile
 func TestMCPTool_ComposeWithEmbedded(t *testing.T) {
@@ -214,4 +213,3 @@ Handler test content.
 		assert.Contains(t, result, "PROFILE_EXISTS")
 	})
 }
-

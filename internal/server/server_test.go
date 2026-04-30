@@ -15,6 +15,8 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/server"
 	artifactv1 "github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/artifact/v1"
 	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/artifact/v1/artifactv1connect"
 	configv1 "github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/config/v1"
@@ -25,8 +27,6 @@ import (
 	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/search/v1/searchv1connect"
 	workflowv1 "github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/workflow/v1"
 	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/workflow/v1/workflowv1connect"
-	"github.com/2bit-software/zombiekit/internal/logging"
-	"github.com/2bit-software/zombiekit/internal/server"
 )
 
 type testHarness struct {

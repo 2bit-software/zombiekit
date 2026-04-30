@@ -75,7 +75,7 @@ When reasoning through problems, apply these principles:
 
 ### 3. Research (When Needed)
 
-- Knowledge may be outdated (cutoff: January 2025)
+- Knowledge may be outdated; the harness injects the actual model cutoff at runtime
 - When using third-party packages/libraries/frameworks, verify current usage patterns
 - **Use Context7 MCP** (`mcp__context7`) for up-to-date library/framework documentation — preferred over web search for API references
 - Don't rely on summaries - fetch actual content
@@ -292,4 +292,3 @@ A task is **not complete** until:
 8. **No Silent Failures**: Empty catch blocks are bugs
 9. **Be Direct**: "No" is a complete sentence. Disagree when you should.
 10. **Transformer Mandate**: Generate options, human decides. Don't make architectural choices autonomously.
-

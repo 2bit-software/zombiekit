@@ -8,22 +8,22 @@ import (
 
 func makeSkillProfile(name, body, path string) *Profile {
 	return &Profile{
-		Name:    name,
-		Body:    body,
-		Path:    filepath.Join(path, "SKILL.md"),
-		Source:  SourceGlobal,
-		IsSkill: true,
+		Name:     name,
+		Body:     body,
+		Path:     filepath.Join(path, "SKILL.md"),
+		Source:   SourceGlobal,
+		IsSkill:  true,
 		Inherits: false,
 	}
 }
 
 func makeFlatProfile(name, body string) *Profile {
 	return &Profile{
-		Name:    name,
-		Body:    body,
-		Path:    "/profiles/" + name + ".md",
-		Source:  SourceGlobal,
-		IsSkill: false,
+		Name:     name,
+		Body:     body,
+		Path:     "/profiles/" + name + ".md",
+		Source:   SourceGlobal,
+		IsSkill:  false,
 		Inherits: false,
 	}
 }
@@ -121,4 +121,3 @@ func TestComposeTwoSkillProfiles_EachHasOwnBaseDirLine(t *testing.T) {
 		t.Error("expected base dir line for skill-two")
 	}
 }
-

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/go-chi/chi/v5"
 )
 
 // pluginNamePattern validates plugin names: lowercase alphanumeric with hyphens.

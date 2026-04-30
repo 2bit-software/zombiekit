@@ -37,9 +37,9 @@ func makeSkillZIP(t *testing.T, dir, name string, entries map[string]string) str
 func TestExtractSkillFile_NestedPrefix(t *testing.T) {
 	dir := t.TempDir()
 	makeSkillZIP(t, dir, "epic-planner", map[string]string{
-		"epic-planner/SKILL.md":           "# Epic Planner",
-		"epic-planner/script.sh":          "#!/bin/bash",
-		"epic-planner/templates/out.md":   "# Template",
+		"epic-planner/SKILL.md":         "# Epic Planner",
+		"epic-planner/script.sh":        "#!/bin/bash",
+		"epic-planner/templates/out.md": "# Template",
 	})
 
 	targetDir := filepath.Join(dir, "epic-planner")
@@ -57,7 +57,7 @@ func TestExtractSkillFile_NestedPrefix(t *testing.T) {
 func TestExtractSkillFile_FlatLayout(t *testing.T) {
 	dir := t.TempDir()
 	makeSkillZIP(t, dir, "flat-skill", map[string]string{
-		"SKILL.md": "# Flat Skill",
+		"SKILL.md":  "# Flat Skill",
 		"helper.sh": "#!/bin/bash",
 	})
 

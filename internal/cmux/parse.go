@@ -90,7 +90,7 @@ func FindByTicketID(entries []WorkspaceEntry, ticketID string) *WorkspaceEntry {
 var validEnvKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // BashQuote wraps a string in bash single quotes, escaping embedded single
-// quotes with the '\'' idiom.
+// quotes with the '\” idiom.
 func BashQuote(s string) string {
 	escaped := strings.ReplaceAll(s, `'`, `'\''`)
 	return `'` + escaped + `'`

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/config"
 	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/2bit-software/zombiekit/internal/memory/sqlite"
@@ -17,6 +16,7 @@ import (
 	"github.com/2bit-software/zombiekit/internal/step"
 	"github.com/2bit-software/zombiekit/internal/web"
 	"github.com/2bit-software/zombiekit/internal/workflow"
+	"github.com/urfave/cli/v2"
 )
 
 // newGUICommand creates the gui command for starting the web interface.

@@ -21,8 +21,8 @@ func NewTool(storage memory.Storage) *Tool {
 
 // ToolDefinition represents an MCP tool definition.
 type ToolDefinition struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 }
 

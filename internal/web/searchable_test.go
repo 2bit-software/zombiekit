@@ -3,8 +3,8 @@ package web_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/2bit-software/zombiekit/internal/web"
+	"github.com/stretchr/testify/assert"
 )
 
 // searchableMock is a test implementation of the Searchable interface.

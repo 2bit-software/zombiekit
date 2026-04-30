@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/2bit-software/zombiekit/internal/web"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/2bit-software/zombiekit/internal/logging"
-	"github.com/2bit-software/zombiekit/internal/web"
 )
 
 // mockSearchablePlugin is a test plugin that implements Searchable.

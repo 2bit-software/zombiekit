@@ -77,7 +77,7 @@ func TestNewCommandBuilder_SandboxNameFromEnv(t *testing.T) {
 
 	t.Run("uses sandbox name from env", func(t *testing.T) {
 		env := map[string]string{
-			EnvSandboxName:    "zk-dev-123",
+			EnvSandboxName:      "zk-dev-123",
 			"WORK_CALLBACK_URL": "http://localhost:8666/DEV-123",
 		}
 		cmd, cwd, err := builder("/tmp/worktrees/DEV-123", env, "claude", "hello")

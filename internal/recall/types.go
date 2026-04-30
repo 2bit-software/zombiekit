@@ -42,7 +42,7 @@ type SearchResult struct {
 // ConversationSummary contains aggregated metadata for a conversation.
 type ConversationSummary struct {
 	ConversationID string    `json:"conversation_id"`
-	Title          string    `json:"title"`         // First user message (truncated) or "[No title]"
+	Title          string    `json:"title"` // First user message (truncated) or "[No title]"
 	MessageCount   int       `json:"message_count"`
 	FirstMessage   time.Time `json:"first_message"`
 	LastMessage    time.Time `json:"last_message"`

@@ -1,10 +1,10 @@
 package web
 
 import (
-	"github.com/go-chi/chi/v5"
 	"github.com/2bit-software/zombiekit/internal/profile"
 	"github.com/2bit-software/zombiekit/internal/step"
 	"github.com/2bit-software/zombiekit/internal/workflow"
+	"github.com/go-chi/chi/v5"
 )
 
 // PromptsPlugin implements the WebPlugin interface for the unified prompts view.

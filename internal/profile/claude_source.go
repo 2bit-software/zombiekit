@@ -235,4 +235,3 @@ func (s *ClaudeSource) DefaultInherits() bool {
 func (s *ClaudeSource) SourceName() string {
 	return "claude"
 }
-

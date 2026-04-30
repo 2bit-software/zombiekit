@@ -54,7 +54,7 @@ func DefaultConfig() Config {
 	home, _ := os.UserHomeDir()
 	return Config{
 		Mounts: []string{
-			filepath.Join(home, ".claude"),          // rw: Claude Code needs to refresh OAuth tokens
+			filepath.Join(home, ".claude"), // rw: Claude Code needs to refresh OAuth tokens
 			filepath.Join(home, ".brains") + ":ro",
 		},
 		CallbackHost:   "host.docker.internal",

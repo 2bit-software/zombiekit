@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/2bit-software/zombiekit/internal/version"
+	"github.com/urfave/cli/v2"
 )
 
 func TestStartCommand_Exists(t *testing.T) {

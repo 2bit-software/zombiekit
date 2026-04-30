@@ -5,10 +5,10 @@ import (
 	"errors"
 
 	"connectrpc.com/connect"
+	"github.com/2bit-software/zombiekit/internal/recall"
 	commonv1 "github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/common/v1"
 	searchv1 "github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/search/v1"
 	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/search/v1/searchv1connect"
-	"github.com/2bit-software/zombiekit/internal/recall"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

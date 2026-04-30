@@ -101,4 +101,3 @@ func IsNotARepository(err error) bool {
 	var e *Error
 	return errors.As(err, &e) && e.Kind == ErrNotARepository
 }
-

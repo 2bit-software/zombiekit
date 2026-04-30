@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/2bit-software/zombiekit/internal/profile"
+	"github.com/go-chi/chi/v5"
 )
 
 // ProfilesPlugin implements the WebPlugin interface for profiles.

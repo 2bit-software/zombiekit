@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/version"
+	"github.com/urfave/cli/v2"
 )
 
 // newVersionCommand creates the version subcommand that displays version and commit info.

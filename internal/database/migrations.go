@@ -32,8 +32,8 @@ type MigrationStatus struct {
 
 // migrationRunner abstracts the database-specific operations needed to run migrations.
 type migrationRunner struct {
-	fs       embed.FS
-	dir      string
+	fs        embed.FS
+	dir       string
 	isApplied func(version int) (bool, error)
 	readSQL   func(filename string) ([]byte, error)
 	apply     func(version int, name string, sqlBytes []byte) error

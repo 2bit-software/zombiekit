@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adrg/frontmatter"
 	zombiekit "github.com/2bit-software/zombiekit"
 	"github.com/2bit-software/zombiekit/internal/initiative"
 	"github.com/2bit-software/zombiekit/internal/profile"
+	"github.com/adrg/frontmatter"
 )
 
 // Compile-time check that fs.FS is still used (for GetWorkflowSteps method).

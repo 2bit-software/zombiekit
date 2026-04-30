@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/cmux"
 	"github.com/2bit-software/zombiekit/internal/sandbox"
+	"github.com/urfave/cli/v2"
 )
 
 func main() {

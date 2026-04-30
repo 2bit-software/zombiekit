@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/2bit-software/zombiekit/internal/memory"
+	"github.com/go-chi/chi/v5"
 )
 
 // DefaultPageLimit is the default number of items per page.

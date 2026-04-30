@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/go-chi/chi/v5"
 )
 
 //go:embed static

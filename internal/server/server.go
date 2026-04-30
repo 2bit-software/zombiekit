@@ -10,28 +10,28 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/artifact/v1/artifactv1connect"
-	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/config/v1/configv1connect"
-	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/llm/v1/llmv1connect"
-	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/profile/v1/profilev1connect"
-	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/search/v1/searchv1connect"
-	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/workflow/v1/workflowv1connect"
 	"github.com/2bit-software/zombiekit/internal/config"
 	"github.com/2bit-software/zombiekit/internal/database"
 	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/2bit-software/zombiekit/internal/recall"
 	recallpg "github.com/2bit-software/zombiekit/internal/recall/postgres"
 	"github.com/2bit-software/zombiekit/internal/server/storage"
+	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/artifact/v1/artifactv1connect"
+	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/config/v1/configv1connect"
+	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/llm/v1/llmv1connect"
+	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/profile/v1/profilev1connect"
+	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/search/v1/searchv1connect"
+	"github.com/2bit-software/zombiekit/proto/gen/zombiekit/brains/workflow/v1/workflowv1connect"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
 
 type Server struct {
-	cfg          *Config
-	httpServer   *http.Server
-	db           *database.PostgresPool
-	recallStore  recall.Storage
-	embedder     *OllamaEmbedderAdapter
+	cfg         *Config
+	httpServer  *http.Server
+	db          *database.PostgresPool
+	recallStore recall.Storage
+	embedder    *OllamaEmbedderAdapter
 }
 
 func New(cfg *Config) (*Server, error) {

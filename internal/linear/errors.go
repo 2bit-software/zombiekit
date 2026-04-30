@@ -6,7 +6,7 @@ import "errors"
 type ErrorKind int
 
 const (
-	ErrNotFound    ErrorKind = iota + 1
+	ErrNotFound ErrorKind = iota + 1
 	ErrRateLimited
 	ErrAPI
 	ErrNetwork

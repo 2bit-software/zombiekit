@@ -10,7 +10,7 @@ import (
 type ErrorKind int
 
 const (
-	ErrSessionExists   ErrorKind = iota + 1
+	ErrSessionExists ErrorKind = iota + 1
 	ErrSessionNotFound
 	ErrCmuxUnavailable
 	ErrBinaryNotFound

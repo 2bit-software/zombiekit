@@ -29,8 +29,8 @@ func (s *RecallService) Name() string {
 
 // recallDeps holds initialized dependencies for the recall import loop.
 type recallDeps struct {
-	storage   recall.Storage
-	embedder  *recall.OllamaEmbedder
+	storage    recall.Storage
+	embedder   *recall.OllamaEmbedder
 	claudePath string
 }
 
@@ -82,7 +82,10 @@ func (s *RecallService) Run(ctx context.Context) error {
 	return s.watchLoop(ctx, deps, log)
 }
 
-func (s *RecallService) runInitialImport(ctx context.Context, deps *recallDeps, log interface{ Info(string, ...any); Warn(string, ...any) }) {
+func (s *RecallService) runInitialImport(ctx context.Context, deps *recallDeps, log interface {
+	Info(string, ...any)
+	Warn(string, ...any)
+}) {
 	result, err := s.importClaude(ctx, deps.storage, deps.embedder, deps.claudePath)
 	if err != nil {
 		log.Warn("initial import failed", "error", err)
@@ -96,7 +99,10 @@ func (s *RecallService) runInitialImport(ctx context.Context, deps *recallDeps, 
 	}
 }
 
-func (s *RecallService) watchLoop(ctx context.Context, deps *recallDeps, log interface{ Info(string, ...any); Warn(string, ...any) }) error {
+func (s *RecallService) watchLoop(ctx context.Context, deps *recallDeps, log interface {
+	Info(string, ...any)
+	Warn(string, ...any)
+}) error {
 	ticker := time.NewTicker(s.config.Interval)
 	defer ticker.Stop()
 

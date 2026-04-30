@@ -1,3 +1,7 @@
+# Root Taskfile contract: default, dev, init, up, down, check, shell.
+# `install` and `orch` are intentional extensions kept at root because they are
+# top-level workflows users invoke directly (binary install + MCP register, and
+# the orchestrator daemon launch). Everything else belongs in Taskfile.dev.yml.
 version: '3'
 
 dotenv: ['.env']
@@ -13,6 +17,16 @@ tasks:
     desc: Run development tasks (use `task dev -- --list` to see all)
     cmds:
       - task --taskfile Taskfile.dev.yml {{.CLI_ARGS}}
+
+  init:
+    desc: Install Go dependencies and dev tools
+    cmds:
+      - task --taskfile Taskfile.dev.yml init
+
+  check:
+    desc: Run all CI checks (fmt, vet, lint, proto:lint, test, build)
+    cmds:
+      - task --taskfile Taskfile.dev.yml ci
 
   install:
     desc: Install brains CLI to GOBIN with bs symlink

@@ -7,10 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/urfave/cli/v2"
 	"github.com/2bit-software/zombiekit/internal/logging"
 	"github.com/2bit-software/zombiekit/internal/server"
 	"github.com/2bit-software/zombiekit/internal/version"
+	"github.com/urfave/cli/v2"
 )
 
 func main() {

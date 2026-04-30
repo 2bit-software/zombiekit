@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/2bit-software/zombiekit/internal/logging"
+	"github.com/BurntSushi/toml"
 )
 
 // LocalConfigPath returns the path to the local configuration file.

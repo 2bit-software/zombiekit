@@ -96,4 +96,3 @@ func buildSbxExecCommand(sandboxName string, env map[string]string, innerCmd, pr
 	escaped := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`).Replace(inner)
 	return `bash -c "` + escaped + `"`, nil
 }
-
