@@ -43,6 +43,7 @@ func NewApp(info *version.BuildInfo) *cli.App {
 			newInitCommand(),
 			newSkillCommand(),
 			newWorktreeCommand(),
+			newSandboxCommand(),
 		},
 	}
 }
