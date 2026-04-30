@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/sandbox"
+	"github.com/2bit-software/zombiekit/internal/workspace"
 )
 
 const (
@@ -69,22 +67,11 @@ func (p *ProjectRunner) processTicket(ctx context.Context, ticket linear.Ticket)
 	return nil
 }
 
-// runTicketPipeline performs the core pickup sequence: worktree creation,
-// session spawn, and job recording. Returns the session ref and worktree path
-// so the caller can roll back on failure.
+// runTicketPipeline performs the core pickup sequence by delegating the
+// worktree+sandbox+session steps to workspace.Prep, then records the job
+// in the state store. Returns the session ref and worktree path so the
+// caller can roll back on failure.
 func (p *ProjectRunner) runTicketPipeline(ctx context.Context, ticket linear.Ticket) (sessionRef, worktreePath string, err error) {
-	worktreePath, err = p.setupWorktree(ctx, ticket)
-	if err != nil {
-		return "", worktreePath, err
-	}
-
-	if p.sandboxAvailable {
-		sbxName := sandbox.Name(ticket.Identifier)
-		if err := sandbox.Create(ctx, sbxName, worktreePath, p.sandboxConfig); err != nil {
-			return "", worktreePath, fmt.Errorf("create sandbox: %w", err)
-		}
-	}
-
 	env := map[string]string{
 		"WORK_CALLBACK_URL": fmt.Sprintf("http://localhost:%d/project/%s/%s", p.cfg.CallbackPort, p.id, ticket.Identifier),
 	}
@@ -94,38 +81,41 @@ func (p *ProjectRunner) runTicketPipeline(ctx context.Context, ticket linear.Tic
 			env[k] = v
 		}
 	}
+
 	prompt := "Read .ai/ticket.md — this is your assigned ticket. Use /brains.new to begin."
 	if hasLabel(ticket.Labels, "automode") {
 		prompt = "Read .ai/ticket.md — this is your assigned ticket. Use /brains.new automode to begin."
 	}
-	sessionRef, err = p.sessions.SpawnSession(ctx, ticket.Identifier, ticket.Title, worktreePath, env, prompt)
+
+	result, err := p.workspace.Prep(ctx, workspace.PrepInput{
+		TicketID:    ticket.Identifier,
+		Title:       ticket.Title,
+		Description: ticket.Description,
+		Sandbox:     p.sandboxAvailable,
+		Spawn:       &workspace.SpawnInput{Prompt: prompt, Env: env, SessionTitle: ticket.Title},
+	})
 	if err != nil {
-		return "", worktreePath, fmt.Errorf("spawn session: %w", err)
+		// workspace.Prep handled its own internal rollback already. Return
+		// empty refs so rollbackTicket skips redundant teardown.
+		return "", "", err
 	}
 
-	if err := p.store.CreateJob(ctx, ticket.Identifier, worktreePath, sessionRef, p.id); err != nil {
-		return sessionRef, worktreePath, fmt.Errorf("create job: %w", err)
+	if err := p.store.CreateJob(ctx, ticket.Identifier, result.WorktreePath, result.SessionRef, p.id); err != nil {
+		return result.SessionRef, result.WorktreePath, fmt.Errorf("create job: %w", err)
 	}
 
-	return sessionRef, worktreePath, nil
+	return result.SessionRef, result.WorktreePath, nil
 }
 
-// rollbackTicket reverses a partially-completed pipeline in reverse order,
-// then marks the ticket as needs-attention.
-func (p *ProjectRunner) rollbackTicket(ctx context.Context, ticket linear.Ticket, sessionRef, worktreePath string, logger *slog.Logger) {
-	if sessionRef != "" {
-		if killErr := p.sessions.KillSession(ctx, ticket.Identifier); killErr != nil {
-			logger.Error("rollback: failed to kill session", "ticket", ticket.Identifier, "error", killErr)
-		}
-	}
-
-	if p.sandboxAvailable {
-		sandbox.Cleanup(ctx, sandbox.Name(ticket.Identifier))
-	}
-
+// rollbackTicket reverses a partially-completed pipeline by tearing down
+// the workspace (only when Prep succeeded but a later step failed),
+// releasing the concurrency slot, and marking the ticket needs-attention.
+// When Prep itself fails, it has already rolled back internally; we only
+// release the slot and update Linear here.
+func (p *ProjectRunner) rollbackTicket(ctx context.Context, ticket linear.Ticket, _ string, worktreePath string, logger *slog.Logger) {
 	if worktreePath != "" {
-		if delErr := p.worktrees.DeleteWorktree(ctx, worktreePath); delErr != nil {
-			logger.Error("rollback: failed to delete worktree", "ticket", ticket.Identifier, "error", delErr)
+		if err := p.workspace.Teardown(ctx, ticket.Identifier, worktreePath); err != nil {
+			logger.Error("rollback: workspace teardown", "ticket", ticket.Identifier, "error", err)
 		}
 	}
 	if releaseErr := p.store.ReleaseSlot(ctx, p.id); releaseErr != nil {
@@ -144,27 +134,6 @@ func (p *ProjectRunner) updateLinearAfterPickup(ctx context.Context, ticket line
 	if err := p.linear.RemoveLabel(ctx, ticket.ID, labelAIReady); err != nil {
 		logger.Error("failed to remove ai-ready label (job is running)", "ticket", ticket.Identifier, "error", err)
 	}
-}
-
-// setupWorktree creates a git worktree for the ticket and writes the ticket
-// description to .ai/ticket.md inside it.
-func (p *ProjectRunner) setupWorktree(ctx context.Context, ticket linear.Ticket) (string, error) {
-	worktreePath, err := p.worktrees.CreateWorktree(ctx, ticket.Identifier, shortTitle(ticket.Title))
-	if err != nil {
-		return "", fmt.Errorf("create worktree: %w", err)
-	}
-
-	aiDir := filepath.Join(worktreePath, ".ai")
-	if err := os.MkdirAll(aiDir, 0o755); err != nil {
-		return worktreePath, fmt.Errorf("create .ai directory: %w", err)
-	}
-
-	ticketFile := filepath.Join(aiDir, "ticket.md")
-	if err := os.WriteFile(ticketFile, []byte(ticket.Description), 0o644); err != nil {
-		return worktreePath, fmt.Errorf("write ticket file: %w", err)
-	}
-
-	return worktreePath, nil
 }
 
 // markTicketNeedsAttention applies the needs-attention label and removes ai-ready.
@@ -186,21 +155,4 @@ func hasLabel(labels []string, name string) bool {
 		}
 	}
 	return false
-}
-
-var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
-
-// shortTitle derives a filesystem-safe short name from a ticket title.
-// e.g., "Watcher 1 — ready ticket pickup" -> "ready-ticket-pickup"
-func shortTitle(title string) string {
-	lower := strings.ToLower(title)
-	safe := nonAlphanumeric.ReplaceAllString(lower, "-")
-	safe = strings.Trim(safe, "-")
-
-	// Truncate to a reasonable length
-	if len(safe) > 50 {
-		safe = safe[:50]
-		safe = strings.TrimRight(safe, "-")
-	}
-	return safe
 }

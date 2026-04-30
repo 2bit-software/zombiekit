@@ -8,7 +8,7 @@ Reference document for developers. Covers the full Claude Code + zombiekit + bra
 
 | Binary | Installed Path | Notes |
 |--------|---------------|-------|
-| `brains` | `~/.local/bin/brains` | Main CLI; MCP server, hook handler, profile/workflow engine |
+| `brains` | `~/.local/bin/brains` | Main CLI; MCP server, hook handler, profile/workflow engine. Also hosts `brains worktree`, `brains sandbox`, `brains workspace` for ad-hoc operator-driven workspace management (mirroring orchestrator pickup/teardown without the daemon). |
 | `bs` | `~/.local/bin/bs` | Symlink → `brains` |
 | `orchestrator` | `./bin/orchestrator` (local only) | Distributed workflow orchestration daemon |
 | `zk-server` | `./bin/zk-server` (local only) | PostgreSQL + Ollama wrapper for recall features |

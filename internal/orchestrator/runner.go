@@ -12,6 +12,7 @@ import (
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/sandbox"
 	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/2bit-software/zombiekit/internal/workspace"
 	"github.com/2bit-software/zombiekit/internal/worktree"
 )
 
@@ -30,6 +31,7 @@ type ProjectRunner struct {
 	github     github.Client
 	worktrees  worktree.Manager
 	sessions   cmux.SessionManager
+	workspace  *workspace.Manager
 	events     <-chan callback.Event
 	dispatcher *CommentDispatcher
 	logger     *slog.Logger
@@ -78,6 +80,13 @@ func NewProjectRunner(
 	sandboxCfg sandbox.Config,
 	logger *slog.Logger,
 ) *ProjectRunner {
+	projectLogger := logger.With(slog.String("project", cfg.ID))
+	ws := workspace.NewManager(wt, sandboxCfg,
+		workspace.WithSpawner(sm),
+		workspace.WithLogger(projectLogger),
+		workspace.WithWorktreesRoot(cfg.WorktreesRoot),
+	)
+
 	return &ProjectRunner{
 		id:               cfg.ID,
 		cfg:              cfg,
@@ -86,9 +95,10 @@ func NewProjectRunner(
 		github:           gh,
 		worktrees:        wt,
 		sessions:         sm,
+		workspace:        ws,
 		events:           events,
 		dispatcher:       NewCommentDispatcher(logger),
-		logger:           logger.With(slog.String("project", cfg.ID)),
+		logger:           projectLogger,
 		sandboxAvailable: sandboxAvailable,
 		sandboxConfig:    sandboxCfg,
 		archiver:         NoopArchiver{},

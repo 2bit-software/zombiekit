@@ -13,6 +13,7 @@ import (
 	"github.com/2bit-software/zombiekit/internal/linear"
 	"github.com/2bit-software/zombiekit/internal/sandbox"
 	"github.com/2bit-software/zombiekit/internal/state"
+	"github.com/2bit-software/zombiekit/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -649,7 +650,7 @@ func TestShortTitle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.want, shortTitle(tt.input))
+			assert.Equal(t, tt.want, workspace.ShortTitle(tt.input))
 		})
 	}
 }
