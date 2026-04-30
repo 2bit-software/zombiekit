@@ -42,6 +42,7 @@ func NewApp(info *version.BuildInfo) *cli.App {
 			newHookCommand(),
 			newInitCommand(),
 			newSkillCommand(),
+			newWorktreeCommand(),
 		},
 	}
 }
